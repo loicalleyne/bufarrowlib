@@ -60,6 +60,9 @@ rec := tc.NewDenormalizerRecordBatch()
 ### Cloning
 `Transcoder.Clone` creates an independent copy (separate builders and stencils) that can be used in another goroutine. All options — including denormalization plans — carry over.
 
+### Protobuf Editions support
+bufarrowlib works at the `protoreflect` descriptor level, so it is inherently compatible with [Protobuf Editions](https://protobuf.dev/editions/overview/) (Edition 2023+) as well as proto2 and proto3. Editions features such as `features.field_presence` are resolved by the protobuf runtime into the same descriptor properties (`HasPresence`, `Kind`, `Cardinality`, etc.) that bufarrowlib already uses — no special configuration is needed. The `CompileProtoToFileDescriptor` / `NewFromFile` path uses `protocompile`, which supports Edition 2023.
+
 ## pbpath
 
 The [`proto/pbpath`](proto/pbpath) subpackage is a standalone protobuf field-path engine that can be used independently of the rest of bufarrowlib.

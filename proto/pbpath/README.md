@@ -232,6 +232,10 @@ key          = integer | string_literal | "true" | "false"
 - **Dynamic descriptors** – via `protodesc.NewFile` from a `FileDescriptorProto`
 - **protocompile / buf** – parse `.proto` files at runtime
 
+### Protobuf Editions
+
+`pbpath` operates entirely on `protoreflect` descriptors, so it works with proto2, proto3, and [Protobuf Editions](https://protobuf.dev/editions/overview/) (Edition 2023+) without any changes. Editions features are resolved by the protobuf runtime before `pbpath` sees the descriptors.
+
 ### Identifying the Root Message
 
 Every path implicitly starts at a **root message** – the outermost message type
