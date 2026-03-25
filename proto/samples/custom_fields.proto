@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+// Custom fields message for testing WithCustomMessage and WithCustomMessageFile.
+// Fields here are designed to not conflict with merge_test.proto's MergeA/MergeB
+// or samples.proto's ScalarTypes/Three messages.
+
+message CustomFields {
+  int64 event_timestamp = 1;
+  string source_id = 2;
+}
+
+message CustomFieldsConflict {
+  // "value" conflicts with Three.value
+  uint64 value = 1;
+}

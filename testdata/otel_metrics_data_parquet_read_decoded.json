@@ -1,0 +1,1 @@
+{"resourceMetrics":[{"resource":{},"scopeMetrics":[{"scope":{},"metrics":[{"name":"check","gauge":{"dataPoints":[{"attributes":[{"key":"key","value":{"stringValue":"value"}}],"timeUnixNano":"16","asInt":"18"}]}}]}]}]}

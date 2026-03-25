@@ -1,0 +1,3 @@
+[{"resource_spans":[]}
+,{"resource_spans":[{"resource":{"attributes":[],"dropped_attributes_count":0},"schema_url":"","scope_spans":[{"schema_url":"","scope":{"attributes":[],"dropped_attributes_count":0,"name":"","version":""},"spans":[{"attributes":[],"dropped_attributes_count":0,"dropped_events_count":0,"dropped_links_count":0,"end_time_unix_nano":0,"events":[],"flags":0,"kind":0,"links":[],"name":"","parent_span_id":null,"span_id":null,"start_time_unix_nano":0,"status":{"code":0,"message":""},"trace_id":"aGVsbG8=","trace_state":""}]}]}]}
+]

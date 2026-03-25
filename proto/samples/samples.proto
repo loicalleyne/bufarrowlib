@@ -1,0 +1,111 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+message ScalarTypes {
+  double double = 1;
+  float float = 2;
+  int32 int32 = 3;
+  int64 int64 = 4;
+  uint32 uint32 = 5;
+  uint64 uint64 = 6;
+  sint32 sint32 = 7;
+  sint64 sint64 = 8;
+  fixed32 fixed32 = 9;
+  fixed64 fixed64 = 10;
+  sfixed32 sfixed32 = 11;
+  sfixed64 sfixed64 = 12;
+  bool bool = 13;
+  string string = 14;
+  bytes bytes = 15;
+}
+
+message ScalarTypesOptional {
+  optional double double = 1;
+  optional float float = 2;
+  optional int32 int32 = 3;
+  optional int64 int64 = 4;
+  optional uint32 uint32 = 5;
+  optional uint64 uint64 = 6;
+  optional sint32 sint32 = 7;
+  optional sint64 sint64 = 8;
+  optional fixed32 fixed32 = 9;
+  optional fixed64 fixed64 = 10;
+  optional sfixed32 sfixed32 = 11;
+  optional sfixed64 sfixed64 = 12;
+  optional bool bool = 13;
+  optional string string = 14;
+  optional bytes bytes = 15;
+}
+
+message ScalarTypesRepeated {
+  repeated double double = 1;
+  repeated float float = 2;
+  repeated int32 int32 = 3;
+  repeated int64 int64 = 4;
+  repeated uint32 uint32 = 5;
+  repeated uint64 uint64 = 6;
+  repeated sint32 sint32 = 7;
+  repeated sint64 sint64 = 8;
+  repeated fixed32 fixed32 = 9;
+  repeated fixed64 fixed64 = 10;
+  repeated sfixed32 sfixed32 = 11;
+  repeated sfixed64 sfixed64 = 12;
+  repeated bool bool = 13;
+  repeated string string = 14;
+  repeated bytes bytes = 15;
+}
+
+message Nested {
+  ScalarTypes nested_scalar = 1;
+  repeated ScalarTypes nested_repeated_scalar = 2;
+  One deep = 3;
+}
+
+message One { Two two = 1; }
+
+message Two { Three three = 1; }
+
+message Three { uint64 value = 1; }
+
+message Cyclic {
+  One one = 1;
+  Cyclic cylcic = 2;
+}
+
+message Known {
+  google.protobuf.Timestamp ts = 1;
+  google.protobuf.Duration duration = 2;
+  repeated google.protobuf.Timestamp ts_rep = 3;
+  repeated google.protobuf.Duration duration_rep = 4;
+}
+
+message OneOfScala {
+  oneof value {
+    double double = 1;
+    float float = 2;
+    int32 int32 = 3;
+    int64 int64 = 4;
+    uint32 uint32 = 5;
+    uint64 uint64 = 6;
+    sint32 sint32 = 7;
+    sint64 sint64 = 8;
+    fixed32 fixed32 = 9;
+    fixed64 fixed64 = 10;
+    sfixed32 sfixed32 = 11;
+    sfixed64 sfixed64 = 12;
+    bool bool = 13;
+    string string = 14;
+    bytes bytes = 15;
+  }
+  oneof nested { One one = 16; }
+}
+
+message SimpleOneOf {
+  oneof value {
+    string k = 1;
+    string v = 2;
+    One one = 3;
+  }
+}

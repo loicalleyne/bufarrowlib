@@ -1,0 +1,32 @@
+syntax = "proto3";
+package CustomTypes;
+
+// https://learn.microsoft.com/en-us/dotnet/architecture/grpc-for-wcf-developers/protobuf-data-types#creating-a-custom-decimal-type-for-protobuf
+// Example: 12345.6789 -> { units = 12345, nanos = 678900000 }
+message DecimalValue {
+
+    // Whole units part of the amount
+    int64 units = 1;
+
+    // Nano units of the amount (10^-9)
+    // Must be same sign as units
+    sfixed32 nanos = 2;
+}
+
+// Decimal is unsupported in protobuf basic conversion class between protobuf message and a C# object
+// public partial class DecimalValue
+// {
+//     private const decimal NanoFactor = 1_000_000_000;
+
+//     public static implicit operator decimal(DecimalValue grpcDecimal)
+//     {
+//         return grpcDecimal.Units + grpcDecimal.Nanos / NanoFactor;
+//     }
+
+//     public static implicit operator DecimalValue(decimal value)
+//     {
+//         var units = decimal.ToInt64(value);
+//         var nanos = decimal.ToInt32((value - units) * NanoFactor);
+//         return new DecimalValue(units, nanos);
+//     }
+// }

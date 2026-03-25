@@ -1,0 +1,66 @@
+syntax = "proto3";
+package samples;
+
+// Message with a nested message type
+message WithNestedA {
+  string label = 1;
+  InnerA detail = 2;
+
+  message InnerA {
+    int32 x = 1;
+    int32 y = 2;
+  }
+}
+
+// Message with a different nested message type
+message WithNestedB {
+  int64 count = 1;
+  InnerB info = 2;
+
+  message InnerB {
+    string description = 1;
+  }
+}
+
+// Message with a nested message that has the same name as WithNestedA's
+message WithNestedConflict {
+  bool flag = 1;
+
+  message InnerA {
+    string z = 1;
+  }
+}
+
+// Message with an enum type
+message WithEnumA {
+  string name = 1;
+  StatusA status = 2;
+
+  enum StatusA {
+    STATUS_A_UNSPECIFIED = 0;
+    STATUS_A_ACTIVE = 1;
+    STATUS_A_INACTIVE = 2;
+  }
+}
+
+// Message with a different enum type
+message WithEnumB {
+  int32 priority = 1;
+  LevelB level = 2;
+
+  enum LevelB {
+    LEVEL_B_UNSPECIFIED = 0;
+    LEVEL_B_LOW = 1;
+    LEVEL_B_HIGH = 2;
+  }
+}
+
+// Message with an enum that has the same name as WithEnumA's
+message WithEnumConflict {
+  double value = 1;
+
+  enum StatusA {
+    STATUS_A_UNSPECIFIED = 0;
+    STATUS_A_PENDING = 1;
+  }
+}

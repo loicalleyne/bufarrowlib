@@ -1,0 +1,139 @@
+﻿syntax = "proto3";
+
+import "custom/CustomTypes.proto";
+import "google/protobuf/timestamp.proto";
+
+message BidRequestEvent {
+  string id = 1;
+  UserEvent user = 2;
+  DeviceEvent device = 3;
+  repeated ImpressionEvent imp = 4;
+  SiteEvent site = 5;
+  repeated string cur = 6;
+  optional uint32 tmax = 7;
+  optional uint32 test = 8;
+  optional uint32 at = 9;
+  google.protobuf.Timestamp timestamp = 10;
+  TechnicalProviderEvent technicalprovider = 11;
+  BidRequestDoohEvent dooh = 12;
+
+  message UserEvent {
+    string id = 1;
+    UserExt ext = 2;
+
+    message UserExt {
+      DemographicEvent demographic = 1;
+
+      message DemographicEvent {
+        CustomTypes.DecimalValue total = 1;
+      }
+    }
+  }
+
+  message DeviceEvent {
+    string ifa = 1;
+    string ua = 2;
+    string ip = 3;
+    GeoEvent geo = 4;
+    uint32 w = 5;
+    uint32 h = 6;
+
+    message GeoEvent {
+      CustomTypes.DecimalValue lat = 1;
+      CustomTypes.DecimalValue lon = 2;
+      uint32 type = 3;
+      string country = 4;
+      string region = 5;
+      string city = 6;
+      optional uint32 dma = 7;
+      sint32 utcoffset = 8;
+    }
+  }
+
+  message SiteEvent {
+    string id = 1;
+    string name = 2;
+    SitePublisher publisher = 3;
+    optional string page = 4;
+
+    message SitePublisher {
+      optional string id = 1;
+      optional string name = 2;
+    }
+  }
+
+  message ImpressionEvent {
+    string id = 1;
+    uint32 exp = 2;
+    PrivateMarketplaceEvent pmp = 3;
+    BannerEvent banner = 4;
+    VideoEvent video = 5;
+    CustomTypes.DecimalValue bidfloor = 6;
+    optional string bidfloorcur = 7;
+    ImpExt ext = 8;
+    uint64 dt = 9;
+    ImpQuantityEvent qty = 10;
+
+    message PrivateMarketplaceEvent {
+      uint32 private_auction = 1;
+      repeated DealEvent deals = 2;
+
+      message DealEvent {
+        string id = 1;
+        CustomTypes.DecimalValue bidfloor = 2;
+        uint32 at = 3;
+        repeated string wseat = 4;
+        optional string bidfloorcur = 5;
+        DealExtEvent ext = 6;
+
+        message DealExtEvent {
+          uint32 adspottype = 1;
+          uint32 guaranteed = 2;
+          bool must_bid = 3;
+        }
+      }
+    }
+
+    message BannerEvent {
+      repeated string mimes = 1;
+      uint32 w = 2;
+      uint32 h = 3;
+    }
+
+    message VideoEvent {
+      repeated string mimes = 1;
+      uint32 w = 2;
+      uint32 h = 3;
+      uint32 minduration = 4;
+      uint32 maxduration = 5;
+      repeated uint32 protocols = 6;
+    }
+
+    message ImpExt {
+      optional uint32 displaytime = 1;
+    }
+
+    message ImpQuantityEvent {
+      CustomTypes.DecimalValue multiplier = 1;
+    }
+  }
+
+  message TechnicalProviderEvent {
+    uint32 id = 1;
+    string name = 2;
+  }
+
+  message BidRequestDoohEvent {
+    string id = 1;
+    string name = 2;
+    repeated string venuetype = 3;
+    uint32 venuetypetax = 4;
+    PublisherEvent publisher = 5;
+    float audience = 6;
+
+    message PublisherEvent {
+      string id = 1;
+      string name = 2;
+    }
+  }
+}
