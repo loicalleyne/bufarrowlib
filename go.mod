@@ -6,7 +6,6 @@ require (
 	buf.build/go/hyperpb v0.1.3
 	github.com/apache/arrow-go/v18 v18.4.1
 	github.com/bufbuild/protocompile v0.14.1
-	github.com/confluentinc/confluent-kafka-go/v2 v2.8.0
 	github.com/google/go-cmp v0.7.0
 	github.com/sryoya/protorand v0.0.0-20250114120907-8c1a8e3138f2
 	go.opentelemetry.io/proto/otlp v1.5.0
