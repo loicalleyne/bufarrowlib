@@ -77,14 +77,60 @@ func fanoutSignature(p pbpath.Path) string {
 	return b.String()
 }
 
+// cloneDenorm sets up the denormalizer for a cloned Transcoder. It shares the
+// immutable [Plan] and schema from src but creates fresh Arrow builders, column
+// metadata, and append closures so the clone can operate independently.
+//
+// This is cheaper than [compileDenormPlan] because it skips path parsing, trie
+// construction, and leaf/FD validation — all of which are already captured in
+// the shared Plan.
+func (s *Transcoder) cloneDenorm(src *Transcoder, mem memory.Allocator) error {
+	s.denormPlan = src.denormPlan
+	s.denormSchema = src.denormSchema
+	s.denormBuilder = array.NewRecordBuilder(mem, s.denormSchema)
+
+	entries := s.denormPlan.Entries()
+	nCols := len(entries)
+
+	// Copy group structure (slices are immutable after compilation).
+	s.denormGroups = make([]fanoutGroup, len(src.denormGroups))
+	copy(s.denormGroups, src.denormGroups)
+
+	s.denormCols = make([]denormColumn, nCols)
+	for i, e := range entries {
+		var fn protoAppendFunc
+		if e.HasExpr && e.OutputKind != 0 {
+			fn = ExprKindToAppendFunc(e.OutputKind, s.denormBuilder.Field(i))
+		} else {
+			fn = ProtoKindToAppendFunc(src.denormCols[i].fd, s.denormBuilder.Field(i))
+		}
+		if fn == nil {
+			return fmt.Errorf("bufarrow: failed to create append function for denorm path %q in clone", e.Name)
+		}
+		s.denormCols[i] = denormColumn{
+			entryIdx: src.denormCols[i].entryIdx,
+			groupIdx: src.denormCols[i].groupIdx,
+			appendFn: fn,
+			fd:       src.denormCols[i].fd,
+		}
+	}
+	return nil
+}
+
 // compileDenormPlan compiles the denormalizer plan from the PlanPathSpec
 // entries stored in opts.denormPaths. It validates that every leaf is a
 // recognised scalar type, computes fan-out groups, builds the Arrow schema
 // and record builder, and wires per-column append closures.
 //
+// When an entry was created with [pbpath.WithExpr] and the Expr has a fixed
+// output kind (e.g. FuncHas→BoolKind, FuncLen→Int64Kind, FuncConcat→StringKind),
+// the Arrow column type is derived from the output kind instead of the leaf
+// field descriptor. For pass-through Expr entries (output kind == 0) the type
+// is resolved from the first leaf PathRef's field descriptor.
+//
 // Called from New() and Clone().
 func (s *Transcoder) compileDenormPlan(mem memory.Allocator) error {
-	plan, err := pbpath.NewPlan(s.msgDesc, s.opts.denormPaths...)
+	plan, err := pbpath.NewPlan(s.msgDesc, nil, s.opts.denormPaths...)
 	if err != nil {
 		return fmt.Errorf("bufarrow: denormalizer plan: %w", err)
 	}
@@ -98,14 +144,33 @@ func (s *Transcoder) compileDenormPlan(mem memory.Allocator) error {
 	leafFDs := make([]protoreflect.FieldDescriptor, nCols)
 
 	for i, e := range entries {
-		// Find the leaf FieldDescriptor. For paths ending in a FieldAccessStep
-		// this is the last step directly. For paths ending in a list step
-		// (wildcard, range, index) applied to a repeated scalar, the field
-		// descriptor is on the preceding FieldAccessStep.
+		if e.HasExpr && e.OutputKind != 0 {
+			// Expr with fixed output kind — use ExprKindToArrowType.
+			at := ExprKindToArrowType(e.OutputKind)
+			if at == nil {
+				return fmt.Errorf("bufarrow: denormalizer Expr entry %q: unsupported output kind %v", e.Name, e.OutputKind)
+			}
+			arrowFields[i] = arrow.Field{Name: e.Name, Type: at, Nullable: true}
+			// leafFDs[i] stays nil — we'll use ExprKindToAppendFunc below.
+			continue
+		}
+
+		// Raw path or pass-through Expr: resolve the leaf FieldDescriptor.
+		// For Expr entries the Path is nil, so resolve from the first leaf PathRef.
+		path := e.Path
+		if e.HasExpr {
+			// Pass-through Expr: find the first leaf entry's path.
+			leafIndices := plan.ExprInputEntries(i)
+			if len(leafIndices) == 0 {
+				return fmt.Errorf("bufarrow: denormalizer Expr entry %q has no leaf paths", e.Name)
+			}
+			path = plan.InternalPath(leafIndices[0])
+		}
+
 		var fd protoreflect.FieldDescriptor
-		for j := len(e.Path) - 1; j >= 0; j-- {
-			if e.Path[j].Kind() == pbpath.FieldAccessStep {
-				fd = e.Path[j].FieldDescriptor()
+		for j := len(path) - 1; j >= 0; j-- {
+			if path[j].Kind() == pbpath.FieldAccessStep {
+				fd = path[j].FieldDescriptor()
 				break
 			}
 		}
@@ -128,12 +193,26 @@ func (s *Transcoder) compileDenormPlan(mem memory.Allocator) error {
 	s.denormBuilder = array.NewRecordBuilder(mem, s.denormSchema)
 
 	// --- Compute fan-out groups ---
+	// Expr-only entries (no Path) are placed in their own singleton group.
+	// Their fan-out is determined at eval time by their leaf entries.
 	sigToGroup := make(map[string]int)      // signature → group index
 	s.denormGroups = s.denormGroups[:0]      // reset for Clone()
 	s.denormCols = make([]denormColumn, nCols)
 
 	for i, e := range entries {
-		sig := fanoutSignature(e.Path)
+		var sig string
+		if e.HasExpr && e.Path == nil {
+			// Expr entries: fan-out signature derived from their first leaf path.
+			leafIndices := plan.ExprInputEntries(i)
+			if len(leafIndices) > 0 {
+				if lp := plan.InternalPath(leafIndices[0]); lp != nil {
+					sig = fanoutSignature(lp)
+				}
+			}
+			// If no leaf paths, sig remains "" (scalar/no fan-out).
+		} else {
+			sig = fanoutSignature(e.Path)
+		}
 		gIdx, ok := sigToGroup[sig]
 		if !ok {
 			gIdx = len(s.denormGroups)
@@ -142,7 +221,12 @@ func (s *Transcoder) compileDenormPlan(mem memory.Allocator) error {
 		}
 		s.denormGroups[gIdx].colIndices = append(s.denormGroups[gIdx].colIndices, i)
 
-		fn := ProtoKindToAppendFunc(leafFDs[i], s.denormBuilder.Field(i))
+		var fn protoAppendFunc
+		if e.HasExpr && e.OutputKind != 0 {
+			fn = ExprKindToAppendFunc(e.OutputKind, s.denormBuilder.Field(i))
+		} else {
+			fn = ProtoKindToAppendFunc(leafFDs[i], s.denormBuilder.Field(i))
+		}
 		if fn == nil {
 			return fmt.Errorf("bufarrow: failed to create append function for denorm path %q", e.Name)
 		}
@@ -170,18 +254,38 @@ func (s *Transcoder) AppendDenorm(msg proto.Message) error {
 		return fmt.Errorf("bufarrow: AppendDenorm called without denormalizer plan configured")
 	}
 
-	results, err := s.denormPlan.Eval(msg)
+	results, err := s.denormPlan.EvalLeaves(msg)
 	if err != nil {
 		return fmt.Errorf("bufarrow: denormalizer eval: %w", err)
 	}
 
 	nGroups := len(s.denormGroups)
+	nCols := len(s.denormCols)
+
+	// --- Reuse or allocate per-call scratch slices ---
+	// These are hoisted out of the row loop and reused across calls.
+	if cap(s.denormGroupCounts) < nGroups {
+		s.denormGroupCounts = make([]int, nGroups)
+		s.denormGroupIsNull = make([]bool, nGroups)
+		s.denormBranchIdx = make([]int, nGroups)
+		s.denormNullCols = make([]bool, nCols)
+	}
+	groupCounts := s.denormGroupCounts[:nGroups]
+	groupIsNull := s.denormGroupIsNull[:nGroups]
+	branchIdx := s.denormBranchIdx[:nGroups]
+	nullCols := s.denormNullCols[:nCols]
+
+	// Reset slices.
+	for i := range groupCounts {
+		groupCounts[i] = 0
+		groupIsNull[i] = false
+	}
+	for i := range nullCols {
+		nullCols[i] = false
+	}
 
 	// --- Compute per-group row counts ---
-	groupCounts := make([]int, nGroups)
-	groupIsNull := make([]bool, nGroups) // true if this group left-joins to null
 	for g := range s.denormGroups {
-		// All columns in a group have the same branch count; pick the first.
 		firstCol := s.denormGroups[g].colIndices[0]
 		branches := results[firstCol]
 		if len(branches) == 0 {
@@ -202,51 +306,46 @@ func (s *Transcoder) AppendDenorm(msg proto.Message) error {
 	}
 
 	// --- Null fast-path: bulk-append nulls for entirely-null groups ---
-	// For groups where groupIsNull is true, every column in that group gets
-	// AppendNulls(totalRows) and is excluded from the per-row loop.
-	nullGroupCols := make(map[int]bool) // column indices to skip in per-row loop
+	nullColCount := 0
 	for g := range s.denormGroups {
 		if groupIsNull[g] {
 			for _, colIdx := range s.denormGroups[g].colIndices {
 				s.denormBuilder.Field(colIdx).AppendNulls(totalRows)
-				nullGroupCols[colIdx] = true
+				nullCols[colIdx] = true
+				nullColCount++
 			}
 		}
 	}
 
-	// If every group is null, we're done — all columns already got their nulls.
-	if len(nullGroupCols) == len(s.denormCols) {
+	// If every column is null, we're done.
+	if nullColCount == nCols {
 		return nil
 	}
 
 	// --- Per-row iteration with div/mod cross-join ---
 	for row := 0; row < totalRows; row++ {
 		remainder := row
-		// Walk groups from last to first to compute the branch index for each.
-		branchIdx := make([]int, nGroups)
 		for g := nGroups - 1; g >= 0; g-- {
 			branchIdx[g] = remainder % groupCounts[g]
 			remainder /= groupCounts[g]
 		}
 
-		// Append values for each non-null column.
 		for colIdx, col := range s.denormCols {
-			if nullGroupCols[colIdx] {
-				continue // already bulk-appended
+			if nullCols[colIdx] {
+				continue
 			}
 			branches := results[col.entryIdx]
 			bIdx := branchIdx[col.groupIdx]
 			if bIdx >= len(branches) {
-				// Shouldn't happen if group counts are correct, but be safe.
 				s.denormBuilder.Field(colIdx).AppendNull()
 				continue
 			}
-			leaf := branches[bIdx].Index(-1)
-			if !leaf.Value.IsValid() {
+			leaf := branches[bIdx]
+			if !leaf.IsValid() {
 				s.denormBuilder.Field(colIdx).AppendNull()
 				continue
 			}
-			col.appendFn(leaf.Value)
+			col.appendFn(leaf)
 		}
 	}
 

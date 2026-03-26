@@ -13,21 +13,21 @@ func TestNewPlan(t *testing.T) {
 	testMD, _ := buildTestDescriptors(t)
 
 	t.Run("nil md", func(t *testing.T) {
-		_, err := NewPlan(nil, PlanPath("nested.stringfield"))
+		_, err := NewPlan(nil, nil, PlanPath("nested.stringfield"))
 		if err == nil || !strings.Contains(err.Error(), "non-nil") {
 			t.Fatalf("expected non-nil error, got: %v", err)
 		}
 	})
 
 	t.Run("no paths", func(t *testing.T) {
-		_, err := NewPlan(testMD)
+		_, err := NewPlan(testMD, nil)
 		if err == nil || !strings.Contains(err.Error(), "at least one") {
 			t.Fatalf("expected at-least-one error, got: %v", err)
 		}
 	})
 
 	t.Run("parse error", func(t *testing.T) {
-		_, err := NewPlan(testMD, PlanPath("no_such_field"))
+		_, err := NewPlan(testMD, nil, PlanPath("no_such_field"))
 		if err == nil {
 			t.Fatalf("expected parse error, got nil")
 		}
@@ -37,7 +37,7 @@ func TestNewPlan(t *testing.T) {
 	})
 
 	t.Run("multiple parse errors", func(t *testing.T) {
-		_, err := NewPlan(testMD,
+		_, err := NewPlan(testMD, nil,
 			PlanPath("bad1"),
 			PlanPath("nested.stringfield"),
 			PlanPath("bad2"),
@@ -51,7 +51,7 @@ func TestNewPlan(t *testing.T) {
 	})
 
 	t.Run("valid single path", func(t *testing.T) {
-		plan, err := NewPlan(testMD, PlanPath("nested.stringfield"))
+		plan, err := NewPlan(testMD, nil, PlanPath("nested.stringfield"))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -65,7 +65,7 @@ func TestNewPlan(t *testing.T) {
 	})
 
 	t.Run("alias overrides name", func(t *testing.T) {
-		plan, err := NewPlan(testMD,
+		plan, err := NewPlan(testMD, nil,
 			PlanPath("nested.stringfield", Alias("col_a")),
 		)
 		if err != nil {
@@ -103,7 +103,7 @@ func TestPlanEval(t *testing.T) {
 	}
 
 	t.Run("wrong message type", func(t *testing.T) {
-		plan, err := NewPlan(testMD, PlanPath("nested.stringfield"))
+		plan, err := NewPlan(testMD, nil, PlanPath("nested.stringfield"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -115,7 +115,7 @@ func TestPlanEval(t *testing.T) {
 	})
 
 	t.Run("single scalar path", func(t *testing.T) {
-		plan, err := NewPlan(testMD, PlanPath("nested.stringfield"))
+		plan, err := NewPlan(testMD, nil, PlanPath("nested.stringfield"))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -137,7 +137,7 @@ func TestPlanEval(t *testing.T) {
 
 	t.Run("shared prefix", func(t *testing.T) {
 		// Two paths sharing "nested." prefix.
-		plan, err := NewPlan(testMD,
+		plan, err := NewPlan(testMD, nil,
 			PlanPath("nested.stringfield", Alias("str")),
 			PlanPath("nested.stringfield", Alias("str2")),
 		)
@@ -163,7 +163,7 @@ func TestPlanEval(t *testing.T) {
 	})
 
 	t.Run("wildcard fan-out", func(t *testing.T) {
-		plan, err := NewPlan(testMD,
+		plan, err := NewPlan(testMD, nil,
 			PlanPath("repeats[*].nested.stringfield"),
 		)
 		if err != nil {
@@ -185,7 +185,7 @@ func TestPlanEval(t *testing.T) {
 	})
 
 	t.Run("range fan-out", func(t *testing.T) {
-		plan, err := NewPlan(testMD,
+		plan, err := NewPlan(testMD, nil,
 			PlanPath("repeats[0:2].nested.stringfield"),
 		)
 		if err != nil {
@@ -208,7 +208,7 @@ func TestPlanEval(t *testing.T) {
 
 	t.Run("mixed wildcard and range on same field fork", func(t *testing.T) {
 		// repeats[*] and repeats[0:2] should be separate trie branches.
-		plan, err := NewPlan(testMD,
+		plan, err := NewPlan(testMD, nil,
 			PlanPath("repeats[*].nested.stringfield", Alias("all")),
 			PlanPath("repeats[0:2].nested.stringfield", Alias("first_two")),
 		)
@@ -229,7 +229,7 @@ func TestPlanEval(t *testing.T) {
 
 	t.Run("empty fan-out produces empty slice", func(t *testing.T) {
 		empty := dynamicpb.NewMessage(testMD)
-		plan, err := NewPlan(testMD,
+		plan, err := NewPlan(testMD, nil,
 			PlanPath("repeats[*].nested.stringfield"),
 		)
 		if err != nil {
@@ -249,7 +249,7 @@ func TestPlanEval(t *testing.T) {
 
 	t.Run("strict clamped range errors", func(t *testing.T) {
 		// repeats has 3 elements, range 0:10 clamps to 0:3.
-		plan, err := NewPlan(testMD,
+		plan, err := NewPlan(testMD, nil,
 			PlanPath("repeats[0:10].nested.stringfield", StrictPath()),
 		)
 		if err != nil {
@@ -262,7 +262,7 @@ func TestPlanEval(t *testing.T) {
 	})
 
 	t.Run("strict non-clamped range succeeds", func(t *testing.T) {
-		plan, err := NewPlan(testMD,
+		plan, err := NewPlan(testMD, nil,
 			PlanPath("repeats[0:3].nested.stringfield", StrictPath()),
 		)
 		if err != nil {
@@ -278,7 +278,7 @@ func TestPlanEval(t *testing.T) {
 	})
 
 	t.Run("negative index", func(t *testing.T) {
-		plan, err := NewPlan(testMD,
+		plan, err := NewPlan(testMD, nil,
 			PlanPath("repeats[-1].nested.stringfield"),
 		)
 		if err != nil {
@@ -305,7 +305,7 @@ func TestPlanEval(t *testing.T) {
 		n := newNested(nestedMD, "v1")
 		mf.Set(protoreflect.ValueOfString("k1").MapKey(), protoreflect.ValueOfMessage(n))
 
-		plan, err := NewPlan(testMD,
+		plan, err := NewPlan(testMD, nil,
 			PlanPath(`strkeymap["k1"].stringfield`),
 		)
 		if err != nil {
@@ -325,7 +325,7 @@ func TestPlanEval(t *testing.T) {
 	})
 
 	t.Run("negative stride", func(t *testing.T) {
-		plan, err := NewPlan(testMD,
+		plan, err := NewPlan(testMD, nil,
 			PlanPath("repeats[::-1].nested.stringfield"),
 		)
 		if err != nil {
@@ -414,7 +414,7 @@ func TestPathValuesMulti(t *testing.T) {
 
 func TestPlanEntries(t *testing.T) {
 	testMD, _ := buildTestDescriptors(t)
-	plan, err := NewPlan(testMD,
+	plan, err := NewPlan(testMD, nil,
 		PlanPath("nested.stringfield", Alias("alias_a")),
 		PlanPath("repeats[*].nested.stringfield"),
 	)
@@ -457,7 +457,7 @@ func TestPlanEvalConsistency(t *testing.T) {
 		"repeats[-1].nested.stringfield",
 	}
 
-	plan, err := NewPlan(testMD, func() []PlanPathSpec {
+	plan, err := NewPlan(testMD, nil, func() []PlanPathSpec {
 		specs := make([]PlanPathSpec, len(paths))
 		for i, p := range paths {
 			specs[i] = PlanPath(p)

@@ -15,11 +15,39 @@ import (
 // segment, then forked — giving an O(1) cost per shared step rather than
 // O(P) where P is the number of paths.
 //
-// A Plan is safe for concurrent use by multiple goroutines.
+// [Plan.Eval] and [Plan.EvalLeavesConcurrent] are safe for concurrent use
+// by multiple goroutines.
+//
+// [Plan.EvalLeaves] reuses internal scratch buffers and is NOT safe for
+// concurrent use; it is the preferred method when called from a single
+// goroutine (e.g. inside [Transcoder.AppendDenorm]).
 type Plan struct {
 	root    *planNode
 	md      protoreflect.MessageDescriptor
 	entries []planEntry
+	cfg     planConfig
+
+	// userCount is the number of user-visible entries (first N in entries).
+	// entries[userCount:] are hidden leaf paths used by Expr trees.
+	userCount int
+
+	// scratch is reused by EvalLeaves to avoid per-call allocations.
+	// It is lazily initialised on first EvalLeaves call.
+	scratch *leafScratch
+}
+
+// leafBranch is a lightweight branch tracked during EvalLeaves traversal.
+// Unlike [Values], it carries only the current cursor value — not the full
+// path chain — eliminating O(depth × branches) clonePath/cloneValues allocs.
+type leafBranch struct {
+	cursor  protoreflect.Value // the value at the current trie node
+	clamped bool               // range/index was clamped during traversal
+}
+
+// leafScratch holds pre-allocated buffers for [Plan.EvalLeaves].
+type leafScratch struct {
+	out  [][]protoreflect.Value // one slot per path entry
+	seed [1]leafBranch          // avoid heap alloc for the single root branch
 }
 
 // PlanEntry exposes metadata about one compiled path inside a [Plan].
@@ -27,8 +55,14 @@ type PlanEntry struct {
 	// Name is the alias if one was set via [Alias], otherwise the original
 	// path string.
 	Name string
-	// Path is the compiled [Path].
+	// Path is the compiled [Path]. Nil for Expr-only entries.
 	Path Path
+	// OutputKind is the protoreflect.Kind of the expression's result,
+	// or zero when no [WithExpr] was set (raw path leaf kind) or when the
+	// Expr is pass-through (same kind as input leaf).
+	OutputKind protoreflect.Kind
+	// HasExpr is true when this entry was created with [WithExpr].
+	HasExpr bool
 }
 
 // planEntry is the internal per-path state.
@@ -36,6 +70,7 @@ type planEntry struct {
 	name   string
 	path   Path
 	strict bool
+	expr   Expr // optional computed expression (nil → raw path leaf)
 }
 
 // planNode is a node in the traversal trie.
@@ -58,24 +93,35 @@ type PlanPathSpec struct {
 type planEntryOpts struct {
 	strict bool
 	alias  string
+	expr   Expr // optional expression to evaluate after path resolution
 }
 
-// PlanOption configures a single path entry inside a [Plan].
-type PlanOption func(*planEntryOpts)
+// EntryOption configures a single path entry inside a [Plan].
+type EntryOption func(*planEntryOpts)
 
-// StrictPath returns a [PlanOption] that makes this path's evaluation return
+// StrictPath returns an [EntryOption] that makes this path's evaluation return
 // an error when a range or index is clamped due to the list being shorter
 // than the requested bound. Without StrictPath, out-of-bounds accesses are
 // silently clamped or skipped.
-func StrictPath() PlanOption { return func(o *planEntryOpts) { o.strict = true } }
+func StrictPath() EntryOption { return func(o *planEntryOpts) { o.strict = true } }
 
-// Alias returns a [PlanOption] that gives this path entry a human-readable
+// Alias returns an [EntryOption] that gives this path entry a human-readable
 // name. The alias is returned by [Plan.Entries] and is useful for mapping
 // paths to output column names.
-func Alias(name string) PlanOption { return func(o *planEntryOpts) { o.alias = name } }
+func Alias(name string) EntryOption { return func(o *planEntryOpts) { o.alias = name } }
+
+// WithExpr returns an [EntryOption] that attaches a composable [Expr] to a path
+// entry. The expr tree's leaf [PathRef] nodes are resolved against the plan's
+// trie during compilation; at evaluation time the function tree is applied to
+// the resolved leaf values.
+//
+// When WithExpr is set the path string passed to [PlanPath] is ignored for
+// traversal purposes — all paths come from the Expr tree's leaves. The
+// PlanPath path string (or [Alias]) is still used as the entry name.
+func WithExpr(expr Expr) EntryOption { return func(o *planEntryOpts) { o.expr = expr } }
 
 // PlanPath creates a [PlanPathSpec] pairing a path string with per-path options.
-func PlanPath(path string, opts ...PlanOption) PlanPathSpec {
+func PlanPath(path string, opts ...EntryOption) PlanPathSpec {
 	var o planEntryOpts
 	for _, fn := range opts {
 		fn(&o)
@@ -83,14 +129,31 @@ func PlanPath(path string, opts ...PlanOption) PlanPathSpec {
 	return PlanPathSpec{path: path, opts: o}
 }
 
+// ---- Plan-level options ----
+
+// planConfig holds plan-level configuration.
+type planConfig struct {
+	autoPromote bool
+}
+
+// PlanOption configures plan-level behaviour for [NewPlan].
+type PlanOption func(*planConfig)
+
+// AutoPromote returns a [PlanOption] that sets the default auto-promotion
+// behaviour for [Cond] expressions. When true, Cond branches with
+// mismatched output kinds are automatically promoted to a common type.
+// Individual Cond expressions can override this setting.
+func AutoPromote(on bool) PlanOption { return func(c *planConfig) { c.autoPromote = on } }
+
 // ---- Construction ----
 
 // NewPlan compiles one or more path strings against md into an immutable [Plan].
 // Parsing and trie construction happen once; [Plan.Eval] is the hot path.
 //
+// opts may be nil when no plan-level options are needed.
 // All paths must be rooted at the same message descriptor md.
 // Returns an error that bundles all parse failures.
-func NewPlan(md protoreflect.MessageDescriptor, paths ...PlanPathSpec) (*Plan, error) {
+func NewPlan(md protoreflect.MessageDescriptor, opts []PlanOption, paths ...PlanPathSpec) (*Plan, error) {
 	if md == nil {
 		return nil, fmt.Errorf("pbpath.NewPlan: message descriptor must be non-nil")
 	}
@@ -98,12 +161,67 @@ func NewPlan(md protoreflect.MessageDescriptor, paths ...PlanPathSpec) (*Plan, e
 		return nil, fmt.Errorf("pbpath.NewPlan: at least one path is required")
 	}
 
-	p := &Plan{md: md, entries: make([]planEntry, len(paths))}
+	var cfg planConfig
+	for _, o := range opts {
+		o(&cfg)
+	}
+
+	userCount := len(paths)
+
+	// Collect all path specs: user-visible first, then hidden Expr leaf paths.
+	// Use a map to deduplicate hidden leaf paths that appear in multiple Exprs
+	// (or that duplicate a user-visible path).
+	allSpecs := make([]PlanPathSpec, userCount)
+	copy(allSpecs, paths)
+
+	// pathIndex maps raw path strings to their entry index (for dedup).
+	pathIndex := make(map[string]int, userCount)
+	for i, spec := range paths {
+		if spec.opts.expr == nil {
+			pathIndex[spec.path] = i
+		}
+	}
+
+	// For each Expr entry, collect leaf paths and resolve entry indices.
+	for i, spec := range paths {
+		if spec.opts.expr == nil {
+			continue
+		}
+		leaves := resolvePathExprs(spec.opts.expr)
+		for _, leaf := range leaves {
+			if idx, ok := pathIndex[leaf.path]; ok {
+				leaf.entryIdx = idx
+				continue
+			}
+			// New hidden leaf path — add to the end.
+			idx := len(allSpecs)
+			pathIndex[leaf.path] = idx
+			allSpecs = append(allSpecs, PlanPath(leaf.path))
+			leaf.entryIdx = idx
+		}
+		_ = i // suppress unused
+	}
+
+	p := &Plan{md: md, entries: make([]planEntry, len(allSpecs)), cfg: cfg, userCount: userCount}
 
 	// Parse all paths, collecting errors.
+	// Entries with an Expr are not parsed — their leaf paths were already
+	// added as hidden entries in allSpecs.
 	var errs []string
-	parsed := make([]Path, len(paths))
-	for i, spec := range paths {
+	parsed := make([]Path, len(allSpecs))
+	for i, spec := range allSpecs {
+		if spec.opts.expr != nil {
+			// Expr entry: use alias (or path string) as name only.
+			name := spec.opts.alias
+			if name == "" {
+				name = spec.path
+			}
+			p.entries[i] = planEntry{
+				name: name,
+				expr: spec.opts.expr,
+			}
+			continue
+		}
 		pp, err := ParsePath(md, spec.path)
 		if err != nil {
 			errs = append(errs, fmt.Sprintf("path %d (%q): %v", i, spec.path, err))
@@ -114,18 +232,43 @@ func NewPlan(md protoreflect.MessageDescriptor, paths ...PlanPathSpec) (*Plan, e
 		if name == "" {
 			name = spec.path
 		}
-		p.entries[i] = planEntry{name: name, path: pp, strict: spec.opts.strict}
+		p.entries[i] = planEntry{
+			name:   name,
+			path:   pp,
+			strict: spec.opts.strict,
+			expr:   spec.opts.expr,
+		}
 	}
 	if len(errs) > 0 {
 		return nil, fmt.Errorf("pbpath.NewPlan: %s", strings.Join(errs, "; "))
 	}
 
+	// Resolve EnumDescriptors for any FuncEnumName nodes in user Exprs.
+	// This must happen after paths are parsed so we can look up terminal FDs.
+	if err := resolveEnumDescs(p.entries[:userCount], parsed); err != nil {
+		return nil, err
+	}
+
 	// Build the trie. The root planNode represents the RootStep.
+	// Find the first parsed path to get the RootStep.
+	var rootPath Path
+	for _, pp := range parsed {
+		if len(pp) > 0 {
+			rootPath = pp
+			break
+		}
+	}
+	if len(rootPath) == 0 {
+		return nil, fmt.Errorf("pbpath.NewPlan: no parseable paths (all entries are Expr-only with no leaf paths)")
+	}
 	p.root = &planNode{
-		step: parsed[0][0], // RootStep — same for all paths
+		step: rootPath[0],
 		desc: md,
 	}
 	for i, pp := range parsed {
+		if len(pp) == 0 {
+			continue // Expr entry — no path to insert
+		}
 		if err := p.insertPath(pp, i); err != nil {
 			return nil, fmt.Errorf("pbpath.NewPlan: path %d: %v", i, err)
 		}
@@ -246,11 +389,50 @@ func stepEqual(a, b Step) bool {
 // Entries returns metadata for each compiled path, in the order they were
 // provided to [NewPlan].
 func (p *Plan) Entries() []PlanEntry {
-	out := make([]PlanEntry, len(p.entries))
-	for i, e := range p.entries {
-		out[i] = PlanEntry{Name: e.name, Path: e.path}
+	out := make([]PlanEntry, p.userCount)
+	for i := range p.userCount {
+		e := p.entries[i]
+		var ok protoreflect.Kind
+		if e.expr != nil {
+			ok = e.expr.outputKind()
+		}
+		out[i] = PlanEntry{Name: e.name, Path: e.path, OutputKind: ok, HasExpr: e.expr != nil}
 	}
 	return out
+}
+
+// ExprInputEntries returns the plan-entry indices of all leaf [PathRef] nodes
+// referenced by the Expr on user-visible entry idx. These are indices into
+// the full internal entries slice (which may include hidden leaf paths appended
+// after the user-visible entries).
+//
+// Returns nil when the entry has no Expr. Callers can use [Plan.InternalPath]
+// to retrieve the compiled path for each returned index.
+func (p *Plan) ExprInputEntries(idx int) []int {
+	if idx < 0 || idx >= p.userCount {
+		return nil
+	}
+	e := p.entries[idx]
+	if e.expr == nil {
+		return nil
+	}
+	leaves := resolvePathExprs(e.expr)
+	out := make([]int, len(leaves))
+	for i, leaf := range leaves {
+		out[i] = leaf.entryIdx
+	}
+	return out
+}
+
+// InternalPath returns the compiled [Path] for the given internal entry index.
+// Unlike [Entries] (which exposes only user-visible entries), this method can
+// access hidden leaf paths that were added to the trie for [Expr] evaluation.
+// Returns nil if idx is out of range.
+func (p *Plan) InternalPath(idx int) Path {
+	if idx < 0 || idx >= len(p.entries) {
+		return nil
+	}
+	return p.entries[idx].path
 }
 
 // ---- Evaluation ----
@@ -281,7 +463,305 @@ func (p *Plan) Eval(m proto.Message) ([][]Values, error) {
 	if err := p.root.exec(seed, p, out); err != nil {
 		return nil, err
 	}
-	return out, nil
+	// Return only user-visible entries; hidden Expr leaf paths are internal.
+	return out[:p.userCount], nil
+}
+
+// ---- Leaf-only evaluation (optimised hot path) ----
+
+// EvalLeaves traverses msg along all compiled paths simultaneously, returning
+// only the leaf (last) value for each branch — not the full path/values chain.
+//
+// This is significantly cheaper than [Plan.Eval] because it avoids
+// clonePath/cloneValues allocations entirely, tracking only a single cursor
+// value per branch per trie step.
+//
+// The returned slice is indexed by entry position (matching [NewPlan] order).
+// Each inner slice contains one protoreflect.Value per fan-out branch.
+// An empty inner slice means the path produced no values for this message
+// (left-join null).
+//
+// EvalLeaves reuses internal scratch buffers and is NOT safe for concurrent
+// use. Use [Plan.EvalLeavesConcurrent] when calling from multiple goroutines.
+func (p *Plan) EvalLeaves(m proto.Message) ([][]protoreflect.Value, error) {
+	got := m.ProtoReflect().Descriptor().FullName()
+	want := p.md.FullName()
+	if got != want {
+		return nil, fmt.Errorf("pbpath.Plan.EvalLeaves: got message type %s, want %s", got, want)
+	}
+
+	// Lazily initialise scratch.
+	if p.scratch == nil {
+		p.scratch = &leafScratch{
+			out: make([][]protoreflect.Value, len(p.entries)),
+		}
+	}
+	s := p.scratch
+
+	// Reset output slots (all entries, including hidden).
+	for i := range s.out {
+		s.out[i] = s.out[i][:0]
+	}
+
+	// Seed with root message.
+	s.seed[0] = leafBranch{cursor: protoreflect.ValueOf(m.ProtoReflect())}
+	if err := p.root.execLeaves(s.seed[:], p, s.out); err != nil {
+		return nil, err
+	}
+
+	// Post-process Expr entries: evaluate the expression tree using the
+	// resolved leaf values from the trie traversal.
+	p.evalExprs(s.out)
+
+	// Return only user-visible entries.
+	return s.out[:p.userCount], nil
+}
+
+// EvalLeavesConcurrent is like [Plan.EvalLeaves] but allocates fresh buffers
+// per call, making it safe for concurrent use by multiple goroutines.
+func (p *Plan) EvalLeavesConcurrent(m proto.Message) ([][]protoreflect.Value, error) {
+	got := m.ProtoReflect().Descriptor().FullName()
+	want := p.md.FullName()
+	if got != want {
+		return nil, fmt.Errorf("pbpath.Plan.EvalLeavesConcurrent: got message type %s, want %s", got, want)
+	}
+
+	out := make([][]protoreflect.Value, len(p.entries))
+	seed := [1]leafBranch{{cursor: protoreflect.ValueOf(m.ProtoReflect())}}
+	if err := p.root.execLeaves(seed[:], p, out); err != nil {
+		return nil, err
+	}
+
+	p.evalExprs(out)
+
+	return out[:p.userCount], nil
+}
+
+// resolveEnumDescs walks user Expr trees looking for funcEnumName nodes.
+// For each, it resolves the child leaf's parsed Path to find the terminal
+// FieldDescriptor, obtains its EnumDescriptor, and stores it on the funcExpr.
+// Returns an error if the leaf field is not an enum.
+func resolveEnumDescs(entries []planEntry, parsed []Path) error {
+	for _, e := range entries {
+		if e.expr == nil {
+			continue
+		}
+		if err := walkResolveEnumDesc(e.expr, parsed); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func walkResolveEnumDesc(expr Expr, parsed []Path) error {
+	fe, ok := expr.(*funcExpr)
+	if !ok {
+		return nil // leaf — nothing to do
+	}
+	// Recurse into children first.
+	for _, kid := range fe.kids {
+		if err := walkResolveEnumDesc(kid, parsed); err != nil {
+			return err
+		}
+	}
+	if fe.kind != funcEnumName {
+		return nil
+	}
+	// The single child should be a pathExpr (or eventually resolve to one).
+	leaves := resolvePathExprs(fe.kids[0])
+	if len(leaves) == 0 {
+		return fmt.Errorf("pbpath.NewPlan: FuncEnumName: child has no resolvable path")
+	}
+	leaf := leaves[0]
+	pp := parsed[leaf.entryIdx]
+	if len(pp) == 0 {
+		return fmt.Errorf("pbpath.NewPlan: FuncEnumName: leaf %q has no parsed path", leaf.path)
+	}
+	// Find the terminal FieldAccessStep.
+	var fd protoreflect.FieldDescriptor
+	for i := len(pp) - 1; i >= 0; i-- {
+		if pp[i].Kind() == FieldAccessStep {
+			fd = pp[i].FieldDescriptor()
+			break
+		}
+	}
+	if fd == nil {
+		return fmt.Errorf("pbpath.NewPlan: FuncEnumName: leaf %q has no terminal FieldAccessStep", leaf.path)
+	}
+	ed := fd.Enum()
+	if ed == nil {
+		return fmt.Errorf("pbpath.NewPlan: FuncEnumName: field %q is not an enum (kind: %v)", fd.Name(), fd.Kind())
+	}
+	fe.enumDesc = ed
+	return nil
+}
+
+// evalExprs post-processes all user-visible entries that have an Expr,
+// replacing the raw leaf values with the expression result.
+func (p *Plan) evalExprs(out [][]protoreflect.Value) {
+	for i := range p.userCount {
+		e := p.entries[i]
+		if e.expr == nil {
+			continue
+		}
+		// Determine branch count: the maximum fan-out of any leaf this
+		// expression depends on. For single-valued leaves this is 1.
+		maxBranches := 1
+		for _, leaf := range resolvePathExprs(e.expr) {
+			if n := len(out[leaf.entryIdx]); n > maxBranches {
+				maxBranches = n
+			}
+		}
+		result := make([]protoreflect.Value, 0, maxBranches)
+		for bi := range maxBranches {
+			result = append(result, e.expr.eval(out, bi))
+		}
+		out[i] = result
+	}
+}
+
+// execLeaves is the leaf-only analogue of exec.
+func (n *planNode) execLeaves(branches []leafBranch, plan *Plan, out [][]protoreflect.Value) error {
+	// Snapshot leaf values for any paths terminating at this node.
+	for _, id := range n.leafIDs {
+		entry := plan.entries[id]
+		for _, b := range branches {
+			if entry.strict && b.clamped {
+				return fmt.Errorf("pbpath.Plan.EvalLeaves: path %q: range or index was clamped (strict mode)", entry.name)
+			}
+		}
+		for _, b := range branches {
+			out[id] = append(out[id], b.cursor)
+		}
+	}
+
+	// Recurse into children.
+	for _, child := range n.children {
+		next, err := applyStepLeaves(child.step, branches)
+		if err != nil {
+			return err
+		}
+		if len(next) == 0 {
+			child.execLeavesEmpty(plan, out)
+			continue
+		}
+		if err := child.execLeaves(next, plan, out); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// execLeavesEmpty marks all leaf paths under this node as having empty results.
+func (n *planNode) execLeavesEmpty(plan *Plan, out [][]protoreflect.Value) {
+	for _, id := range n.leafIDs {
+		if out[id] == nil {
+			out[id] = []protoreflect.Value{} // explicitly empty, not nil
+		}
+	}
+	for _, child := range n.children {
+		child.execLeavesEmpty(plan, out)
+	}
+}
+
+// applyStepLeaves applies a single step to every leaf branch, returning new
+// branches. This is the leaf-only analogue of applyStep — it tracks only the
+// cursor value, not the full path/values chain.
+func applyStepLeaves(step Step, branches []leafBranch) ([]leafBranch, error) {
+	// Pre-allocate with a small constant capacity that fits on the stack
+	// (Go 1.26+). Most steps produce 1 branch per input branch.
+	var next []leafBranch
+
+	switch step.Kind() {
+	case FieldAccessStep:
+		fd := step.FieldDescriptor()
+		for _, b := range branches {
+			val := b.cursor.Message().Get(fd)
+			next = append(next, leafBranch{cursor: val, clamped: b.clamped})
+		}
+
+	case ListIndexStep:
+		idx := step.ListIndex()
+		for _, b := range branches {
+			list := b.cursor.List()
+			resolved := idx
+			if resolved < 0 {
+				resolved = list.Len() + resolved
+			}
+			if resolved < 0 || resolved >= list.Len() {
+				continue
+			}
+			next = append(next, leafBranch{cursor: list.Get(resolved), clamped: b.clamped})
+		}
+
+	case MapIndexStep:
+		for _, b := range branches {
+			val := b.cursor.Map().Get(step.MapIndex())
+			if !val.IsValid() {
+				continue
+			}
+			next = append(next, leafBranch{cursor: val, clamped: b.clamped})
+		}
+
+	case AnyExpandStep:
+		for _, b := range branches {
+			next = append(next, leafBranch{cursor: b.cursor, clamped: b.clamped})
+		}
+
+	case ListWildcardStep:
+		for _, b := range branches {
+			list := b.cursor.List()
+			for j := 0; j < list.Len(); j++ {
+				next = append(next, leafBranch{cursor: list.Get(j), clamped: b.clamped})
+			}
+		}
+
+	case ListRangeStep:
+		stride := step.RangeStep()
+		if stride == 0 {
+			return nil, fmt.Errorf("slice step must not be zero")
+		}
+		for _, b := range branches {
+			list := b.cursor.List()
+			length := list.Len()
+			wasClamped := b.clamped
+
+			start, end := resolveSliceBounds(step, length, stride)
+
+			if !step.StartOmitted() {
+				rawStart := step.RangeStart()
+				if rawStart < 0 {
+					rawStart = length + rawStart
+				}
+				if rawStart < 0 || rawStart > length {
+					wasClamped = true
+				}
+			}
+			if !step.EndOmitted() {
+				rawEnd := step.RangeEnd()
+				if rawEnd < 0 {
+					rawEnd = length + rawEnd
+				}
+				if stride > 0 && rawEnd > length {
+					wasClamped = true
+				}
+			}
+
+			if stride > 0 {
+				for j := start; j < end; j += stride {
+					next = append(next, leafBranch{cursor: list.Get(j), clamped: wasClamped})
+				}
+			} else {
+				for j := start; j > end && j >= 0; j += stride {
+					next = append(next, leafBranch{cursor: list.Get(j), clamped: wasClamped})
+				}
+			}
+		}
+
+	default:
+		return nil, fmt.Errorf("unsupported step kind %d", step.Kind())
+	}
+	return next, nil
 }
 
 // exec recursively walks the trie, applying steps and collecting results.
@@ -534,16 +1014,18 @@ func resolveSliceBounds(step Step, length, stride int) (start, end int) {
 	return
 }
 
-// clonePath returns a copy of p.
+// clonePath returns a copy of p with capacity for one additional step,
+// so that a subsequent append does not trigger a reallocation.
 func clonePath(p Path) Path {
-	out := make(Path, len(p))
+	out := make(Path, len(p), len(p)+1)
 	copy(out, p)
 	return out
 }
 
-// cloneValues returns a copy of v.
+// cloneValues returns a copy of v with capacity for one additional value,
+// so that a subsequent append does not trigger a reallocation.
 func cloneValues(v []protoreflect.Value) []protoreflect.Value {
-	out := make([]protoreflect.Value, len(v))
+	out := make([]protoreflect.Value, len(v), len(v)+1)
 	copy(out, v)
 	return out
 }
@@ -555,7 +1037,7 @@ func cloneValues(v []protoreflect.Value) []protoreflect.Value {
 // For repeated evaluation of the same paths against many messages, prefer
 // [NewPlan] + [Plan.Eval].
 func PathValuesMulti(md protoreflect.MessageDescriptor, m proto.Message, paths ...PlanPathSpec) ([][]Values, error) {
-	plan, err := NewPlan(md, paths...)
+	plan, err := NewPlan(md, nil, paths...)
 	if err != nil {
 		return nil, err
 	}

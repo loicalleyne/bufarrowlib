@@ -10,6 +10,9 @@ For hot paths that evaluate **multiple paths** against many messages of the same
 type, the **Plan API** compiles paths into a trie-based execution plan that
 traverses shared prefixes only once.
 
+For a deep dive into the internal object model, trie structure, expression
+system, and performance recommendations, see the [Architecture Guide](ARCHITECTURE.md).
+
 ## Core API
 
 ```go
@@ -763,6 +766,117 @@ results, err := plan.Eval(msg)
 
 This lets you mix lenient and strict paths in the same plan without separate
 traversals.
+
+## Expression Engine
+
+The Plan API supports **computed columns** through a composable `Expr` tree.
+Expressions reference protobuf field paths via `PathRef` and apply functions to
+produce derived values — all evaluated inline during plan traversal.
+
+### Quick Start
+
+```go
+plan, err := pbpath.NewPlan(md, nil,
+    // Coalesce: first non-zero value from multiple paths
+    pbpath.PlanPath("device_id",
+        pbpath.WithExpr(pbpath.FuncCoalesce(
+            pbpath.PathRef("user.id"),
+            pbpath.PathRef("site.id"),
+            pbpath.PathRef("device.ifa"),
+        )),
+        pbpath.Alias("device_id"),
+    ),
+
+    // Conditional: use banner dimensions if present, else video
+    pbpath.PlanPath("width",
+        pbpath.WithExpr(pbpath.FuncCond(
+            pbpath.FuncHas(pbpath.PathRef("imp[0].banner.w")),
+            pbpath.PathRef("imp[0].banner.w"),
+            pbpath.PathRef("imp[0].video.w"),
+        )),
+        pbpath.Alias("width"),
+    ),
+
+    // Arithmetic: compute a derived value
+    pbpath.PlanPath("total",
+        pbpath.WithExpr(pbpath.FuncMul(
+            pbpath.PathRef("items[0].price"),
+            pbpath.PathRef("items[0].qty"),
+        )),
+        pbpath.Alias("total"),
+    ),
+
+    // Default: provide a fallback literal
+    pbpath.PlanPath("country",
+        pbpath.WithExpr(pbpath.FuncDefault(
+            pbpath.PathRef("device.geo.country"),
+            protoreflect.ValueOfString("UNKNOWN"),
+        )),
+        pbpath.Alias("country"),
+    ),
+)
+```
+
+### Available Functions
+
+| Category | Functions | Output kind |
+|---|---|---|
+| Control flow | `FuncCoalesce`, `FuncDefault`, `FuncCond` | Same as input |
+| Existence | `FuncHas` | Bool |
+| Length | `FuncLen` | Int64 |
+| Predicates | `FuncEq`, `FuncNe`, `FuncLt`, `FuncLe`, `FuncGt`, `FuncGe` | Bool |
+| Arithmetic | `FuncAdd`, `FuncSub`, `FuncMul`, `FuncDiv`, `FuncMod` | Numeric (auto-promoted) |
+| Math | `FuncAbs`, `FuncCeil`, `FuncFloor`, `FuncRound`, `FuncMin`, `FuncMax` | Preserved |
+| String | `FuncUpper`, `FuncLower`, `FuncTrim`, `FuncTrimPrefix`, `FuncTrimSuffix`, `FuncConcat` | String |
+| Cast | `FuncCastInt`, `FuncCastFloat`, `FuncCastString` | Changed |
+| Timestamp | `FuncStrptime`, `FuncTryStrptime`, `FuncAge`, `FuncExtract{Year,Month,Day,Hour,Minute,Second}` | Int64 |
+| ETL | `FuncHash`, `FuncEpochToDate`, `FuncDatePart`, `FuncBucket`, `FuncMask`, `FuncCoerce`, `FuncEnumName` | Varies |
+| Aggregates | `FuncSum`, `FuncDistinct`, `FuncListConcat` | Varies |
+
+Expressions compose freely — a `FuncCond` can contain `FuncHas` as its
+predicate, `PathRef` as the then-branch, and `FuncDefault` as the else-branch.
+See the [Architecture Guide](ARCHITECTURE.md#expression-system-expr) for
+implementation details.
+
+## EvalLeaves — High-Performance Evaluation
+
+`Plan.EvalLeaves` is the recommended method for hot paths. It returns only
+leaf values (not the full path/values chain) and reuses pre-allocated scratch
+buffers, giving near-zero per-call allocations.
+
+```go
+// Compile once.
+plan, _ := pbpath.NewPlan(md, nil,
+    pbpath.PlanPath("device.geo.country", pbpath.Alias("country")),
+    pbpath.PlanPath("imp[*].id",          pbpath.Alias("imp_id")),
+)
+
+// Evaluate per message — near-zero allocations.
+for _, msg := range stream {
+    leaves, _ := plan.EvalLeaves(msg)
+    country := leaves[0]  // []protoreflect.Value with 1 element
+    impIDs  := leaves[1]  // []protoreflect.Value with N elements
+}
+```
+
+| Method | Allocations | Thread-safe | Returns |
+|---|---|---|---|
+| `Eval(msg)` | Full Values chains | ✅ | `[][]Values` |
+| `EvalLeaves(msg)` | Near-zero (scratch reuse) | ❌ | `[][]protoreflect.Value` |
+| `EvalLeavesConcurrent(msg)` | Fresh buffers per call | ✅ | `[][]protoreflect.Value` |
+
+## Running Benchmarks
+
+```sh
+# Run all pbpath benchmarks
+go test -bench=. -benchmem ./proto/pbpath/
+
+# Run Plan evaluation benchmarks
+go test -bench='BenchmarkPlan' -benchmem ./proto/pbpath/
+
+# Run with longer duration for stable results
+go test -bench='BenchmarkPlan' -benchmem -benchtime=5s -count=3 ./proto/pbpath/
+```
 
 ## Error Cases
 

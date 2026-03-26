@@ -293,6 +293,92 @@ func isScalarLeaf(fd protoreflect.FieldDescriptor) bool {
 	return ProtoKindToArrowType(fd) != nil
 }
 
+// ExprKindToArrowType returns the Arrow data type corresponding to a
+// [protoreflect.Kind]. This is used for denormalizer columns whose type is
+// determined by an [Expr] function's output kind rather than by a leaf field
+// descriptor.
+//
+// Only the primitive scalar kinds that Expr functions can produce are handled:
+//
+//	BoolKind   → Boolean
+//	Int32Kind  → Int32     Int64Kind  → Int64
+//	Uint32Kind → Uint32    Uint64Kind → Uint64
+//	FloatKind  → Float32   DoubleKind → Float64
+//	StringKind → String    BytesKind  → Binary
+//	EnumKind   → Int32
+//
+// Returns nil for message, group, or unrecognised kinds.
+func ExprKindToArrowType(kind protoreflect.Kind) arrow.DataType {
+	switch kind {
+	case protoreflect.BoolKind:
+		return arrow.FixedWidthTypes.Boolean
+	case protoreflect.EnumKind:
+		return arrow.PrimitiveTypes.Int32
+	case protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Sfixed32Kind:
+		return arrow.PrimitiveTypes.Int32
+	case protoreflect.Uint32Kind, protoreflect.Fixed32Kind:
+		return arrow.PrimitiveTypes.Uint32
+	case protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind:
+		return arrow.PrimitiveTypes.Int64
+	case protoreflect.Uint64Kind, protoreflect.Fixed64Kind:
+		return arrow.PrimitiveTypes.Uint64
+	case protoreflect.FloatKind:
+		return arrow.PrimitiveTypes.Float32
+	case protoreflect.DoubleKind:
+		return arrow.PrimitiveTypes.Float64
+	case protoreflect.StringKind:
+		return arrow.BinaryTypes.String
+	case protoreflect.BytesKind:
+		return arrow.BinaryTypes.Binary
+	default:
+		return nil
+	}
+}
+
+// ExprKindToAppendFunc returns a closure that appends a [protoreflect.Value]
+// of the given kind to the Arrow array builder b. The builder must match the
+// type returned by [ExprKindToArrowType] for the same kind.
+//
+// This is the Expr-output counterpart of [ProtoKindToAppendFunc]; it handles
+// only the primitive scalar kinds that Expr functions can produce.
+// Returns nil for unsupported kinds.
+func ExprKindToAppendFunc(kind protoreflect.Kind, b array.Builder) protoAppendFunc {
+	switch kind {
+	case protoreflect.BoolKind:
+		a := b.(*array.BooleanBuilder)
+		return func(v protoreflect.Value) { a.Append(v.Bool()) }
+	case protoreflect.EnumKind:
+		a := b.(*array.Int32Builder)
+		return func(v protoreflect.Value) { a.Append(int32(v.Enum())) }
+	case protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Sfixed32Kind:
+		a := b.(*array.Int32Builder)
+		return func(v protoreflect.Value) { a.Append(int32(v.Int())) }
+	case protoreflect.Uint32Kind, protoreflect.Fixed32Kind:
+		a := b.(*array.Uint32Builder)
+		return func(v protoreflect.Value) { a.Append(uint32(v.Uint())) }
+	case protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind:
+		a := b.(*array.Int64Builder)
+		return func(v protoreflect.Value) { a.Append(v.Int()) }
+	case protoreflect.Uint64Kind, protoreflect.Fixed64Kind:
+		a := b.(*array.Uint64Builder)
+		return func(v protoreflect.Value) { a.Append(v.Uint()) }
+	case protoreflect.FloatKind:
+		a := b.(*array.Float32Builder)
+		return func(v protoreflect.Value) { a.Append(float32(v.Float())) }
+	case protoreflect.DoubleKind:
+		a := b.(*array.Float64Builder)
+		return func(v protoreflect.Value) { a.Append(v.Float()) }
+	case protoreflect.StringKind:
+		a := b.(*array.StringBuilder)
+		return func(v protoreflect.Value) { a.Append(v.String()) }
+	case protoreflect.BytesKind:
+		a := b.(*array.BinaryBuilder)
+		return func(v protoreflect.Value) { a.Append(v.Bytes()) }
+	default:
+		return nil
+	}
+}
+
 // leafFieldDescriptor extracts the leaf FieldDescriptor from a pbpath step
 // descriptor. The desc should be the descriptor at the terminal node of a
 // compiled path — either a FieldDescriptor for scalar fields or a

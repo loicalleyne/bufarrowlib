@@ -37,6 +37,22 @@ type Transcoder struct {
 	denormGroups  []fanoutGroup
 	denormCols    []denormColumn
 	opts          *Opt
+
+	// hyperType is the shared HyperType coordinator for PGO-enabled raw-bytes
+	// ingestion. When non-nil, AppendRaw/AppendDenormRaw use it to load the
+	// current compiled MessageType and record profiling data. Multiple
+	// Transcoders (including clones) may share the same HyperType.
+	hyperType *HyperType
+
+	// hyperShared is per-Transcoder hyperpb memory reuse state. It is created
+	// fresh for each Transcoder/clone and must not be shared.
+	hyperShared *hyperpb.Shared
+
+	// Scratch slices reused across AppendDenorm calls to avoid per-call allocations.
+	denormGroupCounts []int
+	denormGroupIsNull []bool
+	denormBranchIdx   []int
+	denormNullCols    []bool
 }
 
 // Opt holds the option values collected from [Option] functions and passed
@@ -47,6 +63,7 @@ type Opt struct {
 	customMsgName     string
 	customImportPaths []string
 	denormPaths       []pbpath.PlanPathSpec
+	hyperType         *HyperType
 }
 
 // Option is a functional option applied to [New] and [NewFromFile] to
@@ -94,6 +111,22 @@ func WithCustomMessageFile(protoFilePath, messageName string, importPaths []stri
 func WithDenormalizerPlan(paths ...pbpath.PlanPathSpec) Option {
 	return func(cfg config) {
 		cfg.denormPaths = append(cfg.denormPaths, paths...)
+	}
+}
+
+// WithHyperType provides a shared [HyperType] coordinator for PGO-enabled
+// raw-bytes ingestion via [Transcoder.AppendRaw] and
+// [Transcoder.AppendDenormRaw]. The HyperType's compiled
+// [hyperpb.MessageType] is used instead of compiling a new one, and all
+// Transcoders sharing the same HyperType contribute profiling data for
+// online recompilation.
+//
+// Create a HyperType with [NewHyperType] and pass it to multiple New/Clone
+// calls. Call [HyperType.Recompile] to upgrade the parser with collected
+// profile data.
+func WithHyperType(ht *HyperType) Option {
+	return func(cfg config) {
+		cfg.hyperType = ht
 	}
 }
 
@@ -170,9 +203,18 @@ func New(msgDesc protoreflect.MessageDescriptor, mem memory.Allocator, opts ...O
 		activeMsgDesc = mergedMsgDesc
 	}
 
-	msgType := hyperpb.CompileMessageDescriptor(activeMsgDesc)
+	var msgType *hyperpb.MessageType
+	if o.hyperType != nil {
+		msgType = o.hyperType.Type()
+	} else {
+		msgType = hyperpb.CompileMessageDescriptor(activeMsgDesc)
+	}
 	a := hyperpb.NewMessage(msgType)
 	tc = &Transcoder{msgDesc: msgDesc, msgType: msgType, stencil: a, opts: o}
+	if o.hyperType != nil {
+		tc.hyperType = o.hyperType
+		tc.hyperShared = new(hyperpb.Shared)
+	}
 
 	var b *message
 	if mergedMsgDesc != nil {
@@ -197,6 +239,10 @@ func New(msgDesc protoreflect.MessageDescriptor, mem memory.Allocator, opts ...O
 
 // Clone returns an identical [Transcoder]. Use in concurrency scenarios as
 // Transcoder methods are not concurrency safe.
+//
+// The compiled denormalizer [Plan] is shared (it is immutable), but the Arrow
+// builders, scratch buffers, and leaf scratch are freshly allocated so each
+// clone can operate independently.
 func (s *Transcoder) Clone(mem memory.Allocator) (tc *Transcoder, err error) {
 	defer func() {
 		e := recover()
@@ -215,11 +261,15 @@ func (s *Transcoder) Clone(mem memory.Allocator) (tc *Transcoder, err error) {
 	b := build(a.ProtoReflect())
 	b.build(mem)
 	tc = &Transcoder{msgDesc: s.msgDesc, msg: b, msgType: s.msgType, stencil: a, opts: s.opts}
+	if s.hyperType != nil {
+		tc.hyperType = s.hyperType
+		tc.hyperShared = new(hyperpb.Shared)
+	}
 	if s.stencilCustom != nil {
 		tc.stencilCustom = dynamicpb.NewMessage(s.stencilCustom.ProtoReflect().Descriptor())
 	}
-	if len(s.opts.denormPaths) > 0 {
-		if err := tc.compileDenormPlan(mem); err != nil {
+	if s.denormPlan != nil {
+		if err := tc.cloneDenorm(s, mem); err != nil {
 			return nil, err
 		}
 	}
