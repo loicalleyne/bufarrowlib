@@ -297,7 +297,7 @@ tc, err := bufarrowlib.New(md, memory.DefaultAllocator,
 
 ## 📊 Benchmarks
 
-Benchmarks use a realistic 506-message corpus shaped to match production ad-tech traffic (OpenRTB BidRequest): 75% have 2 impressions, 61% have 1 deal per impression, banner and video mutually exclusive dimensions, all top-level fields populated.
+Benchmarks use a realistic 506-message corpus shaped to match sampled production ad-tech traffic (OpenRTB BidRequest): 75% have 2 imp objects, 61% have 1 deal object per impression, banner and video mutually exclusive dimensions, all top-level fields populated.
 
 ### BidRequest denormalization — method comparison
 
