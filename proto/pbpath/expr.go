@@ -29,7 +29,7 @@ type Expr interface {
 	// assigned during plan compilation.
 	//
 	// branchIdx selects which fan-out branch to read from multi-valued leaves.
-	eval(leafValues [][]protoreflect.Value, branchIdx int) protoreflect.Value
+	eval(leafValues [][]Value, branchIdx int) Value
 
 	// children returns the direct child expressions, or nil for leaves.
 	children() []Expr
@@ -55,10 +55,10 @@ func (e *pathExpr) inputPaths() []string { return []string{e.path} }
 func (e *pathExpr) outputKind() protoreflect.Kind { return 0 } // pass-through
 func (e *pathExpr) children() []Expr               { return nil }
 
-func (e *pathExpr) eval(leafValues [][]protoreflect.Value, branchIdx int) protoreflect.Value {
+func (e *pathExpr) eval(leafValues [][]Value, branchIdx int) Value {
 	vals := leafValues[e.entryIdx]
 	if branchIdx >= len(vals) {
-		return protoreflect.Value{} // null / out-of-bounds
+		return Value{} // null / out-of-bounds
 	}
 	return vals[branchIdx]
 }
@@ -132,6 +132,12 @@ const (
 	funcSum
 	funcDistinct
 	funcListConcat
+
+	// Wave 4 — filter / logic functions
+	funcSelect  // mid-traversal filter: pass-through if predicate is truthy, null otherwise
+	funcAnd     // logical AND of two boolean children
+	funcOr      // logical OR of two boolean children
+	funcNot     // logical NOT of a boolean child
 )
 
 // funcExpr is an interior Expr node that applies a function to child
@@ -140,13 +146,13 @@ const (
 type funcExpr struct {
 	kind         funcKind
 	kids         []Expr
-	literal      protoreflect.Value              // for Default: the fallback literal; Coerce: ifTrue; Mask: keepFirst (as int64)
-	separator    string                          // for Concat: separator; TrimPrefix/Suffix: affix; Strptime: format; DatePart: part name; Mask: mask char; ListConcat: separator
-	autoPromote  *bool                           // for Cond: per-expr override; nil = use plan default
-	outKind      protoreflect.Kind               // cached output kind (0 = pass-through)
-	literal2     protoreflect.Value              // for Coerce: ifFalse
-	intParam     int                             // for Bucket: size; Mask: keepLast
-	enumDesc     protoreflect.EnumDescriptor     // for EnumName: resolved at plan compile time
+	literal      Value                            // for Default: the fallback literal; Coerce: ifTrue; Mask: keepFirst (as int64)
+	separator    string                           // for Concat: separator; TrimPrefix/Suffix: affix; Strptime: format; DatePart: part name; Mask: mask char; ListConcat: separator
+	autoPromote  *bool                            // for Cond: per-expr override; nil = use plan default
+	outKind      protoreflect.Kind                // cached output kind (0 = pass-through)
+	literal2     Value                            // for Coerce: ifFalse
+	intParam     int                              // for Bucket: size; Mask: keepLast
+	enumDesc     protoreflect.EnumDescriptor      // for EnumName: resolved at plan compile time
 }
 
 func (e *funcExpr) outputKind() protoreflect.Kind { return e.outKind }
@@ -169,7 +175,7 @@ func FuncCoalesce(children ...Expr) Expr {
 }
 
 // FuncDefault returns the child value if non-zero, otherwise the literal.
-func FuncDefault(child Expr, literal protoreflect.Value) Expr {
+func FuncDefault(child Expr, literal Value) Expr {
 	return &funcExpr{kind: funcDefault, kids: []Expr{child}, literal: literal}
 }
 
@@ -467,7 +473,7 @@ func FuncMask(child Expr, keepFirst, keepLast int, maskChar string) Expr {
 	return &funcExpr{
 		kind:      funcMask,
 		kids:      []Expr{child},
-		literal:   protoreflect.ValueOfInt64(int64(keepFirst)),
+		literal:   ScalarInt64(int64(keepFirst)),
 		intParam:  keepLast,
 		separator: maskChar,
 		outKind:   protoreflect.StringKind,
@@ -477,7 +483,7 @@ func FuncMask(child Expr, keepFirst, keepLast int, maskChar string) Expr {
 // FuncCoerce maps a boolean child to one of two literal values.
 // If the child is non-zero (true), ifTrue is returned; otherwise ifFalse.
 // Output kind: StringKind.
-func FuncCoerce(child Expr, ifTrue, ifFalse protoreflect.Value) Expr {
+func FuncCoerce(child Expr, ifTrue, ifFalse Value) Expr {
 	return &funcExpr{
 		kind:     funcCoerce,
 		kids:     []Expr{child},
@@ -514,6 +520,120 @@ func FuncDistinct(child Expr) Expr {
 func FuncListConcat(child Expr, sep string) Expr {
 	return &funcExpr{kind: funcListConcat, kids: []Expr{child}, separator: sep, outKind: protoreflect.StringKind}
 }
+
+// ---- Wave 4 — Filter / logic constructors ----
+
+// FuncSelect evaluates a predicate child and, if truthy, returns the value
+// of the second child (the "input" being filtered). If the predicate is falsy,
+// returns null. This gives jq-style `| select(pred)` semantics.
+//
+// Usage: FuncSelect(predicate, inputPathRef)
+// The first child is the boolean predicate; the second is the value to
+// pass through (typically the same path being filtered).
+// Output kind: pass-through (same as the input child).
+func FuncSelect(predicate, input Expr) Expr {
+	return &funcExpr{kind: funcSelect, kids: []Expr{predicate, input}}
+}
+
+// FuncAnd returns the logical AND of two boolean children.
+// Both children should evaluate to boolean-like values; the result is true
+// only when both are truthy (non-null, non-zero).
+// Output kind: BoolKind.
+func FuncAnd(a, b Expr) Expr {
+	return &funcExpr{kind: funcAnd, kids: []Expr{a, b}, outKind: protoreflect.BoolKind}
+}
+
+// FuncOr returns the logical OR of two boolean children.
+// The result is true when at least one child is truthy.
+// Output kind: BoolKind.
+func FuncOr(a, b Expr) Expr {
+	return &funcExpr{kind: funcOr, kids: []Expr{a, b}, outKind: protoreflect.BoolKind}
+}
+
+// FuncNot returns the logical NOT of a boolean child.
+// The result is true when the child is falsy (null, zero, false, empty).
+// Output kind: BoolKind.
+func FuncNot(child Expr) Expr {
+	return &funcExpr{kind: funcNot, kids: []Expr{child}, outKind: protoreflect.BoolKind}
+}
+
+// ---- Filter predicate expressions ----
+
+// filterPathExpr is a leaf [Expr] that references a field path relative to
+// the current cursor message (used inside filter predicates like [?(.name == "x")]).
+// Unlike [pathExpr], which references a path from the root, filterPathExpr
+// is evaluated at traversal time against the per-branch cursor value.
+//
+// The field descriptors are resolved at parse time (when the message descriptor
+// is known), so eval is a direct field lookup chain with no parsing overhead.
+type filterPathExpr struct {
+	relPath string                         // relative path string for display (e.g. "name" or "inner.id")
+	fields  []protoreflect.FieldDescriptor // resolved chain of field descriptors
+}
+
+// FilterPathRef creates a leaf [Expr] referencing a field path relative to
+// the current message cursor. Used inside filter predicates.
+// The fields parameter is the resolved chain of field descriptors from the
+// cursor message to the target field.
+func FilterPathRef(relPath string, fields ...protoreflect.FieldDescriptor) Expr {
+	return &filterPathExpr{relPath: relPath, fields: fields}
+}
+
+func (e *filterPathExpr) inputPaths() []string           { return nil } // not a root-relative path
+func (e *filterPathExpr) outputKind() protoreflect.Kind { return 0 }
+func (e *filterPathExpr) children() []Expr               { return nil }
+
+// eval evaluates the filter path against the cursor message stored in
+// leafValues[0][branchIdx] (by convention, filter evaluation passes the
+// cursor as a single-element slice at index 0).
+//
+// The traversal walks the resolved field descriptor chain from the cursor
+// message to the target field, performing direct protoreflect.Message.Get()
+// calls without any Plan compilation overhead.
+func (e *filterPathExpr) eval(leafValues [][]Value, branchIdx int) Value {
+	if len(leafValues) == 0 || branchIdx >= len(leafValues[0]) {
+		return Null()
+	}
+	cursor := leafValues[0][branchIdx]
+	if cursor.Kind() != MessageKind || cursor.Message() == nil {
+		return Null()
+	}
+	msg := cursor.Message()
+	// Walk the field chain.
+	for i, fd := range e.fields {
+		val := msg.Get(fd)
+		if i == len(e.fields)-1 {
+			// Last field — return the value.
+			return FromProtoValue(val)
+		}
+		// Intermediate field — must be a message to continue traversal.
+		if fd.Message() == nil {
+			return Null() // non-message intermediate → can't traverse further
+		}
+		msg = val.Message()
+	}
+	return Null()
+}
+
+// literalExpr is a leaf [Expr] that always returns a fixed [Value].
+// Used for literal constants inside filter predicates (e.g. the "x" in
+// [?(.name == "x")] or the 42 in [?(.count > 42)]).
+type literalExpr struct {
+	val     Value
+	litKind protoreflect.Kind // output kind for Arrow type inference
+}
+
+// Literal creates a leaf [Expr] that always returns val.
+// The kind parameter determines the output kind for Arrow type inference;
+// pass 0 for automatic (inferred from val's protoreflect.Value).
+func Literal(val Value, kind protoreflect.Kind) Expr {
+	return &literalExpr{val: val, litKind: kind}
+}
+
+func (e *literalExpr) inputPaths() []string           { return nil }
+func (e *literalExpr) outputKind() protoreflect.Kind   { return e.litKind }
+func (e *literalExpr) children() []Expr                 { return nil }
+func (e *literalExpr) eval(_ [][]Value, _ int) Value { return e.val }
 
 // resolvePathExprs recursively walks the Expr tree and collects all
 // pathExpr leaves. Returns the list of paths found.

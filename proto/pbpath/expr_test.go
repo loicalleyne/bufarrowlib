@@ -164,7 +164,7 @@ func TestFuncCoalesce(t *testing.T) {
 		if len(result) != 1 || len(result[0]) != 1 {
 			t.Fatalf("expected 1 result with 1 branch, got %v", result)
 		}
-		if got := result[0][0].Int(); got != 10 {
+		if got := result[0][0].ToProtoValue().Int(); got != 10 {
 			t.Fatalf("expected 10, got %d", got)
 		}
 	})
@@ -181,7 +181,7 @@ func TestFuncCoalesce(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if result[0][0].IsValid() {
+		if !result[0][0].IsNull() {
 			t.Fatalf("expected invalid (null), got %v", result[0][0])
 		}
 	})
@@ -195,7 +195,7 @@ func TestFuncDefault(t *testing.T) {
 	t.Run("uses value when present", func(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"x": 42})
 		plan, err := NewPlan(md, nil,
-			PlanPath("d", WithExpr(FuncDefault(PathRef("x"), protoreflect.ValueOfInt64(99))), Alias("d")),
+			PlanPath("d", WithExpr(FuncDefault(PathRef("x"), ScalarInt64(99))), Alias("d")),
 		)
 		if err != nil {
 			t.Fatal(err)
@@ -204,7 +204,7 @@ func TestFuncDefault(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := result[0][0].Int(); got != 42 {
+		if got := result[0][0].ToProtoValue().Int(); got != 42 {
 			t.Fatalf("expected 42, got %d", got)
 		}
 	})
@@ -212,7 +212,7 @@ func TestFuncDefault(t *testing.T) {
 	t.Run("uses literal when zero", func(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{})
 		plan, err := NewPlan(md, nil,
-			PlanPath("d", WithExpr(FuncDefault(PathRef("x"), protoreflect.ValueOfInt64(99))), Alias("d")),
+			PlanPath("d", WithExpr(FuncDefault(PathRef("x"), ScalarInt64(99))), Alias("d")),
 		)
 		if err != nil {
 			t.Fatal(err)
@@ -221,7 +221,7 @@ func TestFuncDefault(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := result[0][0].Int(); got != 99 {
+		if got := result[0][0].ToProtoValue().Int(); got != 99 {
 			t.Fatalf("expected 99, got %d", got)
 		}
 	})
@@ -244,7 +244,7 @@ func TestFuncCond(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := result[0][0].Int(); got != 10 {
+		if got := result[0][0].ToProtoValue().Int(); got != 10 {
 			t.Fatalf("expected 10, got %d", got)
 		}
 	})
@@ -261,7 +261,7 @@ func TestFuncCond(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := result[0][0].Int(); got != 20 {
+		if got := result[0][0].ToProtoValue().Int(); got != 20 {
 			t.Fatalf("expected 20, got %d", got)
 		}
 	})
@@ -284,7 +284,7 @@ func TestFuncHas(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := result[0][0].Bool(); !got {
+		if got := result[0][0].ToProtoValue().Bool(); !got {
 			t.Fatalf("expected true, got false")
 		}
 		if plan.Entries()[0].OutputKind != protoreflect.BoolKind {
@@ -304,7 +304,7 @@ func TestFuncHas(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := result[0][0].Bool(); got {
+		if got := result[0][0].ToProtoValue().Bool(); got {
 			t.Fatalf("expected false, got true")
 		}
 	})
@@ -327,7 +327,7 @@ func TestFuncLen(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := result[0][0].Int(); got != 5 {
+		if got := result[0][0].ToProtoValue().Int(); got != 5 {
 			t.Fatalf("expected 5, got %d", got)
 		}
 		if plan.Entries()[0].OutputKind != protoreflect.Int64Kind {
@@ -347,7 +347,7 @@ func TestFuncLen(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := result[0][0].Int(); got != 0 {
+		if got := result[0][0].ToProtoValue().Int(); got != 0 {
 			t.Fatalf("expected 0, got %d", got)
 		}
 	})
@@ -386,7 +386,7 @@ func TestFuncArith(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got := result[0][0].Int(); got != tc.want {
+			if got := result[0][0].ToProtoValue().Int(); got != tc.want {
 				t.Fatalf("expected %d, got %d", tc.want, got)
 			}
 		})
@@ -412,7 +412,7 @@ func TestFuncArith(t *testing.T) {
 		// child.x on a message with no child set: proto3 returns default (0)
 		// for scalar fields on default message instances, which is valid.
 		// So this should produce 10 + 0 = 10.
-		if got := result[0][0].Int(); got != 10 {
+		if got := result[0][0].ToProtoValue().Int(); got != 10 {
 			t.Fatalf("expected 10, got %d", got)
 		}
 	})
@@ -433,7 +433,7 @@ func TestFuncArithFloat(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := result[0][0].Float(); got != 4.0 {
+		if got := result[0][0].ToProtoValue().Float(); got != 4.0 {
 			t.Fatalf("expected 4.0, got %f", got)
 		}
 	})
@@ -450,7 +450,7 @@ func TestFuncArithFloat(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := result[0][0].Float(); got != 4.5 {
+		if got := result[0][0].ToProtoValue().Float(); got != 4.5 {
 			t.Fatalf("expected 4.5, got %f", got)
 		}
 	})
@@ -467,7 +467,7 @@ func TestFuncArithFloat(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := result[0][0].Float(); got != 0 {
+		if got := result[0][0].ToProtoValue().Float(); got != 0 {
 			t.Fatalf("expected 0, got %f", got)
 		}
 	})
@@ -490,7 +490,7 @@ func TestFuncConcat(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := result[0][0].String(); got != "hello-world" {
+		if got := result[0][0].ToProtoValue().String(); got != "hello-world" {
 			t.Fatalf("expected %q, got %q", "hello-world", got)
 		}
 		if plan.Entries()[0].OutputKind != protoreflect.StringKind {
@@ -510,7 +510,7 @@ func TestFuncConcat(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := result[0][0].String(); got != "foobar" {
+		if got := result[0][0].ToProtoValue().String(); got != "foobar" {
 			t.Fatalf("expected %q, got %q", "foobar", got)
 		}
 	})
@@ -527,7 +527,7 @@ func TestFuncConcat(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := result[0][0].String(); got != "val=42" {
+		if got := result[0][0].ToProtoValue().String(); got != "val=42" {
 			t.Fatalf("expected %q, got %q", "val=42", got)
 		}
 	})
@@ -543,7 +543,7 @@ func TestExprComposition(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{})
 		expr := FuncCoalesce(
 			FuncAdd(PathRef("zero"), PathRef("zero")),                   // 0+0 = 0 (zero → not valid for coalesce)
-			FuncDefault(PathRef("zero"), protoreflect.ValueOfInt64(99)), // → 99
+			FuncDefault(PathRef("zero"), ScalarInt64(99)), // → 99
 		)
 		plan, err := NewPlan(md, nil,
 			PlanPath("r", WithExpr(expr), Alias("r")),
@@ -555,7 +555,7 @@ func TestExprComposition(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := result[0][0].Int(); got != 99 {
+		if got := result[0][0].ToProtoValue().Int(); got != 99 {
 			t.Fatalf("expected 99, got %d", got)
 		}
 	})
@@ -574,7 +574,7 @@ func TestExprComposition(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := result[0][0].Int(); got != 7 {
+		if got := result[0][0].ToProtoValue().Int(); got != 7 {
 			t.Fatalf("expected 7 (3+4), got %d", got)
 		}
 
@@ -584,7 +584,7 @@ func TestExprComposition(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := result2[0][0].Int(); got != 12 {
+		if got := result2[0][0].ToProtoValue().Int(); got != 12 {
 			t.Fatalf("expected 12 (3*4), got %d", got)
 		}
 	})
@@ -604,7 +604,7 @@ func TestExprComposition(t *testing.T) {
 			t.Fatal(err)
 		}
 		// FuncAdd returns int64, Concat stringifies → "sum:7"
-		if got := result[0][0].String(); got != "sum:7" {
+		if got := result[0][0].ToProtoValue().String(); got != "sum:7" {
 			t.Fatalf("expected %q, got %q", "sum:7", got)
 		}
 	})
@@ -637,10 +637,10 @@ func TestExprSharedLeafDedup(t *testing.T) {
 	if len(result) != 2 {
 		t.Fatalf("expected 2 result slots, got %d", len(result))
 	}
-	if got := result[0][0].Int(); got != 8 {
+	if got := result[0][0].ToProtoValue().Int(); got != 8 {
 		t.Fatalf("sum: expected 8, got %d", got)
 	}
-	if got := result[1][0].Int(); got != 2 {
+	if got := result[1][0].ToProtoValue().Int(); got != 2 {
 		t.Fatalf("diff: expected 2, got %d", got)
 	}
 }
@@ -674,15 +674,15 @@ func TestExprMixedWithRawPaths(t *testing.T) {
 	}
 
 	// Entry 0: raw "name" → "hello"
-	if got := result[0][0].String(); got != "hello" {
+	if got := result[0][0].ToProtoValue().String(); got != "hello" {
 		t.Fatalf("name: expected %q, got %q", "hello", got)
 	}
 	// Entry 1: expr Add(x,y) → 13
-	if got := result[1][0].Int(); got != 13 {
+	if got := result[1][0].ToProtoValue().Int(); got != 13 {
 		t.Fatalf("sum: expected 13, got %d", got)
 	}
 	// Entry 2: raw "x" → 10
-	if got := result[2][0].Int(); got != 10 {
+	if got := result[2][0].ToProtoValue().Int(); got != 10 {
 		t.Fatalf("x: expected 10, got %d", got)
 	}
 }
@@ -704,7 +704,7 @@ func TestExprEvalLeavesConcurrent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := result[0][0].Int(); got != 15 {
+	if got := result[0][0].ToProtoValue().Int(); got != 15 {
 		t.Fatalf("expected 15, got %d", got)
 	}
 }
@@ -715,7 +715,7 @@ func TestInputPaths(t *testing.T) {
 	expr := FuncConcat("-",
 		PathRef("name"),
 		FuncAdd(PathRef("x"), PathRef("y")),
-		FuncDefault(PathRef("suffix"), protoreflect.ValueOfString("none")),
+		FuncDefault(PathRef("suffix"), ScalarString("none")),
 	)
 	paths := expr.inputPaths()
 	want := []string{"name", "x", "y", "suffix"}
@@ -875,7 +875,7 @@ func TestFuncPredicates(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got := result[0][0].Bool(); got != tc.want {
+			if got := result[0][0].ToProtoValue().Bool(); got != tc.want {
 				t.Fatalf("expected %v, got %v", tc.want, got)
 			}
 		})
@@ -931,7 +931,7 @@ func TestFuncStringFunctions(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got := result[0][0].String(); got != tc.want {
+			if got := result[0][0].ToProtoValue().String(); got != tc.want {
 				t.Fatalf("expected %q, got %q", tc.want, got)
 			}
 		})
@@ -961,7 +961,7 @@ func TestFuncMathUnary(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"x": 5})
 		plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(FuncAbs(PathRef("x"))), Alias("r")))
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].Int(); got != 5 {
+		if got := result[0][0].ToProtoValue().Int(); got != 5 {
 			t.Fatalf("expected 5, got %d", got)
 		}
 	})
@@ -970,7 +970,7 @@ func TestFuncMathUnary(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"x": -7})
 		plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(FuncAbs(PathRef("x"))), Alias("r")))
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].Int(); got != 7 {
+		if got := result[0][0].ToProtoValue().Int(); got != 7 {
 			t.Fatalf("expected 7, got %d", got)
 		}
 	})
@@ -979,7 +979,7 @@ func TestFuncMathUnary(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"dx": -3.14})
 		plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(FuncAbs(PathRef("dx"))), Alias("r")))
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].Float(); got != 3.14 {
+		if got := result[0][0].ToProtoValue().Float(); got != 3.14 {
 			t.Fatalf("expected 3.14, got %f", got)
 		}
 	})
@@ -988,7 +988,7 @@ func TestFuncMathUnary(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"dx": 2.3})
 		plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(FuncCeil(PathRef("dx"))), Alias("r")))
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].Float(); got != 3.0 {
+		if got := result[0][0].ToProtoValue().Float(); got != 3.0 {
 			t.Fatalf("expected 3.0, got %f", got)
 		}
 	})
@@ -997,7 +997,7 @@ func TestFuncMathUnary(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"dx": 2.7})
 		plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(FuncFloor(PathRef("dx"))), Alias("r")))
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].Float(); got != 2.0 {
+		if got := result[0][0].ToProtoValue().Float(); got != 2.0 {
 			t.Fatalf("expected 2.0, got %f", got)
 		}
 	})
@@ -1007,7 +1007,7 @@ func TestFuncMathUnary(t *testing.T) {
 		plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(FuncRound(PathRef("dx"))), Alias("r")))
 		result, _ := plan.EvalLeaves(msg)
 		// Banker's rounding: 2.5 → 2.0
-		if got := result[0][0].Float(); got != 2.0 {
+		if got := result[0][0].ToProtoValue().Float(); got != 2.0 {
 			t.Fatalf("expected 2.0, got %f", got)
 		}
 	})
@@ -1017,7 +1017,7 @@ func TestFuncMathUnary(t *testing.T) {
 		plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(FuncRound(PathRef("dx"))), Alias("r")))
 		result, _ := plan.EvalLeaves(msg)
 		// Banker's rounding: 3.5 → 4.0
-		if got := result[0][0].Float(); got != 4.0 {
+		if got := result[0][0].ToProtoValue().Float(); got != 4.0 {
 			t.Fatalf("expected 4.0, got %f", got)
 		}
 	})
@@ -1026,7 +1026,7 @@ func TestFuncMathUnary(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"x": 5})
 		plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(FuncCeil(PathRef("x"))), Alias("r")))
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].Int(); got != 5 {
+		if got := result[0][0].ToProtoValue().Int(); got != 5 {
 			t.Fatalf("expected 5, got %d", got)
 		}
 	})
@@ -1035,7 +1035,7 @@ func TestFuncMathUnary(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"name": "text"})
 		plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(FuncAbs(PathRef("name"))), Alias("r")))
 		result, _ := plan.EvalLeaves(msg)
-		if result[0][0].IsValid() {
+		if !result[0][0].IsNull() {
 			t.Fatalf("expected invalid for non-numeric, got %v", result[0][0])
 		}
 	})
@@ -1062,7 +1062,7 @@ func TestFuncMinMax(t *testing.T) {
 			msg := exprTestMsg(md, tc.fields)
 			plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(tc.expr), Alias("r")))
 			result, _ := plan.EvalLeaves(msg)
-			if got := result[0][0].Int(); got != tc.want {
+			if got := result[0][0].ToProtoValue().Int(); got != tc.want {
 				t.Fatalf("expected %d, got %d", tc.want, got)
 			}
 		})
@@ -1072,7 +1072,7 @@ func TestFuncMinMax(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"dx": 1.5, "dy": 2.5})
 		plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(FuncMin(PathRef("dx"), PathRef("dy"))), Alias("r")))
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].Float(); got != 1.5 {
+		if got := result[0][0].ToProtoValue().Float(); got != 1.5 {
 			t.Fatalf("expected 1.5, got %f", got)
 		}
 	})
@@ -1081,7 +1081,7 @@ func TestFuncMinMax(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"x": 2, "dx": 2.5})
 		plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(FuncMax(PathRef("x"), PathRef("dx"))), Alias("r")))
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].Float(); got != 2.5 {
+		if got := result[0][0].ToProtoValue().Float(); got != 2.5 {
 			t.Fatalf("expected 2.5, got %f", got)
 		}
 	})
@@ -1098,7 +1098,7 @@ func TestFuncCast(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"dx": 3.7})
 		plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(FuncCastInt(PathRef("dx"))), Alias("r")))
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].Int(); got != 3 {
+		if got := result[0][0].ToProtoValue().Int(); got != 3 {
 			t.Fatalf("expected 3 (truncated), got %d", got)
 		}
 	})
@@ -1107,7 +1107,7 @@ func TestFuncCast(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"name": "42"})
 		plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(FuncCastInt(PathRef("name"))), Alias("r")))
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].Int(); got != 42 {
+		if got := result[0][0].ToProtoValue().Int(); got != 42 {
 			t.Fatalf("expected 42, got %d", got)
 		}
 	})
@@ -1116,7 +1116,7 @@ func TestFuncCast(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"name": "3.9"})
 		plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(FuncCastInt(PathRef("name"))), Alias("r")))
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].Int(); got != 3 {
+		if got := result[0][0].ToProtoValue().Int(); got != 3 {
 			t.Fatalf("expected 3 (truncated from 3.9), got %d", got)
 		}
 	})
@@ -1125,7 +1125,7 @@ func TestFuncCast(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"flag": true})
 		plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(FuncCastInt(PathRef("flag"))), Alias("r")))
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].Int(); got != 1 {
+		if got := result[0][0].ToProtoValue().Int(); got != 1 {
 			t.Fatalf("expected 1, got %d", got)
 		}
 	})
@@ -1134,7 +1134,7 @@ func TestFuncCast(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"name": "not_a_number"})
 		plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(FuncCastInt(PathRef("name"))), Alias("r")))
 		result, _ := plan.EvalLeaves(msg)
-		if result[0][0].IsValid() {
+		if !result[0][0].IsNull() {
 			t.Fatalf("expected invalid, got %v", result[0][0])
 		}
 	})
@@ -1143,7 +1143,7 @@ func TestFuncCast(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"x": 7})
 		plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(FuncCastFloat(PathRef("x"))), Alias("r")))
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].Float(); got != 7.0 {
+		if got := result[0][0].ToProtoValue().Float(); got != 7.0 {
 			t.Fatalf("expected 7.0, got %f", got)
 		}
 	})
@@ -1152,7 +1152,7 @@ func TestFuncCast(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"name": "3.14"})
 		plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(FuncCastFloat(PathRef("name"))), Alias("r")))
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].Float(); got != 3.14 {
+		if got := result[0][0].ToProtoValue().Float(); got != 3.14 {
 			t.Fatalf("expected 3.14, got %f", got)
 		}
 	})
@@ -1161,7 +1161,7 @@ func TestFuncCast(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"x": 42})
 		plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(FuncCastString(PathRef("x"))), Alias("r")))
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].String(); got != "42" {
+		if got := result[0][0].ToProtoValue().String(); got != "42" {
 			t.Fatalf("expected %q, got %q", "42", got)
 		}
 	})
@@ -1170,7 +1170,7 @@ func TestFuncCast(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"dx": 3.14})
 		plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(FuncCastString(PathRef("dx"))), Alias("r")))
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].String(); got != "3.14" {
+		if got := result[0][0].ToProtoValue().String(); got != "3.14" {
 			t.Fatalf("expected %q, got %q", "3.14", got)
 		}
 	})
@@ -1179,7 +1179,7 @@ func TestFuncCast(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"flag": true})
 		plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(FuncCastString(PathRef("flag"))), Alias("r")))
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].String(); got != "true" {
+		if got := result[0][0].ToProtoValue().String(); got != "true" {
 			t.Fatalf("expected %q, got %q", "true", got)
 		}
 	})
@@ -1226,7 +1226,7 @@ func TestFuncStrptime(t *testing.T) {
 			t.Fatal(err)
 		}
 		want := time.Date(2024, 3, 15, 10, 30, 0, 0, time.UTC).UnixMilli()
-		if got := result[0][0].Int(); got != want {
+		if got := result[0][0].ToProtoValue().Int(); got != want {
 			t.Fatalf("expected %d, got %d", want, got)
 		}
 	})
@@ -1244,7 +1244,7 @@ func TestFuncStrptime(t *testing.T) {
 			t.Fatal(err)
 		}
 		want := time.Date(2024, 3, 15, 10, 30, 0, 0, time.UTC).UnixMilli()
-		if got := result[0][0].Int(); got != want {
+		if got := result[0][0].ToProtoValue().Int(); got != want {
 			t.Fatalf("expected %d, got %d", want, got)
 		}
 	})
@@ -1255,7 +1255,7 @@ func TestFuncStrptime(t *testing.T) {
 			PlanPath("ts", WithExpr(FuncStrptime("%Y-%m-%d", PathRef("name"))), Alias("ts")),
 		)
 		result, _ := plan.EvalLeaves(msg)
-		if result[0][0].IsValid() {
+		if !result[0][0].IsNull() {
 			t.Fatalf("expected invalid on parse failure, got %v", result[0][0])
 		}
 	})
@@ -1280,7 +1280,7 @@ func TestFuncTryStrptime(t *testing.T) {
 		)
 		result, _ := plan.EvalLeaves(msg)
 		want := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC).UnixMilli()
-		if got := result[0][0].Int(); got != want {
+		if got := result[0][0].ToProtoValue().Int(); got != want {
 			t.Fatalf("expected %d, got %d", want, got)
 		}
 	})
@@ -1291,7 +1291,7 @@ func TestFuncTryStrptime(t *testing.T) {
 			PlanPath("ts", WithExpr(FuncTryStrptime("%Y-%m-%d", PathRef("name"))), Alias("ts")),
 		)
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].Int(); got != 0 {
+		if got := result[0][0].ToProtoValue().Int(); got != 0 {
 			t.Fatalf("expected 0 on failure, got %d", got)
 		}
 	})
@@ -1307,7 +1307,7 @@ func TestFuncAge(t *testing.T) {
 			PlanPath("a", WithExpr(FuncAge(PathRef("x"), PathRef("y"))), Alias("a")),
 		)
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].Int(); got != 7000 {
+		if got := result[0][0].ToProtoValue().Int(); got != 7000 {
 			t.Fatalf("expected 7000, got %d", got)
 		}
 	})
@@ -1320,7 +1320,7 @@ func TestFuncAge(t *testing.T) {
 			PlanPath("a", WithExpr(FuncAge(PathRef("x"))), Alias("a")),
 		)
 		result, _ := plan.EvalLeaves(msg)
-		got := result[0][0].Int()
+		got := result[0][0].ToProtoValue().Int()
 		// Should be around 5000ms, allow ±2000ms for test execution.
 		if got < 3000 || got > 7000 {
 			t.Fatalf("expected ~5000ms age, got %d", got)
@@ -1352,7 +1352,7 @@ func TestFuncExtract(t *testing.T) {
 			msg := exprTestMsg(md, map[string]any{"x": ts})
 			plan, _ := NewPlan(md, nil, PlanPath("r", WithExpr(tc.expr), Alias("r")))
 			result, _ := plan.EvalLeaves(msg)
-			if got := result[0][0].Int(); got != tc.want {
+			if got := result[0][0].ToProtoValue().Int(); got != tc.want {
 				t.Fatalf("expected %d, got %d", tc.want, got)
 			}
 		})
@@ -1373,23 +1373,23 @@ func TestFuncExtract(t *testing.T) {
 func TestCompareValues(t *testing.T) {
 	tests := []struct {
 		name string
-		a, b protoreflect.Value
+		a, b Value
 		cmp  int
 		ok   bool
 	}{
-		{"int_lt", protoreflect.ValueOfInt64(1), protoreflect.ValueOfInt64(2), -1, true},
-		{"int_eq", protoreflect.ValueOfInt64(5), protoreflect.ValueOfInt64(5), 0, true},
-		{"int_gt", protoreflect.ValueOfInt64(9), protoreflect.ValueOfInt64(1), 1, true},
-		{"str_lt", protoreflect.ValueOfString("abc"), protoreflect.ValueOfString("xyz"), -1, true},
-		{"str_eq", protoreflect.ValueOfString("aa"), protoreflect.ValueOfString("aa"), 0, true},
-		{"float_lt", protoreflect.ValueOfFloat64(1.0), protoreflect.ValueOfFloat64(2.0), -1, true},
-		{"invalid_a", protoreflect.Value{}, protoreflect.ValueOfInt64(1), 0, false},
-		{"invalid_b", protoreflect.ValueOfInt64(1), protoreflect.Value{}, 0, false},
-		{"mixed_int_float", protoreflect.ValueOfInt64(2), protoreflect.ValueOfFloat64(2.5), -1, true},
+		{"int_lt", ScalarInt64(1), ScalarInt64(2), -1, true},
+		{"int_eq", ScalarInt64(5), ScalarInt64(5), 0, true},
+		{"int_gt", ScalarInt64(9), ScalarInt64(1), 1, true},
+		{"str_lt", ScalarString("abc"), ScalarString("xyz"), -1, true},
+		{"str_eq", ScalarString("aa"), ScalarString("aa"), 0, true},
+		{"float_lt", ScalarFloat64(1.0), ScalarFloat64(2.0), -1, true},
+		{"invalid_a", Null(), ScalarInt64(1), 0, false},
+		{"invalid_b", ScalarInt64(1), Null(), 0, false},
+		{"mixed_int_float", ScalarInt64(2), ScalarFloat64(2.5), -1, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			cmp, ok := compareValues(tc.a, tc.b)
+			cmp, ok := compareValuesV(tc.a, tc.b)
 			if ok != tc.ok {
 				t.Fatalf("expected ok=%v, got ok=%v", tc.ok, ok)
 			}
@@ -1419,8 +1419,8 @@ func TestFuncHash(t *testing.T) {
 		}
 		r1, _ := plan.EvalLeaves(msg)
 		r2, _ := plan.EvalLeaves(msg)
-		if r1[0][0].Int() != r2[0][0].Int() {
-			t.Fatalf("hash not deterministic: %d vs %d", r1[0][0].Int(), r2[0][0].Int())
+		if r1[0][0].ToProtoValue().Int() != r2[0][0].ToProtoValue().Int() {
+			t.Fatalf("hash not deterministic: %d vs %d", r1[0][0].ToProtoValue().Int(), r2[0][0].ToProtoValue().Int())
 		}
 	})
 
@@ -1434,9 +1434,9 @@ func TestFuncHash(t *testing.T) {
 		msg1 := exprTestMsg(md, map[string]any{"name": "hello"})
 		msg2 := exprTestMsg(md, map[string]any{"name": "world"})
 		r1, _ := plan.EvalLeaves(msg1)
-		hash1 := r1[0][0].Int() // capture before scratch is reused
+		hash1 := r1[0][0].ToProtoValue().Int() // capture before scratch is reused
 		r2, _ := plan.EvalLeaves(msg2)
-		hash2 := r2[0][0].Int()
+		hash2 := r2[0][0].ToProtoValue().Int()
 		if hash1 == hash2 {
 			t.Fatalf("expected different hashes for different inputs, both got %d", hash1)
 		}
@@ -1451,7 +1451,7 @@ func TestFuncHash(t *testing.T) {
 			t.Fatal(err)
 		}
 		result, _ := plan.EvalLeaves(msg)
-		if !result[0][0].IsValid() {
+		if result[0][0].IsNull() {
 			t.Fatal("expected valid hash")
 		}
 	})
@@ -1484,7 +1484,7 @@ func TestFuncEpochToDate(t *testing.T) {
 		result, _ := plan.EvalLeaves(msg)
 		want := int32(1705276800 / 86400) // 19737
 		// Use Int() which returns int64, then compare
-		if got := int32(result[0][0].Int()); got != want {
+		if got := int32(result[0][0].ToProtoValue().Int()); got != want {
 			t.Fatalf("expected %d, got %d", want, got)
 		}
 	})
@@ -1495,7 +1495,7 @@ func TestFuncEpochToDate(t *testing.T) {
 			PlanPath("d", WithExpr(FuncEpochToDate(PathRef("x"))), Alias("d")),
 		)
 		result, _ := plan.EvalLeaves(msg)
-		if got := int32(result[0][0].Int()); got != 0 {
+		if got := int32(result[0][0].ToProtoValue().Int()); got != 0 {
 			t.Fatalf("expected 0, got %d", got)
 		}
 	})
@@ -1538,7 +1538,7 @@ func TestFuncDatePart(t *testing.T) {
 				PlanPath("r", WithExpr(FuncDatePart(tc.part, PathRef("x"))), Alias("r")),
 			)
 			result, _ := plan.EvalLeaves(msg)
-			if got := result[0][0].Int(); got != tc.want {
+			if got := result[0][0].ToProtoValue().Int(); got != tc.want {
 				t.Fatalf("expected %d, got %d", tc.want, got)
 			}
 		})
@@ -1550,7 +1550,7 @@ func TestFuncDatePart(t *testing.T) {
 			PlanPath("r", WithExpr(FuncDatePart("weekday", PathRef("x"))), Alias("r")),
 		)
 		result, _ := plan.EvalLeaves(msg)
-		if result[0][0].IsValid() {
+		if !result[0][0].IsNull() {
 			t.Fatalf("expected invalid for unknown part, got %v", result[0][0])
 		}
 	})
@@ -1590,7 +1590,7 @@ func TestFuncBucket(t *testing.T) {
 				PlanPath("r", WithExpr(FuncBucket(PathRef("x"), tc.size)), Alias("r")),
 			)
 			result, _ := plan.EvalLeaves(msg)
-			if got := result[0][0].Int(); got != tc.want {
+			if got := result[0][0].ToProtoValue().Int(); got != tc.want {
 				t.Fatalf("expected %d, got %d", tc.want, got)
 			}
 		})
@@ -1602,7 +1602,7 @@ func TestFuncBucket(t *testing.T) {
 			PlanPath("r", WithExpr(FuncBucket(PathRef("x"), 0)), Alias("r")),
 		)
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].Int(); got != 42 {
+		if got := result[0][0].ToProtoValue().Int(); got != 42 {
 			t.Fatalf("expected 42 (passthrough), got %d", got)
 		}
 	})
@@ -1637,7 +1637,7 @@ func TestFuncMask(t *testing.T) {
 				PlanPath("r", WithExpr(FuncMask(PathRef("name"), tc.keepFirst, tc.keepLast, tc.maskChar)), Alias("r")),
 			)
 			result, _ := plan.EvalLeaves(msg)
-			if got := result[0][0].String(); got != tc.want {
+			if got := result[0][0].ToProtoValue().String(); got != tc.want {
 				t.Fatalf("expected %q, got %q", tc.want, got)
 			}
 		})
@@ -1662,15 +1662,15 @@ func TestFuncCoerce(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"flag": true})
 		plan, err := NewPlan(md, nil,
 			PlanPath("r", WithExpr(FuncCoerce(PathRef("flag"),
-				protoreflect.ValueOfString("yes"),
-				protoreflect.ValueOfString("no"),
+				ScalarString("yes"),
+				ScalarString("no"),
 			)), Alias("r")),
 		)
 		if err != nil {
 			t.Fatal(err)
 		}
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].String(); got != "yes" {
+		if got := result[0][0].ToProtoValue().String(); got != "yes" {
 			t.Fatalf("expected %q, got %q", "yes", got)
 		}
 	})
@@ -1679,12 +1679,12 @@ func TestFuncCoerce(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"flag": false})
 		plan, _ := NewPlan(md, nil,
 			PlanPath("r", WithExpr(FuncCoerce(PathRef("flag"),
-				protoreflect.ValueOfString("yes"),
-				protoreflect.ValueOfString("no"),
+				ScalarString("yes"),
+				ScalarString("no"),
 			)), Alias("r")),
 		)
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].String(); got != "no" {
+		if got := result[0][0].ToProtoValue().String(); got != "no" {
 			t.Fatalf("expected %q, got %q", "no", got)
 		}
 	})
@@ -1693,12 +1693,12 @@ func TestFuncCoerce(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{"x": 42})
 		plan, _ := NewPlan(md, nil,
 			PlanPath("r", WithExpr(FuncCoerce(PathRef("x"),
-				protoreflect.ValueOfString("present"),
-				protoreflect.ValueOfString("absent"),
+				ScalarString("present"),
+				ScalarString("absent"),
 			)), Alias("r")),
 		)
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].String(); got != "present" {
+		if got := result[0][0].ToProtoValue().String(); got != "present" {
 			t.Fatalf("expected %q, got %q", "present", got)
 		}
 	})
@@ -1707,12 +1707,12 @@ func TestFuncCoerce(t *testing.T) {
 		msg := exprTestMsg(md, map[string]any{})
 		plan, _ := NewPlan(md, nil,
 			PlanPath("r", WithExpr(FuncCoerce(PathRef("x"),
-				protoreflect.ValueOfString("present"),
-				protoreflect.ValueOfString("absent"),
+				ScalarString("present"),
+				ScalarString("absent"),
 			)), Alias("r")),
 		)
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].String(); got != "absent" {
+		if got := result[0][0].ToProtoValue().String(); got != "absent" {
 			t.Fatalf("expected %q, got %q", "absent", got)
 		}
 	})
@@ -1720,7 +1720,7 @@ func TestFuncCoerce(t *testing.T) {
 	t.Run("output_kind", func(t *testing.T) {
 		plan, _ := NewPlan(md, nil,
 			PlanPath("r", WithExpr(FuncCoerce(PathRef("flag"),
-				protoreflect.ValueOfString("y"), protoreflect.ValueOfString("n"),
+				ScalarString("y"), ScalarString("n"),
 			)), Alias("r")),
 		)
 		if plan.Entries()[0].OutputKind != protoreflect.StringKind {
@@ -1743,7 +1743,7 @@ func TestFuncEnumName(t *testing.T) {
 			t.Fatal(err)
 		}
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].String(); got != "ACTIVE" {
+		if got := result[0][0].ToProtoValue().String(); got != "ACTIVE" {
 			t.Fatalf("expected %q, got %q", "ACTIVE", got)
 		}
 	})
@@ -1754,7 +1754,7 @@ func TestFuncEnumName(t *testing.T) {
 			PlanPath("s", WithExpr(FuncEnumName(PathRef("status"))), Alias("s")),
 		)
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].String(); got != "INACTIVE" {
+		if got := result[0][0].ToProtoValue().String(); got != "INACTIVE" {
 			t.Fatalf("expected %q, got %q", "INACTIVE", got)
 		}
 	})
@@ -1766,7 +1766,7 @@ func TestFuncEnumName(t *testing.T) {
 		)
 		result, _ := plan.EvalLeaves(msg)
 		// Enum number 0 → "UNKNOWN"
-		if got := result[0][0].String(); got != "UNKNOWN" {
+		if got := result[0][0].ToProtoValue().String(); got != "UNKNOWN" {
 			t.Fatalf("expected %q, got %q", "UNKNOWN", got)
 		}
 	})
@@ -1778,7 +1778,7 @@ func TestFuncEnumName(t *testing.T) {
 		)
 		result, _ := plan.EvalLeaves(msg)
 		// Unknown enum value → invalid
-		if result[0][0].IsValid() {
+		if !result[0][0].IsNull() {
 			t.Fatalf("expected invalid for unknown enum number, got %v", result[0][0])
 		}
 	})
@@ -1823,7 +1823,7 @@ func TestFuncSum(t *testing.T) {
 			t.Fatal(err)
 		}
 		// All branches should report the same sum.
-		if got := result[0][0].Int(); got != 60 {
+		if got := result[0][0].ToProtoValue().Int(); got != 60 {
 			t.Fatalf("expected 60, got %d", got)
 		}
 	})
@@ -1834,7 +1834,7 @@ func TestFuncSum(t *testing.T) {
 			PlanPath("s", WithExpr(FuncSum(PathRef("x"))), Alias("s")),
 		)
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].Int(); got != 42 {
+		if got := result[0][0].ToProtoValue().Int(); got != 42 {
 			t.Fatalf("expected 42, got %d", got)
 		}
 	})
@@ -1846,7 +1846,7 @@ func TestFuncSum(t *testing.T) {
 		)
 		result, _ := plan.EvalLeaves(msg)
 		// No branches → should return invalid or 0
-		if result[0][0].IsValid() && result[0][0].Int() != 0 {
+		if !result[0][0].IsNull() && result[0][0].ToProtoValue().Int() != 0 {
 			t.Fatalf("expected 0 or invalid for empty, got %v", result[0][0])
 		}
 	})
@@ -1866,7 +1866,7 @@ func TestFuncDistinct(t *testing.T) {
 			t.Fatal(err)
 		}
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].Int(); got != 3 {
+		if got := result[0][0].ToProtoValue().Int(); got != 3 {
 			t.Fatalf("expected 3, got %d", got)
 		}
 	})
@@ -1877,7 +1877,7 @@ func TestFuncDistinct(t *testing.T) {
 			PlanPath("d", WithExpr(FuncDistinct(PathRef("nums[*]"))), Alias("d")),
 		)
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].Int(); got != 3 {
+		if got := result[0][0].ToProtoValue().Int(); got != 3 {
 			t.Fatalf("expected 3, got %d", got)
 		}
 	})
@@ -1888,7 +1888,7 @@ func TestFuncDistinct(t *testing.T) {
 			PlanPath("d", WithExpr(FuncDistinct(PathRef("x"))), Alias("d")),
 		)
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].Int(); got != 1 {
+		if got := result[0][0].ToProtoValue().Int(); got != 1 {
 			t.Fatalf("expected 1, got %d", got)
 		}
 	})
@@ -1917,7 +1917,7 @@ func TestFuncListConcat(t *testing.T) {
 			t.Fatal(err)
 		}
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].String(); got != "a,b,c" {
+		if got := result[0][0].ToProtoValue().String(); got != "a,b,c" {
 			t.Fatalf("expected %q, got %q", "a,b,c", got)
 		}
 	})
@@ -1928,7 +1928,7 @@ func TestFuncListConcat(t *testing.T) {
 			PlanPath("lc", WithExpr(FuncListConcat(PathRef("nums[*]"), "|")), Alias("lc")),
 		)
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].String(); got != "10|20|30" {
+		if got := result[0][0].ToProtoValue().String(); got != "10|20|30" {
 			t.Fatalf("expected %q, got %q", "10|20|30", got)
 		}
 	})
@@ -1939,7 +1939,7 @@ func TestFuncListConcat(t *testing.T) {
 			PlanPath("lc", WithExpr(FuncListConcat(PathRef("labels[*]"), "")), Alias("lc")),
 		)
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].String(); got != "xy" {
+		if got := result[0][0].ToProtoValue().String(); got != "xy" {
 			t.Fatalf("expected %q, got %q", "xy", got)
 		}
 	})
@@ -1950,7 +1950,7 @@ func TestFuncListConcat(t *testing.T) {
 			PlanPath("lc", WithExpr(FuncListConcat(PathRef("name"), ",")), Alias("lc")),
 		)
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].String(); got != "only" {
+		if got := result[0][0].ToProtoValue().String(); got != "only" {
 			t.Fatalf("expected %q, got %q", "only", got)
 		}
 	})
@@ -1980,7 +1980,7 @@ func TestWave3Composition(t *testing.T) {
 			t.Fatal(err)
 		}
 		result, _ := plan.EvalLeaves(msg)
-		if !result[0][0].IsValid() {
+		if result[0][0].IsNull() {
 			t.Fatal("expected valid hash of masked value")
 		}
 	})
@@ -1991,8 +1991,8 @@ func TestWave3Composition(t *testing.T) {
 		// x == 1 (matching ACTIVE) → "enabled"
 		expr := FuncCoerce(
 			FuncEq(PathRef("x"), FuncCastInt(FuncEnumName(PathRef("status")))),
-			protoreflect.ValueOfString("match"),
-			protoreflect.ValueOfString("no_match"),
+			ScalarString("match"),
+			ScalarString("no_match"),
 		)
 		plan, err := NewPlan(md, nil,
 			PlanPath("r", WithExpr(expr), Alias("r")),
@@ -2003,7 +2003,7 @@ func TestWave3Composition(t *testing.T) {
 		// Note: CastInt("ACTIVE") will fail to parse → invalid → Eq will be false
 		// This tests composition even with type mismatch graceful handling
 		result, _ := plan.EvalLeaves(msg)
-		if !result[0][0].IsValid() {
+		if result[0][0].IsNull() {
 			t.Fatal("expected valid result")
 		}
 	})
@@ -2015,7 +2015,7 @@ func TestWave3Composition(t *testing.T) {
 			PlanPath("r", WithExpr(expr), Alias("r")),
 		)
 		result, _ := plan.EvalLeaves(msg)
-		if got := result[0][0].String(); got != "150" {
+		if got := result[0][0].ToProtoValue().String(); got != "150" {
 			t.Fatalf("expected %q, got %q", "150", got)
 		}
 	})

@@ -258,7 +258,7 @@ func TestScanner(t *testing.T) {
 		{name: "colon", s: &scanner{buf: []byte{':'}}, want: &token{Kind: colon}, spos: 1},
 		{name: "asterisk", s: &scanner{buf: []byte{'*'}}, want: &token{Kind: asterisk}, spos: 1},
 		{name: "dot", s: &scanner{buf: []byte{'.'}}, want: &token{Kind: dot}, spos: 1},
-		{name: "whitespace illegal", s: &scanner{buf: []byte{' '}}, want: &token{Kind: illegal, Text: "' '"}, spos: 1},
+		{name: "whitespace skipped", s: &scanner{buf: []byte{' '}}, want: &token{Kind: eof, Pos: 1}, spos: 1},
 		{
 			name: "ident",
 			s:    &scanner{buf: []byte("01234abcd123"), pos: 5},

@@ -40,14 +40,14 @@ type Plan struct {
 // Unlike [Values], it carries only the current cursor value — not the full
 // path chain — eliminating O(depth × branches) clonePath/cloneValues allocs.
 type leafBranch struct {
-	cursor  protoreflect.Value // the value at the current trie node
-	clamped bool               // range/index was clamped during traversal
+	cursor  Value // the value at the current trie node
+	clamped bool  // range/index was clamped during traversal
 }
 
 // leafScratch holds pre-allocated buffers for [Plan.EvalLeaves].
 type leafScratch struct {
-	out  [][]protoreflect.Value // one slot per path entry
-	seed [1]leafBranch          // avoid heap alloc for the single root branch
+	out  [][]Value     // one slot per path entry
+	seed [1]leafBranch // avoid heap alloc for the single root branch
 }
 
 // PlanEntry exposes metadata about one compiled path inside a [Plan].
@@ -347,6 +347,21 @@ func advanceDesc(desc protoreflect.Descriptor, step Step) (protoreflect.Descript
 	case AnyExpandStep:
 		return step.MessageDescriptor(), nil
 
+	case FilterStep:
+		// A FilterStep does not change the schema cursor — it merely
+		// filters branches. The descriptor stays the same.
+		return desc, nil
+
+	case MapWildcardStep:
+		fd, ok := desc.(protoreflect.FieldDescriptor)
+		if !ok {
+			return nil, fmt.Errorf("expected FieldDescriptor for map wildcard step, got %T", desc)
+		}
+		if fd.MapValue().Message() != nil {
+			return fd.MapValue().Message(), nil
+		}
+		return fd.MapValue(), nil
+
 	default:
 		return nil, fmt.Errorf("unsupported step kind %d in trie construction", step.Kind())
 	}
@@ -379,6 +394,12 @@ func stepEqual(a, b Step) bool {
 			a.RangeStep() == b.RangeStep() &&
 			a.StartOmitted() == b.StartOmitted() &&
 			a.EndOmitted() == b.EndOmitted()
+	case FilterStep:
+		// FilterSteps are never merged in the trie — each is unique
+		// because predicates can differ even with the same syntax.
+		return false
+	case MapWildcardStep:
+		return true // all map wildcards are equal
 	default:
 		return false
 	}
@@ -477,13 +498,13 @@ func (p *Plan) Eval(m proto.Message) ([][]Values, error) {
 // value per branch per trie step.
 //
 // The returned slice is indexed by entry position (matching [NewPlan] order).
-// Each inner slice contains one protoreflect.Value per fan-out branch.
+// Each inner slice contains one [Value] per fan-out branch.
 // An empty inner slice means the path produced no values for this message
 // (left-join null).
 //
 // EvalLeaves reuses internal scratch buffers and is NOT safe for concurrent
 // use. Use [Plan.EvalLeavesConcurrent] when calling from multiple goroutines.
-func (p *Plan) EvalLeaves(m proto.Message) ([][]protoreflect.Value, error) {
+func (p *Plan) EvalLeaves(m proto.Message) ([][]Value, error) {
 	got := m.ProtoReflect().Descriptor().FullName()
 	want := p.md.FullName()
 	if got != want {
@@ -493,7 +514,7 @@ func (p *Plan) EvalLeaves(m proto.Message) ([][]protoreflect.Value, error) {
 	// Lazily initialise scratch.
 	if p.scratch == nil {
 		p.scratch = &leafScratch{
-			out: make([][]protoreflect.Value, len(p.entries)),
+			out: make([][]Value, len(p.entries)),
 		}
 	}
 	s := p.scratch
@@ -504,7 +525,7 @@ func (p *Plan) EvalLeaves(m proto.Message) ([][]protoreflect.Value, error) {
 	}
 
 	// Seed with root message.
-	s.seed[0] = leafBranch{cursor: protoreflect.ValueOf(m.ProtoReflect())}
+	s.seed[0] = leafBranch{cursor: MessageVal(m.ProtoReflect())}
 	if err := p.root.execLeaves(s.seed[:], p, s.out); err != nil {
 		return nil, err
 	}
@@ -519,15 +540,15 @@ func (p *Plan) EvalLeaves(m proto.Message) ([][]protoreflect.Value, error) {
 
 // EvalLeavesConcurrent is like [Plan.EvalLeaves] but allocates fresh buffers
 // per call, making it safe for concurrent use by multiple goroutines.
-func (p *Plan) EvalLeavesConcurrent(m proto.Message) ([][]protoreflect.Value, error) {
+func (p *Plan) EvalLeavesConcurrent(m proto.Message) ([][]Value, error) {
 	got := m.ProtoReflect().Descriptor().FullName()
 	want := p.md.FullName()
 	if got != want {
 		return nil, fmt.Errorf("pbpath.Plan.EvalLeavesConcurrent: got message type %s, want %s", got, want)
 	}
 
-	out := make([][]protoreflect.Value, len(p.entries))
-	seed := [1]leafBranch{{cursor: protoreflect.ValueOf(m.ProtoReflect())}}
+	out := make([][]Value, len(p.entries))
+	seed := [1]leafBranch{{cursor: MessageVal(m.ProtoReflect())}}
 	if err := p.root.execLeaves(seed[:], p, out); err != nil {
 		return nil, err
 	}
@@ -598,7 +619,7 @@ func walkResolveEnumDesc(expr Expr, parsed []Path) error {
 
 // evalExprs post-processes all user-visible entries that have an Expr,
 // replacing the raw leaf values with the expression result.
-func (p *Plan) evalExprs(out [][]protoreflect.Value) {
+func (p *Plan) evalExprs(out [][]Value) {
 	for i := range p.userCount {
 		e := p.entries[i]
 		if e.expr == nil {
@@ -612,7 +633,7 @@ func (p *Plan) evalExprs(out [][]protoreflect.Value) {
 				maxBranches = n
 			}
 		}
-		result := make([]protoreflect.Value, 0, maxBranches)
+		result := make([]Value, 0, maxBranches)
 		for bi := range maxBranches {
 			result = append(result, e.expr.eval(out, bi))
 		}
@@ -621,7 +642,7 @@ func (p *Plan) evalExprs(out [][]protoreflect.Value) {
 }
 
 // execLeaves is the leaf-only analogue of exec.
-func (n *planNode) execLeaves(branches []leafBranch, plan *Plan, out [][]protoreflect.Value) error {
+func (n *planNode) execLeaves(branches []leafBranch, plan *Plan, out [][]Value) error {
 	// Snapshot leaf values for any paths terminating at this node.
 	for _, id := range n.leafIDs {
 		entry := plan.entries[id]
@@ -653,10 +674,10 @@ func (n *planNode) execLeaves(branches []leafBranch, plan *Plan, out [][]protore
 }
 
 // execLeavesEmpty marks all leaf paths under this node as having empty results.
-func (n *planNode) execLeavesEmpty(plan *Plan, out [][]protoreflect.Value) {
+func (n *planNode) execLeavesEmpty(plan *Plan, out [][]Value) {
 	for _, id := range n.leafIDs {
 		if out[id] == nil {
-			out[id] = []protoreflect.Value{} // explicitly empty, not nil
+			out[id] = []Value{} // explicitly empty, not nil
 		}
 	}
 	for _, child := range n.children {
@@ -667,6 +688,9 @@ func (n *planNode) execLeavesEmpty(plan *Plan, out [][]protoreflect.Value) {
 // applyStepLeaves applies a single step to every leaf branch, returning new
 // branches. This is the leaf-only analogue of applyStep — it tracks only the
 // cursor value, not the full path/values chain.
+//
+// The cursor is a [Value]; for field access, list operations, and map
+// operations it unwraps to the appropriate protoreflect type.
 func applyStepLeaves(step Step, branches []leafBranch) ([]leafBranch, error) {
 	// Pre-allocate with a small constant capacity that fits on the stack
 	// (Go 1.26+). Most steps produce 1 branch per input branch.
@@ -676,14 +700,18 @@ func applyStepLeaves(step Step, branches []leafBranch) ([]leafBranch, error) {
 	case FieldAccessStep:
 		fd := step.FieldDescriptor()
 		for _, b := range branches {
-			val := b.cursor.Message().Get(fd)
-			next = append(next, leafBranch{cursor: val, clamped: b.clamped})
+			msg := b.cursor.Message()
+			if msg == nil {
+				msg = b.cursor.ProtoValue().Message()
+			}
+			val := msg.Get(fd)
+			next = append(next, leafBranch{cursor: FromProtoValue(val), clamped: b.clamped})
 		}
 
 	case ListIndexStep:
 		idx := step.ListIndex()
 		for _, b := range branches {
-			list := b.cursor.List()
+			list := b.cursor.ProtoValue().List()
 			resolved := idx
 			if resolved < 0 {
 				resolved = list.Len() + resolved
@@ -691,16 +719,16 @@ func applyStepLeaves(step Step, branches []leafBranch) ([]leafBranch, error) {
 			if resolved < 0 || resolved >= list.Len() {
 				continue
 			}
-			next = append(next, leafBranch{cursor: list.Get(resolved), clamped: b.clamped})
+			next = append(next, leafBranch{cursor: FromProtoValue(list.Get(resolved)), clamped: b.clamped})
 		}
 
 	case MapIndexStep:
 		for _, b := range branches {
-			val := b.cursor.Map().Get(step.MapIndex())
+			val := b.cursor.ProtoValue().Map().Get(step.MapIndex())
 			if !val.IsValid() {
 				continue
 			}
-			next = append(next, leafBranch{cursor: val, clamped: b.clamped})
+			next = append(next, leafBranch{cursor: FromProtoValue(val), clamped: b.clamped})
 		}
 
 	case AnyExpandStep:
@@ -710,9 +738,9 @@ func applyStepLeaves(step Step, branches []leafBranch) ([]leafBranch, error) {
 
 	case ListWildcardStep:
 		for _, b := range branches {
-			list := b.cursor.List()
+			list := b.cursor.ProtoValue().List()
 			for j := 0; j < list.Len(); j++ {
-				next = append(next, leafBranch{cursor: list.Get(j), clamped: b.clamped})
+				next = append(next, leafBranch{cursor: FromProtoValue(list.Get(j)), clamped: b.clamped})
 			}
 		}
 
@@ -722,7 +750,7 @@ func applyStepLeaves(step Step, branches []leafBranch) ([]leafBranch, error) {
 			return nil, fmt.Errorf("slice step must not be zero")
 		}
 		for _, b := range branches {
-			list := b.cursor.List()
+			list := b.cursor.ProtoValue().List()
 			length := list.Len()
 			wasClamped := b.clamped
 
@@ -749,13 +777,37 @@ func applyStepLeaves(step Step, branches []leafBranch) ([]leafBranch, error) {
 
 			if stride > 0 {
 				for j := start; j < end; j += stride {
-					next = append(next, leafBranch{cursor: list.Get(j), clamped: wasClamped})
+					next = append(next, leafBranch{cursor: FromProtoValue(list.Get(j)), clamped: wasClamped})
 				}
 			} else {
 				for j := start; j > end && j >= 0; j += stride {
-					next = append(next, leafBranch{cursor: list.Get(j), clamped: wasClamped})
+					next = append(next, leafBranch{cursor: FromProtoValue(list.Get(j)), clamped: wasClamped})
 				}
 			}
+		}
+
+	case FilterStep:
+		pred := step.Predicate()
+		if pred == nil {
+			return nil, fmt.Errorf("FilterStep has nil predicate")
+		}
+		for _, b := range branches {
+			// Evaluate the predicate against the cursor.
+			// filterPathExpr nodes expect the cursor in leafValues[0][0].
+			filterLeaves := [][]Value{{b.cursor}}
+			result := pred.eval(filterLeaves, 0)
+			if isNonZeroValue(result) {
+				next = append(next, b) // keep this branch
+			}
+		}
+
+	case MapWildcardStep:
+		for _, b := range branches {
+			m := b.cursor.ProtoValue().Map()
+			m.Range(func(_ protoreflect.MapKey, v protoreflect.Value) bool {
+				next = append(next, leafBranch{cursor: FromProtoValue(v), clamped: b.clamped})
+				return true
+			})
 		}
 
 	default:
@@ -952,6 +1004,39 @@ func applyStep(step Step, branches []Values) ([]Values, error) {
 					})
 				}
 			}
+		}
+
+	case FilterStep:
+		pred := step.Predicate()
+		if pred == nil {
+			return nil, fmt.Errorf("FilterStep has nil predicate")
+		}
+		for _, v := range branches {
+			cursor := v.Values[len(v.Values)-1]
+			// Evaluate the predicate against the cursor.
+			filterLeaves := [][]Value{{FromProtoValue(cursor)}}
+			result := pred.eval(filterLeaves, 0)
+			if isNonZeroValue(result) {
+				next = append(next, Values{
+					Path:    clonePath(v.Path),
+					Values:  cloneValues(v.Values),
+					clamped: v.clamped,
+				})
+			}
+		}
+
+	case MapWildcardStep:
+		for _, v := range branches {
+			cursor := v.Values[len(v.Values)-1]
+			m := cursor.Map()
+			m.Range(func(k protoreflect.MapKey, val protoreflect.Value) bool {
+				next = append(next, Values{
+					Path:    append(clonePath(v.Path), MapIndex(k)),
+					Values:  append(cloneValues(v.Values), val),
+					clamped: v.clamped,
+				})
+				return true
+			})
 		}
 
 	default:

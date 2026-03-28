@@ -10,6 +10,13 @@ For hot paths that evaluate **multiple paths** against many messages of the same
 type, the **Plan API** compiles paths into a trie-based execution plan that
 traverses shared prefixes only once.
 
+For jq-style interactive exploration, the **Pipeline API** provides a composable
+expression language with `|` pipes, `,` comma operator, `select()` filtering,
+arithmetic operators (`+`, `-`, `*`, `/`, `%`), variable bindings (`as $name`),
+control flow (`if`/`then`/`elif`/`else`/`end`, `try`/`catch`, `//` alternative),
+iteration primitives (`reduce`, `foreach`, `label`/`break`), and 70+ built-in
+functions covering strings, collections, math, regex, and serialization.
+
 For a deep dive into the internal object model, trie structure, expression
 system, and performance recommendations, see the [Architecture Guide](ARCHITECTURE.md).
 
@@ -203,9 +210,13 @@ when they have the same kind and kind-specific parameters:
 | `ListWildcardStep` | Always equal |
 | `ListRangeStep` | Same start, end, step, and omitted flags |
 | `AnyExpandStep` | Same message full name |
+| `FilterStep` | Never merged (each filter has its own predicate) |
+| `MapWildcardStep` | Always equal |
 
 Different step types on the same field (e.g. `imp[*]` vs `imp[0:3]`) **fork**
 into separate trie branches — they produce independent fan-out groups.
+`FilterStep`s are never merged even if their predicates look identical — each
+filter produces its own trie branch.
 
 ## Path String Syntax
 
@@ -218,13 +229,24 @@ by an explicit **root** and suffixed with **index**, **map-key**, **wildcard**,
 ```
 path         = [ root ] { accessor }
 root         = "(" full_message_name ")"
-accessor     = field_access | index_access
+accessor     = field_access | index_access | filter_access
 field_access = "." field_name
 index_access = "[" key "]"
 key          = integer | string_literal | "true" | "false"
-             | "*"                           ← wildcard
+             | "*"                           ← wildcard (list or map)
              | [ start ] ":" [ end ]         ← range
              | [ start ] ":" [ end ] ":" [ step ]  ← slice
+filter_access = "[?(" predicate ")]"
+predicate    = or_expr
+or_expr      = and_expr { "||" and_expr }
+and_expr     = unary_expr { "&&" unary_expr }
+unary_expr   = "!" unary_expr | primary
+primary      = comparison | truthy_check | "(" or_expr ")"
+comparison   = atom comparator atom
+truthy_check = atom
+atom         = relative_path | string_literal | integer | float | "true" | "false"
+relative_path = "." field_name { "." field_name }
+comparator   = "==" | "!=" | "<" | "<=" | ">" | ">="
 ```
 
 ### Obtaining the Message Descriptor
@@ -348,18 +370,27 @@ strkeymap["mykey"].stringfield
 ### Wildcards, Ranges, and Slices
 
 These step types cause `PathValues` to **fan out**, producing one result per
-matching element. They may only be applied to repeated (list) fields; using
-them on a map field is a parse error.
+matching element.
 
 #### Wildcard — `[*]` or `[:]` or `[::]`
 
-Selects **every** element in the list:
+On **repeated (list) fields**, selects **every** element:
 
 ```
 repeats[*]              // all elements
 repeats[:]              // same (normalizes to [*])
 repeats[::]             // same (normalizes to [*])
 ```
+
+On **map fields**, selects **all values** in the map (order is non-deterministic):
+
+```
+strkeymap[*]            // all values in the map
+strkeymap[*].stringfield // a field from every map value
+```
+
+Ranges and slices (`[0:3]`, `[::-1]`, etc.) are only supported on repeated
+fields. Using a range/slice on a map field is a parse error.
 
 #### Range — `[start:end]`
 
@@ -410,6 +441,84 @@ index you can access a field, and so on:
 field.subfield[0].deeper_field["key"].leaf
 repeats[*].nested.stringfield
 repeats[::2].nested.int32repeats[0]
+```
+
+### Mid-Traversal Filtering — `[?(...)]`
+
+Filter predicates let you select only the elements that match a condition,
+similar to jq's `select()`. Filters can be applied to repeated message
+fields or single message fields.
+
+#### Syntax
+
+```
+field[?(.subfield == "value")]          // equality
+field[?(.price > 100)]                  // numeric comparison
+field[?(.active)]                       // truthy check
+field[?(!.hidden)]                      // negation
+field[?(.active && .price > 0)]         // AND
+field[?(.type == "a" || .type == "b")]  // OR
+field[?(.inner.flag)]                   // nested path
+field[?((.x || .y) && .z)]             // grouping with parens
+```
+
+#### On repeated fields
+
+When applied to a repeated message field, the filter iterates all elements
+(like `[*]`) and keeps only those where the predicate is truthy:
+
+```go
+// Select active items with price > 100
+plan, _ := pbpath.NewPlan(md,
+    pbpath.PlanPath("items[?(.active && .price > 100)].name"),
+)
+```
+
+This is equivalent to jq's `select(.active and .price > 100)`.
+
+#### On single message fields
+
+When applied to a non-repeated message field, the filter acts as a gate:
+if the predicate is truthy the traversal continues; otherwise the branch
+is dropped (producing no results).
+
+#### Predicate atoms
+
+| Atom | Example | Description |
+|---|---|---|
+| Relative path | `.field`, `.inner.flag` | Field value on the current element |
+| String literal | `"hello"`, `'world'` | String constant |
+| Integer literal | `42`, `-1`, `0xFF` | Integer constant |
+| Float literal | `3.14`, `-0.5` | Float constant |
+| Boolean literal | `true`, `false` | Boolean constant |
+
+#### Comparators
+
+| Operator | Meaning |
+|---|---|
+| `==` | Equal |
+| `!=` | Not equal |
+| `<` | Less than |
+| `<=` | Less than or equal |
+| `>` | Greater than |
+| `>=` | Greater than or equal |
+
+#### Programmatic API
+
+Filters can also be built programmatically:
+
+```go
+predicate := pbpath.FuncEq(
+    pbpath.FilterPathRef(".status", statusFD),
+    pbpath.Literal(pbpath.ScalarString("active"), 0),
+)
+p := pbpath.Path{
+    pbpath.Root(md),
+    pbpath.FieldAccess(itemsFD),
+    pbpath.ListWildcard(),
+    pbpath.Filter(predicate),
+    pbpath.FieldAccess(nameFD),
+}
 ```
 
 ## Fan-Out and Nested Fan-Outs
@@ -532,6 +641,8 @@ results, err := pbpath.PathValues(p, msg)
 | `ListRange(start, end)` | `ListRangeStep` | `[start:end]` |
 | `ListRangeFrom(start)` | `ListRangeStep` | `[start:]` |
 | `ListRangeStep3(start, end, step, startOmitted, endOmitted)` | `ListRangeStep` | `[start:end:step]` |
+| `Filter(predicate)` | `FilterStep` | `[?(...)]` |
+| `MapWildcard()` | `MapWildcardStep` | `[*]` (on map fields) |
 
 `ListRangeStep3` panics if `step` is 0. Use the `startOmitted`/`endOmitted`
 flags to indicate that a bound should be defaulted at traversal time (matching
@@ -767,6 +878,113 @@ results, err := plan.Eval(msg)
 This lets you mix lenient and strict paths in the same plan without separate
 traversals.
 
+## Value Type
+
+`Value` is the universal intermediate representation used by pbpath expressions
+and the Query API. It is a small union struct (≤48 bytes on 64-bit) that can
+hold any protobuf value without boxing.
+
+### Value Kinds
+
+| Kind | Constructor | Description |
+|---|---|---|
+| `NullKind` | `Null()` | Absent or unset value |
+| `ScalarKind` | `Scalar(v)`, `ScalarBool(b)`, `ScalarInt64(n)`, `ScalarFloat64(f)`, `ScalarString(s)` | Any protobuf scalar |
+| `ListKind` | `ListVal(vs)` | A slice of Values (fan-out branches) |
+| `MessageKind` | `MessageVal(m)` | A protobuf message reference |
+
+Values are created from protobuf values with `FromProtoValue` and converted
+back with `ToProtoValue`. The `IsNull`, `IsNonZero`, `Kind`, `ProtoValue`,
+`List`, and `Message` accessors provide typed access without allocations.
+
+## Result Type
+
+`Result` wraps a `[]Value` representing the fan-out output of a single path
+entry. It provides typed accessors for the most common protobuf scalar types:
+
+```go
+result := resultSet.Get("country")
+country := result.String()       // first branch (or "")
+allIDs := result.Strings()       // all branches
+
+price := result.Float64()        // first branch (or 0)
+prices := result.Float64s()      // all branches
+
+active := result.Bool()          // first branch (or false)
+count := result.Int64()          // first branch (or 0)
+```
+
+### Accessor Naming Convention
+
+| Singular | Plural | Type |
+|---|---|---|
+| `String()` | `Strings()` | `string` |
+| `Bool()` | `Bools()` | `bool` |
+| `Int32()` | `Int32s()` | `int32` |
+| `Int64()` | `Int64s()` | `int64` |
+| `Uint32()` | `Uint32s()` | `uint32` |
+| `Uint64()` | `Uint64s()` | `uint64` |
+| `Float32()` | `Float32s()` | `float32` |
+| `Float64()` | `Float64s()` | `float64` |
+| `Bytes()` | — | `[]byte` |
+| `Message()` | `Messages()` | `protoreflect.Message` |
+| `ProtoValues()` | — | `[]protoreflect.Value` |
+
+Singular accessors return the first branch's value (or zero). Plural
+accessors return all branches. `Len()` returns the number of branches.
+
+## Query API
+
+The `Query` API wraps a `Plan` and presents results through the typed
+`ResultSet`/`Result` types instead of raw `[][]protoreflect.Value` slices.
+
+### Quick Start
+
+```go
+q, err := pbpath.NewQuery(md,
+    pbpath.PlanPath("device.geo.country", pbpath.Alias("country")),
+    pbpath.PlanPath("imp[*].id",          pbpath.Alias("imp_id")),
+    pbpath.PlanPath("imp[*].bidfloor",    pbpath.Alias("price")),
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Evaluate — returns a ResultSet with typed accessors.
+rs, err := q.Run(msg)
+if err != nil {
+    log.Fatal(err)
+}
+
+country := rs.Get("country").String()       // "US"
+impIDs := rs.Get("imp_id").Strings()        // ["imp-1", "imp-2", ...]
+prices := rs.Get("price").Float64s()        // [1.5, 2.0, ...]
+
+// Check if a path produced any results
+if rs.Has("country") {
+    // ...
+}
+
+// Iterate all entries
+for _, name := range rs.Names() {
+    result := rs.Get(name)
+    fmt.Printf("%s: %d branches\n", name, result.Len())
+}
+```
+
+### Concurrent Use
+
+```go
+// RunConcurrent allocates fresh buffers — safe for multi-goroutine use.
+rs, err := q.RunConcurrent(msg)
+```
+
+### Accessing the Underlying Plan
+
+```go
+plan := q.Plan() // *Plan — useful for EvalLeaves when you need raw performance
+```
+
 ## Expression Engine
 
 The Plan API supports **computed columns** through a composable `Expr` tree.
@@ -832,11 +1050,481 @@ plan, err := pbpath.NewPlan(md, nil,
 | Timestamp | `FuncStrptime`, `FuncTryStrptime`, `FuncAge`, `FuncExtract{Year,Month,Day,Hour,Minute,Second}` | Int64 |
 | ETL | `FuncHash`, `FuncEpochToDate`, `FuncDatePart`, `FuncBucket`, `FuncMask`, `FuncCoerce`, `FuncEnumName` | Varies |
 | Aggregates | `FuncSum`, `FuncDistinct`, `FuncListConcat` | Varies |
+| Filter/Logic | `FuncSelect`, `FuncAnd`, `FuncOr`, `FuncNot` | Same / Bool |
 
 Expressions compose freely — a `FuncCond` can contain `FuncHas` as its
 predicate, `PathRef` as the then-branch, and `FuncDefault` as the else-branch.
 See the [Architecture Guide](ARCHITECTURE.md#expression-system-expr) for
 implementation details.
+
+## Pipeline API (jq-style)
+
+The Pipeline API provides a jq-style expression language for exploratory
+protobuf querying. Unlike the Plan API (which is designed for high-throughput
+ETL), pipelines are parsed from human-readable strings and evaluated
+interactively.
+
+### Quick Start
+
+```go
+// Parse a pipeline against a message descriptor.
+p, err := pbpath.ParsePipeline(md, `.items | .[] | select(.active) | .name`)
+if err != nil {
+    log.Fatal(err)
+}
+
+// Execute against a protobuf message.
+results, err := p.ExecMessage(msg.ProtoReflect())
+for _, v := range results {
+    fmt.Println(v.String())
+}
+```
+
+### Grammar
+
+```
+pipeline       = comma_expr ["as" "$" ident "|" pipeline] { "|" comma_expr ["as" "$" ident "|" pipeline] }
+comma_expr     = alt_expr { "," alt_expr }
+alt_expr       = or_expr { "//" or_expr }
+or_expr        = and_expr { "or" and_expr }
+and_expr       = compare_expr { "and" compare_expr }
+compare_expr   = add_expr [ ("==" | "!=" | "<" | "<=" | ">" | ">=") add_expr ]
+add_expr       = mul_expr { ("+" | "-") mul_expr }
+mul_expr       = postfix_expr { ("*" | "/" | "%") postfix_expr }
+postfix_expr   = primary { suffix } [ "?" ]
+suffix         = "." ident | "[]" | "[" integer "]"
+primary        = "." | ".field" | ".[]" | ".[n]"
+               | "[" pipeline "]"     // collect into array
+               | "(" pipeline ")"     // grouping
+               | "{" [ obj_entry { "," obj_entry } [","] ] "}"  // object construction
+               | ident [ "(" pipeline { ";" pipeline } ")" ]
+               | "$" ident            // variable reference
+               | "-" primary          // unary negation
+               | "!" primary          // unary not
+               | "@" ident            // format string
+               | "if" ... "then" ... ["elif" ...] ["else" ...] "end"
+               | "try" primary ["catch" primary]
+               | "reduce" expr "as" "$" ident "(" pipeline ";" pipeline ")"
+               | "foreach" expr "as" "$" ident "(" pipeline ";" pipeline [";" pipeline] ")"
+               | "label" "$" ident "|" pipeline
+               | "break" "$" ident
+               | literal
+obj_entry      = ident ":" alt_expr               // static key
+               | string ":" alt_expr              // string literal key
+               | "(" pipeline ")" ":" alt_expr    // dynamic key
+               | ident                            // shorthand for {ident: .ident}
+```
+
+### Pipe Operator `|`
+
+The pipe operator chains stages left-to-right. Each stage receives every value
+produced by the previous stage:
+
+```
+.items | .[] | .name          // access items field, iterate, extract name
+```
+
+### Comma Operator `,`
+
+The comma operator produces multiple outputs from each input. Comma has higher
+precedence than pipe, so `.a, .b | f` means `(.a, .b) | f`:
+
+```
+.items | .[0] | .name, .value     // two outputs: name and value of first item
+[.name, .kind]                     // collect both into a list
+(.name, .kind) | ascii_upcase     // upcase both
+```
+
+### select(predicate)
+
+Keeps the input if the predicate produces a truthy result; drops it otherwise:
+
+```
+.items | .[] | select(.active)                // truthy check
+.items | .[] | select(.value > 20)            // comparison
+.items | .[] | select(.active and .value > 10) // compound
+```
+
+### Collect `[pipeline]`
+
+Gathers all outputs of the inner pipeline into a single list value:
+
+```
+[.items | .[] | .name]            // ["alpha", "beta", "gamma", "delta"]
+[.items | .[] | .name] | length  // 4
+```
+
+### Built-in Functions
+
+#### String Functions
+
+| Function | Args | Description |
+|---|---|---|
+| `ascii_downcase` | — | Convert to lowercase |
+| `ascii_upcase` | — | Convert to uppercase |
+| `ltrimstr(s)` | 1 | Remove prefix `s` |
+| `rtrimstr(s)` | 1 | Remove suffix `s` |
+| `startswith(s)` | 1 | Test if starts with `s` → bool |
+| `endswith(s)` | 1 | Test if ends with `s` → bool |
+| `split(sep)` | 1 | Split string by separator → array |
+| `join(sep)` | 1 | Join array elements by separator → string |
+| `test(re)` | 1 | Test regex match → bool |
+| `match(re)` | 1 | Find match → [offset, length, string] |
+| `capture(re)` | 1 | Named capture groups → [name, value, ...] |
+| `gsub(re; s)` | 2 | Replace all matches of `re` with `s` |
+| `sub(re; s)` | 2 | Replace first match of `re` with `s` |
+| `explode` | — | String → array of Unicode code points |
+| `implode` | — | Array of code points → string |
+
+```
+"HELLO" | ascii_downcase                // "hello"
+"hello world" | ltrimstr("hello ")      // "world"
+"a-b-c" | split("-") | join("+")        // "a+b+c"
+"foo bar foo" | gsub("foo"; "baz")      // "baz bar baz"
+"hello" | explode | implode             // "hello"
+```
+
+#### Collection Functions
+
+| Function | Args | Description |
+|---|---|---|
+| `map(f)` | 1 | Apply pipeline `f` to each element → array |
+| `sort_by(f)` | 1 | Sort by key pipeline (stable) → array |
+| `group_by(f)` | 1 | Group consecutive equal keys → array of arrays |
+| `unique_by(f)` | 1 | Deduplicate by key (first wins) → array |
+| `min_by(f)` | 1 | Element with minimum key |
+| `max_by(f)` | 1 | Element with maximum key |
+| `flatten` | — | Flatten nested arrays one level |
+| `reverse` | — | Reverse array or string |
+| `first` | — | First element of array |
+| `last` | — | Last element of array |
+| `nth(n)` | 1 | Element at index `n` |
+| `limit(n; f)` | 2 | First `n` outputs of pipeline `f` |
+| `contains(x)` | 1 | Test if input contains `x` → bool |
+| `inside(x)` | 1 | Test if input is inside `x` → bool |
+| `index(s)` | 1 | First index of `s` (string or array) |
+| `rindex(s)` | 1 | Last index of `s` |
+| `indices(s)` | 1 | All indices of `s` → array |
+
+```
+.items | map(.name)                         // ["alpha", "beta", "gamma", "delta"]
+.items | sort_by(.name) | first | .name     // "alpha"
+.items | map(.name) | join(", ")            // "alpha, beta, gamma, delta"
+.items | group_by(.kind) | length           // 2 (groups "A" and "B")
+.items | unique_by(.kind) | .[] | .name     // "alpha", "beta"
+.items | min_by(.value) | .name             // "alpha"
+.items | max_by(.value) | .name             // "delta"
+"foobar" | contains("bar")                  // true
+"abcabc" | index("bc")                      // 1
+```
+
+#### Numeric Functions
+
+| Function | Args | Description |
+|---|---|---|
+| `fabs` | — | Absolute value (float) |
+| `sqrt` | — | Square root |
+| `log` | — | Natural logarithm |
+| `pow` | — | Power: input `[base, exp]` |
+| `nan` | — | NaN constant |
+| `infinite` | — | Infinity constant |
+| `isnan` | — | Test for NaN → bool |
+| `isinfinite` | — | Test for ±infinity → bool |
+| `isnormal` | — | Test for normal number → bool |
+
+```
+16 | sqrt                     // 4
+[2, 10] | pow                 // 1024
+nan | isnan                   // true
+```
+
+#### Serialization & Format Strings
+
+| Function | Description |
+|---|---|
+| `tojson` | Value → JSON string |
+| `fromjson` | JSON string → value |
+| `@base64` | Encode to Base64 |
+| `@base64d` | Decode from Base64 |
+| `@uri` | URL-encode |
+| `@csv` | Array → CSV row |
+| `@tsv` | Array → TSV row |
+| `@html` | HTML-escape |
+| `@json` | Same as `tojson` |
+
+```
+"hello" | @base64              // "aGVsbG8="
+"aGVsbG8=" | @base64d          // "hello"
+"<b>bold</b>" | @html          // "&lt;b&gt;bold&lt;/b&gt;"
+42 | tojson                    // "42"
+```
+
+#### Core Functions
+
+| Function | Description |
+|---|---|
+| `length` | Array/string/object/message length; abs value for numbers |
+| `type` | Type name: "null", "boolean", "number", "string", "array", "object" |
+| `keys` | Array → indices; message/object → field/key names |
+| `values` | Message/object → values; array → identity |
+| `add` | Reduce: sum numbers, concat strings, flatten arrays, merge objects |
+| `tostring` | Convert to string representation |
+| `tonumber` | Convert string to number |
+| `not` | Logical negation |
+| `empty` | Produce zero outputs |
+| `null` | Null constant |
+| `has(k)` | Test if object/message has key `k` → bool |
+| `in(obj)` | Test if input key exists in `obj` → bool |
+| `to_entries` | Object → `[{key, value}, ...]` |
+| `from_entries` | `[{key, value}, ...]` → object |
+| `with_entries(f)` | `to_entries \| map(f) \| from_entries` |
+| `getpath(path)` | Get value at path (array of keys/indices) |
+| `setpath(path; val)` | Set value at path |
+| `delpaths(paths)` | Delete values at multiple paths |
+
+### Arithmetic Operators
+
+Standard arithmetic operators with proper precedence (`*` `/` `%` before `+` `-`):
+
+| Operator | Description |
+|---|---|
+| `+` | Add numbers, concatenate strings, concatenate arrays, merge objects |
+| `-` | Subtract numbers |
+| `*` | Multiply numbers, recursively merge objects |
+| `/` | Divide numbers (integer division for integers) |
+| `%` | Modulo |
+
+Special `+` behaviours: `null + x = x`, `"a" + "b" = "ab"`, `[1] + [2] = [1,2]`, `{a:1} + {b:2} = {a:1,b:2}`.
+
+```
+5 + 3                              // 8
+10 - 3                             // 7
+4 * 5                              // 20
+10 / 3                             // 3 (integer)
+10 % 3                             // 1
+"hello" + " " + "world"           // "hello world"
+2 + 3 * 4                         // 14 (mul before add)
+.items | .[0] | .value * 2 + 1    // field arithmetic
+```
+
+### Variables — `as $name`
+
+Bind expression results to variables for use in subsequent pipeline stages:
+
+```
+.name as $n | .items | .[] | select(.active) | [$n, .name]
+.items | .[0] | .name as $n | .value as $v | [$n, $v]
+```
+
+Variables are lexically scoped — inner bindings shadow outer ones without
+affecting the outer scope. The body of an `as` binding receives the same
+input as the expression being bound (not its output).
+
+### If-then-else
+
+Conditional expressions with optional `elif` chains:
+
+```
+if .active then .name else "inactive" end
+if .value > 50 then "high" elif .value > 10 then "medium" else "low" end
+.items | .[] | if .active then .name else empty end
+```
+
+If no `else` clause is provided and the condition is false, the input passes
+through unchanged (identity).
+
+### Try-catch
+
+Error handling that suppresses or intercepts errors:
+
+```
+try .name                          // pass through; suppress error
+try error catch "caught"           // catch → substitute value
+try error("oops") catch .          // catch body receives error message
+```
+
+`try` without `catch` silently suppresses errors (produces no output on error).
+
+### Alternative Operator `//`
+
+Returns the left side if truthy, otherwise the right side (like jq's `//`):
+
+```
+.name // "default"                 // use .name if non-null/non-false
+null // false // "last"            // chains: first truthy wins
+```
+
+### Optional Operator `?`
+
+Suppresses errors on the preceding expression, producing empty output instead:
+
+```
+.name?                             // no error if .name fails
+.items | .[]?                      // suppress iterate errors
+```
+
+### Reduce
+
+Fold a stream into a single accumulator value:
+
+```
+reduce (.items | .[]) as $x (0; . + $x.value)     // sum: 100
+reduce (.items | .[]) as $x (0; . + 1)             // count: 4
+reduce (.items | .[]) as $x (""; . + $x.name + " ") // concat
+```
+
+Syntax: `reduce STREAM as $VAR (INIT; UPDATE)` — evaluates STREAM, binds each
+value to `$VAR`, and folds through UPDATE starting from INIT. The accumulator
+(`.` inside UPDATE) starts at INIT and is updated after each stream element.
+
+### Foreach
+
+Like reduce but emits intermediate results:
+
+```
+foreach (.items | .[]) as $x (0; . + $x.value)           // running sum: 10, 30, 60, 100
+foreach (.items | .[]) as $x (0; . + 1; . * 10)          // with extract: 10, 20, 30, 40
+```
+
+Syntax: `foreach STREAM as $VAR (INIT; UPDATE [; EXTRACT])` — like reduce
+but emits a value after each iteration. Without EXTRACT, emits the accumulator;
+with EXTRACT, emits the EXTRACT expression applied to the accumulator.
+
+### Label-break
+
+Early exit from a pipeline using `label`/`break`:
+
+```
+label $out | .items | .[] | if .value > 20 then break $out else . end
+```
+
+### Object Construction `{...}`
+
+Build schema-free objects with key-value pairs. Objects support static keys,
+string literal keys, dynamic keys via `(expr)`, and shorthand notation:
+
+```
+{name: .name, val: .value}                // static keys
+{"my-key": .name}                          // string literal key
+{(.name): .value}                          // dynamic key from expression
+{name}                                     // shorthand: same as {name: .name}
+{name, value}                              // multiple shorthand
+{}                                         // empty object
+```
+
+Objects are schema-free — they hold arbitrary string keys and `Value` values,
+unlike `MessageKind` which is tied to a protobuf descriptor. Object values
+render as JSON-like strings: `{"name":"alpha","value":10}`.
+
+#### Object operations
+
+```
+{a: 1} + {b: 2}                           // merge: {"a":1,"b":2}
+{a: 1, b: 2} + {b: 3}                     // right wins: {"a":1,"b":3}
+{a: {x: 1}} * {a: {y: 2}}                 // recursive merge: {"a":{"x":1,"y":2}}
+{a: 1, b: 2} | keys                       // ["a","b"]
+{a: 1, b: 2} | values                     // [1,2]
+{a: 1, b: 2} | length                     // 2
+{a: 1, b: 2} | has("a")                   // true
+"a" | in({"a": 1})                         // true
+{a: 1, b: 2} | .[]                         // 1, 2 (iterate values)
+{a: 1, b: 2} | .a                          // 1 (field access)
+{a: 1, b: 2} | type                        // "object"
+```
+
+#### to_entries / from_entries / with_entries
+
+Convert between object and array-of-pairs representations:
+
+```
+{a: 1, b: 2} | to_entries                 // [{key:"a",value:1}, {key:"b",value:2}]
+[{key: "x", value: 42}] | from_entries    // {"x":42}
+{a: 1} | with_entries(.)                   // {"a":1} (identity transform)
+```
+
+#### Path operations on objects
+
+```
+{a: {b: 42}} | getpath(["a", "b"])         // 42
+{a: 1} | setpath(["b"]; 2)                // {"a":1,"b":2}
+{a: 1, b: 2, c: 3} | delpaths([["b"]])    // {"a":1,"c":3}
+```
+
+#### Building objects from pipelines
+
+```
+// Extract specific fields from each item
+.items | .[] | {name, value}
+
+// Conditional values
+{val: (if .value > 50 then "big" else "small" end)}
+
+// Reduce into an object
+reduce (.items | .[] | .name) as $n ({} ; . + {($n): true})
+
+// Merge multiple objects
+[{a: 1}, {b: 2}, {c: 3}] | add            // {"a":1,"b":2,"c":3}
+```
+
+### Additional Built-in Functions
+
+| Function | Description |
+|---|---|
+| `min` | Minimum of array |
+| `max` | Maximum of array |
+| `floor` | Floor of number |
+| `ceil` | Ceiling of number |
+| `round` | Round number |
+| `range` | Generate 0..n-1 from input n |
+| `any` / `all` | Test array elements for truthiness |
+| `any(f)` / `all(f)` | Test with predicate |
+| `while(cond; update)` | Emit values while condition holds |
+| `until(cond; update)` | Apply update until condition holds |
+| `recurse` / `recurse(f)` | Recursive descent |
+| `repeat(f)` | Apply f repeatedly |
+| `error` / `error(msg)` | Raise an error |
+| `debug` | Pass-through (for debugging) |
+| `env` | Returns null (no env in protobuf context) |
+
+### Pipeline Examples
+
+```go
+// Extract active item names, sorted.
+p, _ := pbpath.ParsePipeline(md,
+    `.items | [.[] | select(.active)] | sort_by(.name) | .[] | .name`)
+results, _ := p.ExecMessage(msg.ProtoReflect())
+// → ["alpha", "delta", "gamma"]
+
+// Sum of all values.
+p, _ = pbpath.ParsePipeline(md, `.items | map(.value) | add`)
+results, _ = p.ExecMessage(msg.ProtoReflect())
+// → [100]
+
+// Regex filtering.
+p, _ = pbpath.ParsePipeline(md,
+    `.items | .[] | select(.name | test("^(alpha|gamma)$")) | .name`)
+results, _ = p.ExecMessage(msg.ProtoReflect())
+// → ["alpha", "gamma"]
+
+// Transform with gsub and base64.
+p, _ = pbpath.ParsePipeline(md, `.name | gsub("-"; "_") | @base64`)
+results, _ = p.ExecMessage(msg.ProtoReflect())
+
+// Variable binding with conditional.
+p, _ = pbpath.ParsePipeline(md,
+    `.name as $n | .items | .[] | if .active then $n + ":" + .name else "skip" end`)
+results, _ = p.ExecMessage(msg.ProtoReflect())
+
+// Reduce to sum values.
+p, _ = pbpath.ParsePipeline(md,
+    `reduce (.items | .[]) as $x (0; . + $x.value)`)
+results, _ = p.ExecMessage(msg.ProtoReflect())
+// → [100]
+
+// Alternative operator for defaults.
+p, _ = pbpath.ParsePipeline(md, `.missing_field // "default"`)
+results, _ = p.ExecMessage(msg.ProtoReflect())
+```
 
 ## EvalLeaves — High-Performance Evaluation
 
@@ -887,7 +1575,6 @@ go test -bench='BenchmarkPlan' -benchmem -benchtime=5s -count=3 ./proto/pbpath/
 | `nested.stringfield[0]` | indexing a non-repeated field |
 | `strkeymap.key` | traversing map internal fields |
 | `strkeymap["k"]["k2"]` | double-indexing (value is not a map) |
-| `strkeymap[*]` | wildcard not supported on map fields |
 | `strkeymap[0:3]` | range/slice not supported on map fields |
 | `repeats[::0]` | step must not be zero |
 | `(wrong.Name).id` | root name doesn't match descriptor |

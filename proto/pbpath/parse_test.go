@@ -378,10 +378,10 @@ func TestParsePath(t *testing.T) {
 			wantErr: "non-integral type false", // bool is integral, but won't be cast to 0 or 1.
 		},
 		{
-			name:    "whitespace is illegal",
-			md:      md,
-			path:    " ",
-			wantErr: "found illegal token ' ' at position 0",
+			name: "whitespace is skipped",
+			md:   md,
+			path: " ",
+			want: "(testprotopath.Test)",
 		},
 		{
 			name:    "unexpected identifier",
@@ -427,10 +427,10 @@ func TestParsePath(t *testing.T) {
 			want: "(testprotopath.Test).repeats[*]", // [:] normalizes to [*]
 		},
 		{
-			name:    "wildcard on map",
-			md:      md,
-			path:    "strkeymap[*]",
-			wantErr: "wildcard not supported on map fields",
+			name: "wildcard on map",
+			md:   md,
+			path: "strkeymap[*]",
+			want: "(testprotopath.Test).strkeymap[*]",
 		},
 		{
 			name:    "colon wildcard on map",

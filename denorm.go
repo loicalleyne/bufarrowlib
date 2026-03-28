@@ -341,11 +341,12 @@ func (s *Transcoder) AppendDenorm(msg proto.Message) error {
 				continue
 			}
 			leaf := branches[bIdx]
-			if !leaf.IsValid() {
+			if leaf.IsNull() {
 				s.denormBuilder.Field(colIdx).AppendNull()
 				continue
 			}
-			col.appendFn(leaf)
+			// Bridge Value back to protoreflect.Value for the Arrow append function.
+			col.appendFn(leaf.ToProtoValue())
 		}
 	}
 

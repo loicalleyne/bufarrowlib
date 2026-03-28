@@ -44,6 +44,18 @@ const (
 	// ListWildcardStep identifies a [Step] as selecting all elements of a
 	// repeated field. Equivalent to [*], [:], or [::] in the path syntax.
 	ListWildcardStep
+	// FilterStep identifies a [Step] as a mid-traversal predicate filter.
+	// It evaluates a predicate expression against the current cursor value
+	// (which must be a message) and keeps only branches where the predicate
+	// is truthy. Syntax: [?(.field == "value")].
+	//
+	// The predicate is compiled at [NewPlan] time into a sub-[Plan] rooted
+	// at the cursor's message descriptor. At traversal time the predicate
+	// is evaluated per-branch with zero additional compilation cost.
+	FilterStep
+	// MapWildcardStep identifies a [Step] as selecting all values from a
+	// map field. Equivalent to [*] applied to a map-typed field.
+	MapWildcardStep
 )
 
 // Step is a single operation in a [Path]. It wraps a [protopath.Step] for the
@@ -62,15 +74,19 @@ type Step struct {
 	rangeStep    int  // stride; 0 is invalid and rejected at parse/construct time
 	startOmitted bool // true when start was not explicitly provided
 	endOmitted   bool // true when end was not explicitly provided
+	// For FilterStep — the predicate expression to evaluate against the cursor.
+	// Nil for all other step kinds.
+	predicate Expr
 }
 
 // Kind returns the step's kind.
 func (s Step) Kind() StepKind { return s.kind }
 
 // ProtoStep returns the underlying [protopath.Step].
-// It panics if the step kind is [ListRangeStep] or [ListWildcardStep].
+// It panics if the step kind is [ListRangeStep], [ListWildcardStep],
+// [FilterStep], or [MapWildcardStep].
 func (s Step) ProtoStep() protopath.Step {
-	if s.kind == ListRangeStep || s.kind == ListWildcardStep {
+	if s.kind == ListRangeStep || s.kind == ListWildcardStep || s.kind == FilterStep || s.kind == MapWildcardStep {
 		panic(fmt.Sprintf("pbpath.Step.ProtoStep: not a standard step kind (%d)", s.kind))
 	}
 	return s.proto
@@ -118,6 +134,10 @@ func (s Step) EndOmitted() bool { return s.endOmitted }
 // RangeOpen reports whether the range has no explicit end bound.
 // Deprecated: use [Step.EndOmitted] instead.
 func (s Step) RangeOpen() bool { return s.endOmitted }
+
+// Predicate returns the predicate [Expr] for a [FilterStep].
+// Returns nil for all other step kinds.
+func (s Step) Predicate() Expr { return s.predicate }
 
 // NOTE: The Path and Values are separate types here since there are use cases
 // where you would like to "address" some value in a message with just the path
@@ -348,6 +368,11 @@ func stepAppendString(s Step, b []byte) []byte {
 		return b
 	case ListWildcardStep:
 		return append(b, "[*]"...)
+	case MapWildcardStep:
+		return append(b, "[*]"...)
+	case FilterStep:
+		b = append(b, "[?(...)]"...)
+		return b
 	case ListIndexStep:
 		b = append(b, '[')
 		b = strconv.AppendInt(b, int64(s.listIndex), 10)
@@ -490,4 +515,18 @@ func ListRangeStep3(start, end, step int, startOmitted, endOmitted bool) Step {
 // ListWildcard returns a [ListWildcardStep] that selects every element.
 func ListWildcard() Step {
 	return Step{kind: ListWildcardStep}
+}
+
+// Filter returns a [FilterStep] that evaluates predicate against the current
+// cursor value and keeps only branches where the predicate is truthy.
+// The predicate is an [Expr] whose leaf [PathRef] nodes are relative to the
+// cursor's message descriptor; resolution happens at [NewPlan] time.
+func Filter(predicate Expr) Step {
+	return Step{kind: FilterStep, predicate: predicate}
+}
+
+// MapWildcard returns a [MapWildcardStep] that selects every value from a
+// map field, iterating over all key-value pairs.
+func MapWildcard() Step {
+	return Step{kind: MapWildcardStep}
 }
