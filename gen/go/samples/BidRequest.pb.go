@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.10
 // 	protoc        (unknown)
-// source: samples/BidRequest.proto
+// source: BidRequest.proto
 
 package samples
 
@@ -43,7 +43,7 @@ type BidRequestEvent struct {
 
 func (x *BidRequestEvent) Reset() {
 	*x = BidRequestEvent{}
-	mi := &file_samples_BidRequest_proto_msgTypes[0]
+	mi := &file_BidRequest_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -55,7 +55,7 @@ func (x *BidRequestEvent) String() string {
 func (*BidRequestEvent) ProtoMessage() {}
 
 func (x *BidRequestEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_BidRequest_proto_msgTypes[0]
+	mi := &file_BidRequest_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -68,7 +68,7 @@ func (x *BidRequestEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BidRequestEvent.ProtoReflect.Descriptor instead.
 func (*BidRequestEvent) Descriptor() ([]byte, []int) {
-	return file_samples_BidRequest_proto_rawDescGZIP(), []int{0}
+	return file_BidRequest_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *BidRequestEvent) GetId() string {
@@ -165,7 +165,7 @@ type BidRequestEvent_UserEvent struct {
 
 func (x *BidRequestEvent_UserEvent) Reset() {
 	*x = BidRequestEvent_UserEvent{}
-	mi := &file_samples_BidRequest_proto_msgTypes[1]
+	mi := &file_BidRequest_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -177,7 +177,7 @@ func (x *BidRequestEvent_UserEvent) String() string {
 func (*BidRequestEvent_UserEvent) ProtoMessage() {}
 
 func (x *BidRequestEvent_UserEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_BidRequest_proto_msgTypes[1]
+	mi := &file_BidRequest_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -190,7 +190,7 @@ func (x *BidRequestEvent_UserEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BidRequestEvent_UserEvent.ProtoReflect.Descriptor instead.
 func (*BidRequestEvent_UserEvent) Descriptor() ([]byte, []int) {
-	return file_samples_BidRequest_proto_rawDescGZIP(), []int{0, 0}
+	return file_BidRequest_proto_rawDescGZIP(), []int{0, 0}
 }
 
 func (x *BidRequestEvent_UserEvent) GetId() string {
@@ -221,7 +221,7 @@ type BidRequestEvent_DeviceEvent struct {
 
 func (x *BidRequestEvent_DeviceEvent) Reset() {
 	*x = BidRequestEvent_DeviceEvent{}
-	mi := &file_samples_BidRequest_proto_msgTypes[2]
+	mi := &file_BidRequest_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -233,7 +233,7 @@ func (x *BidRequestEvent_DeviceEvent) String() string {
 func (*BidRequestEvent_DeviceEvent) ProtoMessage() {}
 
 func (x *BidRequestEvent_DeviceEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_BidRequest_proto_msgTypes[2]
+	mi := &file_BidRequest_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -246,7 +246,7 @@ func (x *BidRequestEvent_DeviceEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BidRequestEvent_DeviceEvent.ProtoReflect.Descriptor instead.
 func (*BidRequestEvent_DeviceEvent) Descriptor() ([]byte, []int) {
-	return file_samples_BidRequest_proto_rawDescGZIP(), []int{0, 1}
+	return file_BidRequest_proto_rawDescGZIP(), []int{0, 1}
 }
 
 func (x *BidRequestEvent_DeviceEvent) GetIfa() string {
@@ -303,7 +303,7 @@ type BidRequestEvent_SiteEvent struct {
 
 func (x *BidRequestEvent_SiteEvent) Reset() {
 	*x = BidRequestEvent_SiteEvent{}
-	mi := &file_samples_BidRequest_proto_msgTypes[3]
+	mi := &file_BidRequest_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -315,7 +315,7 @@ func (x *BidRequestEvent_SiteEvent) String() string {
 func (*BidRequestEvent_SiteEvent) ProtoMessage() {}
 
 func (x *BidRequestEvent_SiteEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_BidRequest_proto_msgTypes[3]
+	mi := &file_BidRequest_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -328,7 +328,7 @@ func (x *BidRequestEvent_SiteEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BidRequestEvent_SiteEvent.ProtoReflect.Descriptor instead.
 func (*BidRequestEvent_SiteEvent) Descriptor() ([]byte, []int) {
-	return file_samples_BidRequest_proto_rawDescGZIP(), []int{0, 2}
+	return file_BidRequest_proto_rawDescGZIP(), []int{0, 2}
 }
 
 func (x *BidRequestEvent_SiteEvent) GetId() string {
@@ -377,7 +377,7 @@ type BidRequestEvent_ImpressionEvent struct {
 
 func (x *BidRequestEvent_ImpressionEvent) Reset() {
 	*x = BidRequestEvent_ImpressionEvent{}
-	mi := &file_samples_BidRequest_proto_msgTypes[4]
+	mi := &file_BidRequest_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -389,7 +389,7 @@ func (x *BidRequestEvent_ImpressionEvent) String() string {
 func (*BidRequestEvent_ImpressionEvent) ProtoMessage() {}
 
 func (x *BidRequestEvent_ImpressionEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_BidRequest_proto_msgTypes[4]
+	mi := &file_BidRequest_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -402,7 +402,7 @@ func (x *BidRequestEvent_ImpressionEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BidRequestEvent_ImpressionEvent.ProtoReflect.Descriptor instead.
 func (*BidRequestEvent_ImpressionEvent) Descriptor() ([]byte, []int) {
-	return file_samples_BidRequest_proto_rawDescGZIP(), []int{0, 3}
+	return file_BidRequest_proto_rawDescGZIP(), []int{0, 3}
 }
 
 func (x *BidRequestEvent_ImpressionEvent) GetId() string {
@@ -485,7 +485,7 @@ type BidRequestEvent_TechnicalProviderEvent struct {
 
 func (x *BidRequestEvent_TechnicalProviderEvent) Reset() {
 	*x = BidRequestEvent_TechnicalProviderEvent{}
-	mi := &file_samples_BidRequest_proto_msgTypes[5]
+	mi := &file_BidRequest_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -497,7 +497,7 @@ func (x *BidRequestEvent_TechnicalProviderEvent) String() string {
 func (*BidRequestEvent_TechnicalProviderEvent) ProtoMessage() {}
 
 func (x *BidRequestEvent_TechnicalProviderEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_BidRequest_proto_msgTypes[5]
+	mi := &file_BidRequest_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -510,7 +510,7 @@ func (x *BidRequestEvent_TechnicalProviderEvent) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use BidRequestEvent_TechnicalProviderEvent.ProtoReflect.Descriptor instead.
 func (*BidRequestEvent_TechnicalProviderEvent) Descriptor() ([]byte, []int) {
-	return file_samples_BidRequest_proto_rawDescGZIP(), []int{0, 4}
+	return file_BidRequest_proto_rawDescGZIP(), []int{0, 4}
 }
 
 func (x *BidRequestEvent_TechnicalProviderEvent) GetId() uint32 {
@@ -541,7 +541,7 @@ type BidRequestEvent_BidRequestDoohEvent struct {
 
 func (x *BidRequestEvent_BidRequestDoohEvent) Reset() {
 	*x = BidRequestEvent_BidRequestDoohEvent{}
-	mi := &file_samples_BidRequest_proto_msgTypes[6]
+	mi := &file_BidRequest_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -553,7 +553,7 @@ func (x *BidRequestEvent_BidRequestDoohEvent) String() string {
 func (*BidRequestEvent_BidRequestDoohEvent) ProtoMessage() {}
 
 func (x *BidRequestEvent_BidRequestDoohEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_BidRequest_proto_msgTypes[6]
+	mi := &file_BidRequest_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -566,7 +566,7 @@ func (x *BidRequestEvent_BidRequestDoohEvent) ProtoReflect() protoreflect.Messag
 
 // Deprecated: Use BidRequestEvent_BidRequestDoohEvent.ProtoReflect.Descriptor instead.
 func (*BidRequestEvent_BidRequestDoohEvent) Descriptor() ([]byte, []int) {
-	return file_samples_BidRequest_proto_rawDescGZIP(), []int{0, 5}
+	return file_BidRequest_proto_rawDescGZIP(), []int{0, 5}
 }
 
 func (x *BidRequestEvent_BidRequestDoohEvent) GetId() string {
@@ -620,7 +620,7 @@ type BidRequestEvent_UserEvent_UserExt struct {
 
 func (x *BidRequestEvent_UserEvent_UserExt) Reset() {
 	*x = BidRequestEvent_UserEvent_UserExt{}
-	mi := &file_samples_BidRequest_proto_msgTypes[7]
+	mi := &file_BidRequest_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -632,7 +632,7 @@ func (x *BidRequestEvent_UserEvent_UserExt) String() string {
 func (*BidRequestEvent_UserEvent_UserExt) ProtoMessage() {}
 
 func (x *BidRequestEvent_UserEvent_UserExt) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_BidRequest_proto_msgTypes[7]
+	mi := &file_BidRequest_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -645,7 +645,7 @@ func (x *BidRequestEvent_UserEvent_UserExt) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use BidRequestEvent_UserEvent_UserExt.ProtoReflect.Descriptor instead.
 func (*BidRequestEvent_UserEvent_UserExt) Descriptor() ([]byte, []int) {
-	return file_samples_BidRequest_proto_rawDescGZIP(), []int{0, 0, 0}
+	return file_BidRequest_proto_rawDescGZIP(), []int{0, 0, 0}
 }
 
 func (x *BidRequestEvent_UserEvent_UserExt) GetDemographic() *BidRequestEvent_UserEvent_UserExt_DemographicEvent {
@@ -664,7 +664,7 @@ type BidRequestEvent_UserEvent_UserExt_DemographicEvent struct {
 
 func (x *BidRequestEvent_UserEvent_UserExt_DemographicEvent) Reset() {
 	*x = BidRequestEvent_UserEvent_UserExt_DemographicEvent{}
-	mi := &file_samples_BidRequest_proto_msgTypes[8]
+	mi := &file_BidRequest_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -676,7 +676,7 @@ func (x *BidRequestEvent_UserEvent_UserExt_DemographicEvent) String() string {
 func (*BidRequestEvent_UserEvent_UserExt_DemographicEvent) ProtoMessage() {}
 
 func (x *BidRequestEvent_UserEvent_UserExt_DemographicEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_BidRequest_proto_msgTypes[8]
+	mi := &file_BidRequest_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -689,7 +689,7 @@ func (x *BidRequestEvent_UserEvent_UserExt_DemographicEvent) ProtoReflect() prot
 
 // Deprecated: Use BidRequestEvent_UserEvent_UserExt_DemographicEvent.ProtoReflect.Descriptor instead.
 func (*BidRequestEvent_UserEvent_UserExt_DemographicEvent) Descriptor() ([]byte, []int) {
-	return file_samples_BidRequest_proto_rawDescGZIP(), []int{0, 0, 0, 0}
+	return file_BidRequest_proto_rawDescGZIP(), []int{0, 0, 0, 0}
 }
 
 func (x *BidRequestEvent_UserEvent_UserExt_DemographicEvent) GetTotal() *custom.DecimalValue {
@@ -715,7 +715,7 @@ type BidRequestEvent_DeviceEvent_GeoEvent struct {
 
 func (x *BidRequestEvent_DeviceEvent_GeoEvent) Reset() {
 	*x = BidRequestEvent_DeviceEvent_GeoEvent{}
-	mi := &file_samples_BidRequest_proto_msgTypes[9]
+	mi := &file_BidRequest_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -727,7 +727,7 @@ func (x *BidRequestEvent_DeviceEvent_GeoEvent) String() string {
 func (*BidRequestEvent_DeviceEvent_GeoEvent) ProtoMessage() {}
 
 func (x *BidRequestEvent_DeviceEvent_GeoEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_BidRequest_proto_msgTypes[9]
+	mi := &file_BidRequest_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -740,7 +740,7 @@ func (x *BidRequestEvent_DeviceEvent_GeoEvent) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use BidRequestEvent_DeviceEvent_GeoEvent.ProtoReflect.Descriptor instead.
 func (*BidRequestEvent_DeviceEvent_GeoEvent) Descriptor() ([]byte, []int) {
-	return file_samples_BidRequest_proto_rawDescGZIP(), []int{0, 1, 0}
+	return file_BidRequest_proto_rawDescGZIP(), []int{0, 1, 0}
 }
 
 func (x *BidRequestEvent_DeviceEvent_GeoEvent) GetLat() *custom.DecimalValue {
@@ -809,7 +809,7 @@ type BidRequestEvent_SiteEvent_SitePublisher struct {
 
 func (x *BidRequestEvent_SiteEvent_SitePublisher) Reset() {
 	*x = BidRequestEvent_SiteEvent_SitePublisher{}
-	mi := &file_samples_BidRequest_proto_msgTypes[10]
+	mi := &file_BidRequest_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -821,7 +821,7 @@ func (x *BidRequestEvent_SiteEvent_SitePublisher) String() string {
 func (*BidRequestEvent_SiteEvent_SitePublisher) ProtoMessage() {}
 
 func (x *BidRequestEvent_SiteEvent_SitePublisher) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_BidRequest_proto_msgTypes[10]
+	mi := &file_BidRequest_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -834,7 +834,7 @@ func (x *BidRequestEvent_SiteEvent_SitePublisher) ProtoReflect() protoreflect.Me
 
 // Deprecated: Use BidRequestEvent_SiteEvent_SitePublisher.ProtoReflect.Descriptor instead.
 func (*BidRequestEvent_SiteEvent_SitePublisher) Descriptor() ([]byte, []int) {
-	return file_samples_BidRequest_proto_rawDescGZIP(), []int{0, 2, 0}
+	return file_BidRequest_proto_rawDescGZIP(), []int{0, 2, 0}
 }
 
 func (x *BidRequestEvent_SiteEvent_SitePublisher) GetId() string {
@@ -861,7 +861,7 @@ type BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent struct {
 
 func (x *BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent) Reset() {
 	*x = BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent{}
-	mi := &file_samples_BidRequest_proto_msgTypes[11]
+	mi := &file_BidRequest_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -873,7 +873,7 @@ func (x *BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent) String() strin
 func (*BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent) ProtoMessage() {}
 
 func (x *BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_BidRequest_proto_msgTypes[11]
+	mi := &file_BidRequest_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -886,7 +886,7 @@ func (x *BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent) ProtoReflect()
 
 // Deprecated: Use BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent.ProtoReflect.Descriptor instead.
 func (*BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent) Descriptor() ([]byte, []int) {
-	return file_samples_BidRequest_proto_rawDescGZIP(), []int{0, 3, 0}
+	return file_BidRequest_proto_rawDescGZIP(), []int{0, 3, 0}
 }
 
 func (x *BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent) GetPrivateAuction() uint32 {
@@ -914,7 +914,7 @@ type BidRequestEvent_ImpressionEvent_BannerEvent struct {
 
 func (x *BidRequestEvent_ImpressionEvent_BannerEvent) Reset() {
 	*x = BidRequestEvent_ImpressionEvent_BannerEvent{}
-	mi := &file_samples_BidRequest_proto_msgTypes[12]
+	mi := &file_BidRequest_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -926,7 +926,7 @@ func (x *BidRequestEvent_ImpressionEvent_BannerEvent) String() string {
 func (*BidRequestEvent_ImpressionEvent_BannerEvent) ProtoMessage() {}
 
 func (x *BidRequestEvent_ImpressionEvent_BannerEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_BidRequest_proto_msgTypes[12]
+	mi := &file_BidRequest_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -939,7 +939,7 @@ func (x *BidRequestEvent_ImpressionEvent_BannerEvent) ProtoReflect() protoreflec
 
 // Deprecated: Use BidRequestEvent_ImpressionEvent_BannerEvent.ProtoReflect.Descriptor instead.
 func (*BidRequestEvent_ImpressionEvent_BannerEvent) Descriptor() ([]byte, []int) {
-	return file_samples_BidRequest_proto_rawDescGZIP(), []int{0, 3, 1}
+	return file_BidRequest_proto_rawDescGZIP(), []int{0, 3, 1}
 }
 
 func (x *BidRequestEvent_ImpressionEvent_BannerEvent) GetMimes() []string {
@@ -977,7 +977,7 @@ type BidRequestEvent_ImpressionEvent_VideoEvent struct {
 
 func (x *BidRequestEvent_ImpressionEvent_VideoEvent) Reset() {
 	*x = BidRequestEvent_ImpressionEvent_VideoEvent{}
-	mi := &file_samples_BidRequest_proto_msgTypes[13]
+	mi := &file_BidRequest_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -989,7 +989,7 @@ func (x *BidRequestEvent_ImpressionEvent_VideoEvent) String() string {
 func (*BidRequestEvent_ImpressionEvent_VideoEvent) ProtoMessage() {}
 
 func (x *BidRequestEvent_ImpressionEvent_VideoEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_BidRequest_proto_msgTypes[13]
+	mi := &file_BidRequest_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1002,7 +1002,7 @@ func (x *BidRequestEvent_ImpressionEvent_VideoEvent) ProtoReflect() protoreflect
 
 // Deprecated: Use BidRequestEvent_ImpressionEvent_VideoEvent.ProtoReflect.Descriptor instead.
 func (*BidRequestEvent_ImpressionEvent_VideoEvent) Descriptor() ([]byte, []int) {
-	return file_samples_BidRequest_proto_rawDescGZIP(), []int{0, 3, 2}
+	return file_BidRequest_proto_rawDescGZIP(), []int{0, 3, 2}
 }
 
 func (x *BidRequestEvent_ImpressionEvent_VideoEvent) GetMimes() []string {
@@ -1056,7 +1056,7 @@ type BidRequestEvent_ImpressionEvent_ImpExt struct {
 
 func (x *BidRequestEvent_ImpressionEvent_ImpExt) Reset() {
 	*x = BidRequestEvent_ImpressionEvent_ImpExt{}
-	mi := &file_samples_BidRequest_proto_msgTypes[14]
+	mi := &file_BidRequest_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1068,7 +1068,7 @@ func (x *BidRequestEvent_ImpressionEvent_ImpExt) String() string {
 func (*BidRequestEvent_ImpressionEvent_ImpExt) ProtoMessage() {}
 
 func (x *BidRequestEvent_ImpressionEvent_ImpExt) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_BidRequest_proto_msgTypes[14]
+	mi := &file_BidRequest_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1081,7 +1081,7 @@ func (x *BidRequestEvent_ImpressionEvent_ImpExt) ProtoReflect() protoreflect.Mes
 
 // Deprecated: Use BidRequestEvent_ImpressionEvent_ImpExt.ProtoReflect.Descriptor instead.
 func (*BidRequestEvent_ImpressionEvent_ImpExt) Descriptor() ([]byte, []int) {
-	return file_samples_BidRequest_proto_rawDescGZIP(), []int{0, 3, 3}
+	return file_BidRequest_proto_rawDescGZIP(), []int{0, 3, 3}
 }
 
 func (x *BidRequestEvent_ImpressionEvent_ImpExt) GetDisplaytime() uint32 {
@@ -1100,7 +1100,7 @@ type BidRequestEvent_ImpressionEvent_ImpQuantityEvent struct {
 
 func (x *BidRequestEvent_ImpressionEvent_ImpQuantityEvent) Reset() {
 	*x = BidRequestEvent_ImpressionEvent_ImpQuantityEvent{}
-	mi := &file_samples_BidRequest_proto_msgTypes[15]
+	mi := &file_BidRequest_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1112,7 +1112,7 @@ func (x *BidRequestEvent_ImpressionEvent_ImpQuantityEvent) String() string {
 func (*BidRequestEvent_ImpressionEvent_ImpQuantityEvent) ProtoMessage() {}
 
 func (x *BidRequestEvent_ImpressionEvent_ImpQuantityEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_BidRequest_proto_msgTypes[15]
+	mi := &file_BidRequest_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1125,7 +1125,7 @@ func (x *BidRequestEvent_ImpressionEvent_ImpQuantityEvent) ProtoReflect() protor
 
 // Deprecated: Use BidRequestEvent_ImpressionEvent_ImpQuantityEvent.ProtoReflect.Descriptor instead.
 func (*BidRequestEvent_ImpressionEvent_ImpQuantityEvent) Descriptor() ([]byte, []int) {
-	return file_samples_BidRequest_proto_rawDescGZIP(), []int{0, 3, 4}
+	return file_BidRequest_proto_rawDescGZIP(), []int{0, 3, 4}
 }
 
 func (x *BidRequestEvent_ImpressionEvent_ImpQuantityEvent) GetMultiplier() *custom.DecimalValue {
@@ -1149,7 +1149,7 @@ type BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent_DealEvent struct {
 
 func (x *BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent_DealEvent) Reset() {
 	*x = BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent_DealEvent{}
-	mi := &file_samples_BidRequest_proto_msgTypes[16]
+	mi := &file_BidRequest_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1161,7 +1161,7 @@ func (x *BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent_DealEvent) Stri
 func (*BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent_DealEvent) ProtoMessage() {}
 
 func (x *BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent_DealEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_BidRequest_proto_msgTypes[16]
+	mi := &file_BidRequest_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1174,7 +1174,7 @@ func (x *BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent_DealEvent) Prot
 
 // Deprecated: Use BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent_DealEvent.ProtoReflect.Descriptor instead.
 func (*BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent_DealEvent) Descriptor() ([]byte, []int) {
-	return file_samples_BidRequest_proto_rawDescGZIP(), []int{0, 3, 0, 0}
+	return file_BidRequest_proto_rawDescGZIP(), []int{0, 3, 0, 0}
 }
 
 func (x *BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent_DealEvent) GetId() string {
@@ -1230,7 +1230,7 @@ type BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent_DealEvent_DealExtEv
 
 func (x *BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent_DealEvent_DealExtEvent) Reset() {
 	*x = BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent_DealEvent_DealExtEvent{}
-	mi := &file_samples_BidRequest_proto_msgTypes[17]
+	mi := &file_BidRequest_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1243,7 +1243,7 @@ func (*BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent_DealEvent_DealExt
 }
 
 func (x *BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent_DealEvent_DealExtEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_BidRequest_proto_msgTypes[17]
+	mi := &file_BidRequest_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1256,7 +1256,7 @@ func (x *BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent_DealEvent_DealE
 
 // Deprecated: Use BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent_DealEvent_DealExtEvent.ProtoReflect.Descriptor instead.
 func (*BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent_DealEvent_DealExtEvent) Descriptor() ([]byte, []int) {
-	return file_samples_BidRequest_proto_rawDescGZIP(), []int{0, 3, 0, 0, 0}
+	return file_BidRequest_proto_rawDescGZIP(), []int{0, 3, 0, 0, 0}
 }
 
 func (x *BidRequestEvent_ImpressionEvent_PrivateMarketplaceEvent_DealEvent_DealExtEvent) GetAdspottype() uint32 {
@@ -1290,7 +1290,7 @@ type BidRequestEvent_BidRequestDoohEvent_PublisherEvent struct {
 
 func (x *BidRequestEvent_BidRequestDoohEvent_PublisherEvent) Reset() {
 	*x = BidRequestEvent_BidRequestDoohEvent_PublisherEvent{}
-	mi := &file_samples_BidRequest_proto_msgTypes[18]
+	mi := &file_BidRequest_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1302,7 +1302,7 @@ func (x *BidRequestEvent_BidRequestDoohEvent_PublisherEvent) String() string {
 func (*BidRequestEvent_BidRequestDoohEvent_PublisherEvent) ProtoMessage() {}
 
 func (x *BidRequestEvent_BidRequestDoohEvent_PublisherEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_BidRequest_proto_msgTypes[18]
+	mi := &file_BidRequest_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1315,7 +1315,7 @@ func (x *BidRequestEvent_BidRequestDoohEvent_PublisherEvent) ProtoReflect() prot
 
 // Deprecated: Use BidRequestEvent_BidRequestDoohEvent_PublisherEvent.ProtoReflect.Descriptor instead.
 func (*BidRequestEvent_BidRequestDoohEvent_PublisherEvent) Descriptor() ([]byte, []int) {
-	return file_samples_BidRequest_proto_rawDescGZIP(), []int{0, 5, 0}
+	return file_BidRequest_proto_rawDescGZIP(), []int{0, 5, 0}
 }
 
 func (x *BidRequestEvent_BidRequestDoohEvent_PublisherEvent) GetId() string {
@@ -1332,11 +1332,11 @@ func (x *BidRequestEvent_BidRequestDoohEvent_PublisherEvent) GetName() string {
 	return ""
 }
 
-var File_samples_BidRequest_proto protoreflect.FileDescriptor
+var File_BidRequest_proto protoreflect.FileDescriptor
 
-const file_samples_BidRequest_proto_rawDesc = "" +
+const file_BidRequest_proto_rawDesc = "" +
 	"\n" +
-	"\x18samples/BidRequest.proto\x1a samples/custom/CustomTypes.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa1\x19\n" +
+	"\x10BidRequest.proto\x1a\x18custom/CustomTypes.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa1\x19\n" +
 	"\x0fBidRequestEvent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12.\n" +
 	"\x04user\x18\x02 \x01(\v2\x1a.BidRequestEvent.UserEventR\x04user\x124\n" +
@@ -1455,19 +1455,19 @@ const file_samples_BidRequest_proto_rawDesc = "" +
 	"\x03_atBFB\x0fBidRequestProtoP\x01Z1github.com/loicalleyne/bufarrowlib/gen/go/samplesb\x06proto3"
 
 var (
-	file_samples_BidRequest_proto_rawDescOnce sync.Once
-	file_samples_BidRequest_proto_rawDescData []byte
+	file_BidRequest_proto_rawDescOnce sync.Once
+	file_BidRequest_proto_rawDescData []byte
 )
 
-func file_samples_BidRequest_proto_rawDescGZIP() []byte {
-	file_samples_BidRequest_proto_rawDescOnce.Do(func() {
-		file_samples_BidRequest_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_samples_BidRequest_proto_rawDesc), len(file_samples_BidRequest_proto_rawDesc)))
+func file_BidRequest_proto_rawDescGZIP() []byte {
+	file_BidRequest_proto_rawDescOnce.Do(func() {
+		file_BidRequest_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_BidRequest_proto_rawDesc), len(file_BidRequest_proto_rawDesc)))
 	})
-	return file_samples_BidRequest_proto_rawDescData
+	return file_BidRequest_proto_rawDescData
 }
 
-var file_samples_BidRequest_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
-var file_samples_BidRequest_proto_goTypes = []any{
+var file_BidRequest_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
+var file_BidRequest_proto_goTypes = []any{
 	(*BidRequestEvent)(nil),                                                                // 0: BidRequestEvent
 	(*BidRequestEvent_UserEvent)(nil),                                                      // 1: BidRequestEvent.UserEvent
 	(*BidRequestEvent_DeviceEvent)(nil),                                                    // 2: BidRequestEvent.DeviceEvent
@@ -1490,7 +1490,7 @@ var file_samples_BidRequest_proto_goTypes = []any{
 	(*timestamppb.Timestamp)(nil),                                                          // 19: google.protobuf.Timestamp
 	(*custom.DecimalValue)(nil),                                                            // 20: CustomTypes.DecimalValue
 }
-var file_samples_BidRequest_proto_depIdxs = []int32{
+var file_BidRequest_proto_depIdxs = []int32{
 	1,  // 0: BidRequestEvent.user:type_name -> BidRequestEvent.UserEvent
 	2,  // 1: BidRequestEvent.device:type_name -> BidRequestEvent.DeviceEvent
 	4,  // 2: BidRequestEvent.imp:type_name -> BidRequestEvent.ImpressionEvent
@@ -1523,33 +1523,33 @@ var file_samples_BidRequest_proto_depIdxs = []int32{
 	0,  // [0:25] is the sub-list for field type_name
 }
 
-func init() { file_samples_BidRequest_proto_init() }
-func file_samples_BidRequest_proto_init() {
-	if File_samples_BidRequest_proto != nil {
+func init() { file_BidRequest_proto_init() }
+func file_BidRequest_proto_init() {
+	if File_BidRequest_proto != nil {
 		return
 	}
-	file_samples_BidRequest_proto_msgTypes[0].OneofWrappers = []any{}
-	file_samples_BidRequest_proto_msgTypes[3].OneofWrappers = []any{}
-	file_samples_BidRequest_proto_msgTypes[4].OneofWrappers = []any{}
-	file_samples_BidRequest_proto_msgTypes[9].OneofWrappers = []any{}
-	file_samples_BidRequest_proto_msgTypes[10].OneofWrappers = []any{}
-	file_samples_BidRequest_proto_msgTypes[14].OneofWrappers = []any{}
-	file_samples_BidRequest_proto_msgTypes[16].OneofWrappers = []any{}
+	file_BidRequest_proto_msgTypes[0].OneofWrappers = []any{}
+	file_BidRequest_proto_msgTypes[3].OneofWrappers = []any{}
+	file_BidRequest_proto_msgTypes[4].OneofWrappers = []any{}
+	file_BidRequest_proto_msgTypes[9].OneofWrappers = []any{}
+	file_BidRequest_proto_msgTypes[10].OneofWrappers = []any{}
+	file_BidRequest_proto_msgTypes[14].OneofWrappers = []any{}
+	file_BidRequest_proto_msgTypes[16].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_samples_BidRequest_proto_rawDesc), len(file_samples_BidRequest_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_BidRequest_proto_rawDesc), len(file_BidRequest_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_samples_BidRequest_proto_goTypes,
-		DependencyIndexes: file_samples_BidRequest_proto_depIdxs,
-		MessageInfos:      file_samples_BidRequest_proto_msgTypes,
+		GoTypes:           file_BidRequest_proto_goTypes,
+		DependencyIndexes: file_BidRequest_proto_depIdxs,
+		MessageInfos:      file_BidRequest_proto_msgTypes,
 	}.Build()
-	File_samples_BidRequest_proto = out.File
-	file_samples_BidRequest_proto_goTypes = nil
-	file_samples_BidRequest_proto_depIdxs = nil
+	File_BidRequest_proto = out.File
+	file_BidRequest_proto_goTypes = nil
+	file_BidRequest_proto_depIdxs = nil
 }

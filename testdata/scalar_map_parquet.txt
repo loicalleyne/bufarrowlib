@@ -1,0 +1,8 @@
+repeated group field_id=-1 schema {
+  optional group field_id=1 labels (Map) {
+    repeated group field_id=-1 key_value {
+      required byte_array field_id=-1 key (String);
+      optional byte_array field_id=-1 value (String);
+    }
+  }
+}

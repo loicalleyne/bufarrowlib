@@ -2,9 +2,9 @@ version: v1
 managed:
   enabled: true
   go_package_prefix:
-    default: github.com/loicalleyne/bufarrowlib/gen/go
+    default: github.com/loicalleyne/bufarrowlib/gen/go/samples
 
 plugins:
   - plugin: go
-    out: gen/go
+    out: gen/go/samples
     opt: paths=source_relative

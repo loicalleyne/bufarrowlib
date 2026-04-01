@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.10
 // 	protoc        (unknown)
-// source: samples/merge_test.proto
+// source: merge_test.proto
 
 package samples
 
@@ -31,7 +31,7 @@ type MergeA struct {
 
 func (x *MergeA) Reset() {
 	*x = MergeA{}
-	mi := &file_samples_merge_test_proto_msgTypes[0]
+	mi := &file_merge_test_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -43,7 +43,7 @@ func (x *MergeA) String() string {
 func (*MergeA) ProtoMessage() {}
 
 func (x *MergeA) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_merge_test_proto_msgTypes[0]
+	mi := &file_merge_test_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56,7 +56,7 @@ func (x *MergeA) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MergeA.ProtoReflect.Descriptor instead.
 func (*MergeA) Descriptor() ([]byte, []int) {
-	return file_samples_merge_test_proto_rawDescGZIP(), []int{0}
+	return file_merge_test_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *MergeA) GetName() string {
@@ -83,7 +83,7 @@ type MergeB struct {
 
 func (x *MergeB) Reset() {
 	*x = MergeB{}
-	mi := &file_samples_merge_test_proto_msgTypes[1]
+	mi := &file_merge_test_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -95,7 +95,7 @@ func (x *MergeB) String() string {
 func (*MergeB) ProtoMessage() {}
 
 func (x *MergeB) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_merge_test_proto_msgTypes[1]
+	mi := &file_merge_test_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -108,7 +108,7 @@ func (x *MergeB) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MergeB.ProtoReflect.Descriptor instead.
 func (*MergeB) Descriptor() ([]byte, []int) {
-	return file_samples_merge_test_proto_rawDescGZIP(), []int{1}
+	return file_merge_test_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *MergeB) GetScore() float64 {
@@ -135,7 +135,7 @@ type MergeC struct {
 
 func (x *MergeC) Reset() {
 	*x = MergeC{}
-	mi := &file_samples_merge_test_proto_msgTypes[2]
+	mi := &file_merge_test_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -147,7 +147,7 @@ func (x *MergeC) String() string {
 func (*MergeC) ProtoMessage() {}
 
 func (x *MergeC) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_merge_test_proto_msgTypes[2]
+	mi := &file_merge_test_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -160,7 +160,7 @@ func (x *MergeC) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MergeC.ProtoReflect.Descriptor instead.
 func (*MergeC) Descriptor() ([]byte, []int) {
-	return file_samples_merge_test_proto_rawDescGZIP(), []int{2}
+	return file_merge_test_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *MergeC) GetName() string {
@@ -177,11 +177,11 @@ func (x *MergeC) GetRating() float32 {
 	return 0
 }
 
-var File_samples_merge_test_proto protoreflect.FileDescriptor
+var File_merge_test_proto protoreflect.FileDescriptor
 
-const file_samples_merge_test_proto_rawDesc = "" +
+const file_merge_test_proto_rawDesc = "" +
 	"\n" +
-	"\x18samples/merge_test.proto\".\n" +
+	"\x10merge_test.proto\".\n" +
 	"\x06MergeA\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x10\n" +
 	"\x03age\x18\x02 \x01(\x05R\x03age\"6\n" +
@@ -193,24 +193,24 @@ const file_samples_merge_test_proto_rawDesc = "" +
 	"\x06rating\x18\x05 \x01(\x02R\x06ratingBEB\x0eMergeTestProtoP\x01Z1github.com/loicalleyne/bufarrowlib/gen/go/samplesb\x06proto3"
 
 var (
-	file_samples_merge_test_proto_rawDescOnce sync.Once
-	file_samples_merge_test_proto_rawDescData []byte
+	file_merge_test_proto_rawDescOnce sync.Once
+	file_merge_test_proto_rawDescData []byte
 )
 
-func file_samples_merge_test_proto_rawDescGZIP() []byte {
-	file_samples_merge_test_proto_rawDescOnce.Do(func() {
-		file_samples_merge_test_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_samples_merge_test_proto_rawDesc), len(file_samples_merge_test_proto_rawDesc)))
+func file_merge_test_proto_rawDescGZIP() []byte {
+	file_merge_test_proto_rawDescOnce.Do(func() {
+		file_merge_test_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_merge_test_proto_rawDesc), len(file_merge_test_proto_rawDesc)))
 	})
-	return file_samples_merge_test_proto_rawDescData
+	return file_merge_test_proto_rawDescData
 }
 
-var file_samples_merge_test_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
-var file_samples_merge_test_proto_goTypes = []any{
+var file_merge_test_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_merge_test_proto_goTypes = []any{
 	(*MergeA)(nil), // 0: MergeA
 	(*MergeB)(nil), // 1: MergeB
 	(*MergeC)(nil), // 2: MergeC
 }
-var file_samples_merge_test_proto_depIdxs = []int32{
+var file_merge_test_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
 	0, // [0:0] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
@@ -218,26 +218,26 @@ var file_samples_merge_test_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for field type_name
 }
 
-func init() { file_samples_merge_test_proto_init() }
-func file_samples_merge_test_proto_init() {
-	if File_samples_merge_test_proto != nil {
+func init() { file_merge_test_proto_init() }
+func file_merge_test_proto_init() {
+	if File_merge_test_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_samples_merge_test_proto_rawDesc), len(file_samples_merge_test_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_merge_test_proto_rawDesc), len(file_merge_test_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_samples_merge_test_proto_goTypes,
-		DependencyIndexes: file_samples_merge_test_proto_depIdxs,
-		MessageInfos:      file_samples_merge_test_proto_msgTypes,
+		GoTypes:           file_merge_test_proto_goTypes,
+		DependencyIndexes: file_merge_test_proto_depIdxs,
+		MessageInfos:      file_merge_test_proto_msgTypes,
 	}.Build()
-	File_samples_merge_test_proto = out.File
-	file_samples_merge_test_proto_goTypes = nil
-	file_samples_merge_test_proto_depIdxs = nil
+	File_merge_test_proto = out.File
+	file_merge_test_proto_goTypes = nil
+	file_merge_test_proto_depIdxs = nil
 }

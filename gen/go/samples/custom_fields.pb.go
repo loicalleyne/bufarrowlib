@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.10
 // 	protoc        (unknown)
-// source: samples/custom_fields.proto
+// source: custom_fields.proto
 
 package samples
 
@@ -31,7 +31,7 @@ type CustomFields struct {
 
 func (x *CustomFields) Reset() {
 	*x = CustomFields{}
-	mi := &file_samples_custom_fields_proto_msgTypes[0]
+	mi := &file_custom_fields_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -43,7 +43,7 @@ func (x *CustomFields) String() string {
 func (*CustomFields) ProtoMessage() {}
 
 func (x *CustomFields) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_custom_fields_proto_msgTypes[0]
+	mi := &file_custom_fields_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56,7 +56,7 @@ func (x *CustomFields) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CustomFields.ProtoReflect.Descriptor instead.
 func (*CustomFields) Descriptor() ([]byte, []int) {
-	return file_samples_custom_fields_proto_rawDescGZIP(), []int{0}
+	return file_custom_fields_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *CustomFields) GetEventTimestamp() int64 {
@@ -83,7 +83,7 @@ type CustomFieldsConflict struct {
 
 func (x *CustomFieldsConflict) Reset() {
 	*x = CustomFieldsConflict{}
-	mi := &file_samples_custom_fields_proto_msgTypes[1]
+	mi := &file_custom_fields_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -95,7 +95,7 @@ func (x *CustomFieldsConflict) String() string {
 func (*CustomFieldsConflict) ProtoMessage() {}
 
 func (x *CustomFieldsConflict) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_custom_fields_proto_msgTypes[1]
+	mi := &file_custom_fields_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -108,7 +108,7 @@ func (x *CustomFieldsConflict) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CustomFieldsConflict.ProtoReflect.Descriptor instead.
 func (*CustomFieldsConflict) Descriptor() ([]byte, []int) {
-	return file_samples_custom_fields_proto_rawDescGZIP(), []int{1}
+	return file_custom_fields_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *CustomFieldsConflict) GetValue() uint64 {
@@ -118,11 +118,11 @@ func (x *CustomFieldsConflict) GetValue() uint64 {
 	return 0
 }
 
-var File_samples_custom_fields_proto protoreflect.FileDescriptor
+var File_custom_fields_proto protoreflect.FileDescriptor
 
-const file_samples_custom_fields_proto_rawDesc = "" +
+const file_custom_fields_proto_rawDesc = "" +
 	"\n" +
-	"\x1bsamples/custom_fields.proto\"T\n" +
+	"\x13custom_fields.proto\"T\n" +
 	"\fCustomFields\x12'\n" +
 	"\x0fevent_timestamp\x18\x01 \x01(\x03R\x0eeventTimestamp\x12\x1b\n" +
 	"\tsource_id\x18\x02 \x01(\tR\bsourceId\",\n" +
@@ -130,23 +130,23 @@ const file_samples_custom_fields_proto_rawDesc = "" +
 	"\x05value\x18\x01 \x01(\x04R\x05valueBHB\x11CustomFieldsProtoP\x01Z1github.com/loicalleyne/bufarrowlib/gen/go/samplesb\x06proto3"
 
 var (
-	file_samples_custom_fields_proto_rawDescOnce sync.Once
-	file_samples_custom_fields_proto_rawDescData []byte
+	file_custom_fields_proto_rawDescOnce sync.Once
+	file_custom_fields_proto_rawDescData []byte
 )
 
-func file_samples_custom_fields_proto_rawDescGZIP() []byte {
-	file_samples_custom_fields_proto_rawDescOnce.Do(func() {
-		file_samples_custom_fields_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_samples_custom_fields_proto_rawDesc), len(file_samples_custom_fields_proto_rawDesc)))
+func file_custom_fields_proto_rawDescGZIP() []byte {
+	file_custom_fields_proto_rawDescOnce.Do(func() {
+		file_custom_fields_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_custom_fields_proto_rawDesc), len(file_custom_fields_proto_rawDesc)))
 	})
-	return file_samples_custom_fields_proto_rawDescData
+	return file_custom_fields_proto_rawDescData
 }
 
-var file_samples_custom_fields_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
-var file_samples_custom_fields_proto_goTypes = []any{
+var file_custom_fields_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_custom_fields_proto_goTypes = []any{
 	(*CustomFields)(nil),         // 0: CustomFields
 	(*CustomFieldsConflict)(nil), // 1: CustomFieldsConflict
 }
-var file_samples_custom_fields_proto_depIdxs = []int32{
+var file_custom_fields_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
 	0, // [0:0] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
@@ -154,26 +154,26 @@ var file_samples_custom_fields_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for field type_name
 }
 
-func init() { file_samples_custom_fields_proto_init() }
-func file_samples_custom_fields_proto_init() {
-	if File_samples_custom_fields_proto != nil {
+func init() { file_custom_fields_proto_init() }
+func file_custom_fields_proto_init() {
+	if File_custom_fields_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_samples_custom_fields_proto_rawDesc), len(file_samples_custom_fields_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_custom_fields_proto_rawDesc), len(file_custom_fields_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_samples_custom_fields_proto_goTypes,
-		DependencyIndexes: file_samples_custom_fields_proto_depIdxs,
-		MessageInfos:      file_samples_custom_fields_proto_msgTypes,
+		GoTypes:           file_custom_fields_proto_goTypes,
+		DependencyIndexes: file_custom_fields_proto_depIdxs,
+		MessageInfos:      file_custom_fields_proto_msgTypes,
 	}.Build()
-	File_samples_custom_fields_proto = out.File
-	file_samples_custom_fields_proto_goTypes = nil
-	file_samples_custom_fields_proto_depIdxs = nil
+	File_custom_fields_proto = out.File
+	file_custom_fields_proto_goTypes = nil
+	file_custom_fields_proto_depIdxs = nil
 }

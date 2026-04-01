@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.10
 // 	protoc        (unknown)
-// source: samples/samples.proto
+// source: samples.proto
 
 package samples
 
@@ -46,7 +46,7 @@ type ScalarTypes struct {
 
 func (x *ScalarTypes) Reset() {
 	*x = ScalarTypes{}
-	mi := &file_samples_samples_proto_msgTypes[0]
+	mi := &file_samples_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -58,7 +58,7 @@ func (x *ScalarTypes) String() string {
 func (*ScalarTypes) ProtoMessage() {}
 
 func (x *ScalarTypes) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_samples_proto_msgTypes[0]
+	mi := &file_samples_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -71,7 +71,7 @@ func (x *ScalarTypes) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScalarTypes.ProtoReflect.Descriptor instead.
 func (*ScalarTypes) Descriptor() ([]byte, []int) {
-	return file_samples_samples_proto_rawDescGZIP(), []int{0}
+	return file_samples_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *ScalarTypes) GetDouble() float64 {
@@ -202,7 +202,7 @@ type ScalarTypesOptional struct {
 
 func (x *ScalarTypesOptional) Reset() {
 	*x = ScalarTypesOptional{}
-	mi := &file_samples_samples_proto_msgTypes[1]
+	mi := &file_samples_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -214,7 +214,7 @@ func (x *ScalarTypesOptional) String() string {
 func (*ScalarTypesOptional) ProtoMessage() {}
 
 func (x *ScalarTypesOptional) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_samples_proto_msgTypes[1]
+	mi := &file_samples_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -227,7 +227,7 @@ func (x *ScalarTypesOptional) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScalarTypesOptional.ProtoReflect.Descriptor instead.
 func (*ScalarTypesOptional) Descriptor() ([]byte, []int) {
-	return file_samples_samples_proto_rawDescGZIP(), []int{1}
+	return file_samples_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *ScalarTypesOptional) GetDouble() float64 {
@@ -358,7 +358,7 @@ type ScalarTypesRepeated struct {
 
 func (x *ScalarTypesRepeated) Reset() {
 	*x = ScalarTypesRepeated{}
-	mi := &file_samples_samples_proto_msgTypes[2]
+	mi := &file_samples_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -370,7 +370,7 @@ func (x *ScalarTypesRepeated) String() string {
 func (*ScalarTypesRepeated) ProtoMessage() {}
 
 func (x *ScalarTypesRepeated) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_samples_proto_msgTypes[2]
+	mi := &file_samples_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -383,7 +383,7 @@ func (x *ScalarTypesRepeated) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScalarTypesRepeated.ProtoReflect.Descriptor instead.
 func (*ScalarTypesRepeated) Descriptor() ([]byte, []int) {
-	return file_samples_samples_proto_rawDescGZIP(), []int{2}
+	return file_samples_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ScalarTypesRepeated) GetDouble() []float64 {
@@ -502,7 +502,7 @@ type Nested struct {
 
 func (x *Nested) Reset() {
 	*x = Nested{}
-	mi := &file_samples_samples_proto_msgTypes[3]
+	mi := &file_samples_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -514,7 +514,7 @@ func (x *Nested) String() string {
 func (*Nested) ProtoMessage() {}
 
 func (x *Nested) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_samples_proto_msgTypes[3]
+	mi := &file_samples_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -527,7 +527,7 @@ func (x *Nested) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Nested.ProtoReflect.Descriptor instead.
 func (*Nested) Descriptor() ([]byte, []int) {
-	return file_samples_samples_proto_rawDescGZIP(), []int{3}
+	return file_samples_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Nested) GetNestedScalar() *ScalarTypes {
@@ -560,7 +560,7 @@ type One struct {
 
 func (x *One) Reset() {
 	*x = One{}
-	mi := &file_samples_samples_proto_msgTypes[4]
+	mi := &file_samples_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -572,7 +572,7 @@ func (x *One) String() string {
 func (*One) ProtoMessage() {}
 
 func (x *One) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_samples_proto_msgTypes[4]
+	mi := &file_samples_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -585,7 +585,7 @@ func (x *One) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use One.ProtoReflect.Descriptor instead.
 func (*One) Descriptor() ([]byte, []int) {
-	return file_samples_samples_proto_rawDescGZIP(), []int{4}
+	return file_samples_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *One) GetTwo() *Two {
@@ -604,7 +604,7 @@ type Two struct {
 
 func (x *Two) Reset() {
 	*x = Two{}
-	mi := &file_samples_samples_proto_msgTypes[5]
+	mi := &file_samples_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -616,7 +616,7 @@ func (x *Two) String() string {
 func (*Two) ProtoMessage() {}
 
 func (x *Two) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_samples_proto_msgTypes[5]
+	mi := &file_samples_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -629,7 +629,7 @@ func (x *Two) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Two.ProtoReflect.Descriptor instead.
 func (*Two) Descriptor() ([]byte, []int) {
-	return file_samples_samples_proto_rawDescGZIP(), []int{5}
+	return file_samples_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Two) GetThree() *Three {
@@ -648,7 +648,7 @@ type Three struct {
 
 func (x *Three) Reset() {
 	*x = Three{}
-	mi := &file_samples_samples_proto_msgTypes[6]
+	mi := &file_samples_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -660,7 +660,7 @@ func (x *Three) String() string {
 func (*Three) ProtoMessage() {}
 
 func (x *Three) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_samples_proto_msgTypes[6]
+	mi := &file_samples_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -673,7 +673,7 @@ func (x *Three) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Three.ProtoReflect.Descriptor instead.
 func (*Three) Descriptor() ([]byte, []int) {
-	return file_samples_samples_proto_rawDescGZIP(), []int{6}
+	return file_samples_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Three) GetValue() uint64 {
@@ -693,7 +693,7 @@ type Cyclic struct {
 
 func (x *Cyclic) Reset() {
 	*x = Cyclic{}
-	mi := &file_samples_samples_proto_msgTypes[7]
+	mi := &file_samples_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -705,7 +705,7 @@ func (x *Cyclic) String() string {
 func (*Cyclic) ProtoMessage() {}
 
 func (x *Cyclic) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_samples_proto_msgTypes[7]
+	mi := &file_samples_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -718,7 +718,7 @@ func (x *Cyclic) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Cyclic.ProtoReflect.Descriptor instead.
 func (*Cyclic) Descriptor() ([]byte, []int) {
-	return file_samples_samples_proto_rawDescGZIP(), []int{7}
+	return file_samples_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Cyclic) GetOne() *One {
@@ -747,7 +747,7 @@ type Known struct {
 
 func (x *Known) Reset() {
 	*x = Known{}
-	mi := &file_samples_samples_proto_msgTypes[8]
+	mi := &file_samples_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -759,7 +759,7 @@ func (x *Known) String() string {
 func (*Known) ProtoMessage() {}
 
 func (x *Known) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_samples_proto_msgTypes[8]
+	mi := &file_samples_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -772,7 +772,7 @@ func (x *Known) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Known.ProtoReflect.Descriptor instead.
 func (*Known) Descriptor() ([]byte, []int) {
-	return file_samples_samples_proto_rawDescGZIP(), []int{8}
+	return file_samples_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Known) GetTs() *timestamppb.Timestamp {
@@ -833,7 +833,7 @@ type OneOfScala struct {
 
 func (x *OneOfScala) Reset() {
 	*x = OneOfScala{}
-	mi := &file_samples_samples_proto_msgTypes[9]
+	mi := &file_samples_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -845,7 +845,7 @@ func (x *OneOfScala) String() string {
 func (*OneOfScala) ProtoMessage() {}
 
 func (x *OneOfScala) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_samples_proto_msgTypes[9]
+	mi := &file_samples_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -858,7 +858,7 @@ func (x *OneOfScala) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OneOfScala.ProtoReflect.Descriptor instead.
 func (*OneOfScala) Descriptor() ([]byte, []int) {
-	return file_samples_samples_proto_rawDescGZIP(), []int{9}
+	return file_samples_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *OneOfScala) GetValue() isOneOfScala_Value {
@@ -1137,7 +1137,7 @@ type SimpleOneOf struct {
 
 func (x *SimpleOneOf) Reset() {
 	*x = SimpleOneOf{}
-	mi := &file_samples_samples_proto_msgTypes[10]
+	mi := &file_samples_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1149,7 +1149,7 @@ func (x *SimpleOneOf) String() string {
 func (*SimpleOneOf) ProtoMessage() {}
 
 func (x *SimpleOneOf) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_samples_proto_msgTypes[10]
+	mi := &file_samples_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1162,7 +1162,7 @@ func (x *SimpleOneOf) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SimpleOneOf.ProtoReflect.Descriptor instead.
 func (*SimpleOneOf) Descriptor() ([]byte, []int) {
-	return file_samples_samples_proto_rawDescGZIP(), []int{10}
+	return file_samples_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *SimpleOneOf) GetValue() isSimpleOneOf_Value {
@@ -1221,11 +1221,284 @@ func (*SimpleOneOf_V) isSimpleOneOf_Value() {}
 
 func (*SimpleOneOf_One) isSimpleOneOf_Value() {}
 
-var File_samples_samples_proto protoreflect.FileDescriptor
+// ScalarMap tests a simple string→string map field.
+type ScalarMap struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Labels        map[string]string      `protobuf:"bytes,1,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
 
-const file_samples_samples_proto_rawDesc = "" +
+func (x *ScalarMap) Reset() {
+	*x = ScalarMap{}
+	mi := &file_samples_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ScalarMap) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ScalarMap) ProtoMessage() {}
+
+func (x *ScalarMap) ProtoReflect() protoreflect.Message {
+	mi := &file_samples_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ScalarMap.ProtoReflect.Descriptor instead.
+func (*ScalarMap) Descriptor() ([]byte, []int) {
+	return file_samples_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *ScalarMap) GetLabels() map[string]string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
+// MapVariety tests multiple map key/value type combinations.
+type MapVariety struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	StringMap      map[string]string      `protobuf:"bytes,1,rep,name=string_map,json=stringMap,proto3" json:"string_map,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	StringIntMap   map[string]int32       `protobuf:"bytes,2,rep,name=string_int_map,json=stringIntMap,proto3" json:"string_int_map,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	IntStringMap   map[int32]string       `protobuf:"bytes,3,rep,name=int_string_map,json=intStringMap,proto3" json:"int_string_map,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Int64DoubleMap map[int64]float64      `protobuf:"bytes,4,rep,name=int64_double_map,json=int64DoubleMap,proto3" json:"int64_double_map,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"fixed64,2,opt,name=value"`
+	BoolStringMap  map[bool]string        `protobuf:"bytes,5,rep,name=bool_string_map,json=boolStringMap,proto3" json:"bool_string_map,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	UintMap        map[uint32]uint64      `protobuf:"bytes,6,rep,name=uint_map,json=uintMap,proto3" json:"uint_map,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *MapVariety) Reset() {
+	*x = MapVariety{}
+	mi := &file_samples_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MapVariety) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MapVariety) ProtoMessage() {}
+
+func (x *MapVariety) ProtoReflect() protoreflect.Message {
+	mi := &file_samples_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MapVariety.ProtoReflect.Descriptor instead.
+func (*MapVariety) Descriptor() ([]byte, []int) {
+	return file_samples_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *MapVariety) GetStringMap() map[string]string {
+	if x != nil {
+		return x.StringMap
+	}
+	return nil
+}
+
+func (x *MapVariety) GetStringIntMap() map[string]int32 {
+	if x != nil {
+		return x.StringIntMap
+	}
+	return nil
+}
+
+func (x *MapVariety) GetIntStringMap() map[int32]string {
+	if x != nil {
+		return x.IntStringMap
+	}
+	return nil
+}
+
+func (x *MapVariety) GetInt64DoubleMap() map[int64]float64 {
+	if x != nil {
+		return x.Int64DoubleMap
+	}
+	return nil
+}
+
+func (x *MapVariety) GetBoolStringMap() map[bool]string {
+	if x != nil {
+		return x.BoolStringMap
+	}
+	return nil
+}
+
+func (x *MapVariety) GetUintMap() map[uint32]uint64 {
+	if x != nil {
+		return x.UintMap
+	}
+	return nil
+}
+
+// MapWithNested tests a map whose values are nested messages.
+type MapWithNested struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NestedMap     map[string]*Three      `protobuf:"bytes,1,rep,name=nested_map,json=nestedMap,proto3" json:"nested_map,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MapWithNested) Reset() {
+	*x = MapWithNested{}
+	mi := &file_samples_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MapWithNested) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MapWithNested) ProtoMessage() {}
+
+func (x *MapWithNested) ProtoReflect() protoreflect.Message {
+	mi := &file_samples_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MapWithNested.ProtoReflect.Descriptor instead.
+func (*MapWithNested) Descriptor() ([]byte, []int) {
+	return file_samples_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *MapWithNested) GetNestedMap() map[string]*Three {
+	if x != nil {
+		return x.NestedMap
+	}
+	return nil
+}
+
+// MapWithTimestamp tests a map whose values are well-known Timestamp.
+type MapWithTimestamp struct {
+	state         protoimpl.MessageState            `protogen:"open.v1"`
+	TsMap         map[string]*timestamppb.Timestamp `protobuf:"bytes,1,rep,name=ts_map,json=tsMap,proto3" json:"ts_map,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MapWithTimestamp) Reset() {
+	*x = MapWithTimestamp{}
+	mi := &file_samples_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MapWithTimestamp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MapWithTimestamp) ProtoMessage() {}
+
+func (x *MapWithTimestamp) ProtoReflect() protoreflect.Message {
+	mi := &file_samples_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MapWithTimestamp.ProtoReflect.Descriptor instead.
+func (*MapWithTimestamp) Descriptor() ([]byte, []int) {
+	return file_samples_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *MapWithTimestamp) GetTsMap() map[string]*timestamppb.Timestamp {
+	if x != nil {
+		return x.TsMap
+	}
+	return nil
+}
+
+// NestedWithMap tests a struct containing a map field.
+type NestedWithMap struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Inner         *ScalarMap             `protobuf:"bytes,2,opt,name=inner,proto3" json:"inner,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NestedWithMap) Reset() {
+	*x = NestedWithMap{}
+	mi := &file_samples_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NestedWithMap) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NestedWithMap) ProtoMessage() {}
+
+func (x *NestedWithMap) ProtoReflect() protoreflect.Message {
+	mi := &file_samples_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NestedWithMap.ProtoReflect.Descriptor instead.
+func (*NestedWithMap) Descriptor() ([]byte, []int) {
+	return file_samples_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *NestedWithMap) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *NestedWithMap) GetInner() *ScalarMap {
+	if x != nil {
+		return x.Inner
+	}
+	return nil
+}
+
+var File_samples_proto protoreflect.FileDescriptor
+
+const file_samples_proto_rawDesc = "" +
 	"\n" +
-	"\x15samples/samples.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1egoogle/protobuf/duration.proto\"\xf5\x02\n" +
+	"\rsamples.proto\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1egoogle/protobuf/duration.proto\"\xf5\x02\n" +
 	"\vScalarTypes\x12\x16\n" +
 	"\x06double\x18\x01 \x01(\x01R\x06double\x12\x14\n" +
 	"\x05float\x18\x02 \x01(\x02R\x05float\x12\x14\n" +
@@ -1338,22 +1611,70 @@ const file_samples_samples_proto_rawDesc = "" +
 	"\x01k\x18\x01 \x01(\tH\x00R\x01k\x12\x0e\n" +
 	"\x01v\x18\x02 \x01(\tH\x00R\x01v\x12\x18\n" +
 	"\x03one\x18\x03 \x01(\v2\x04.OneH\x00R\x03oneB\a\n" +
-	"\x05valueBCB\fSamplesProtoP\x01Z1github.com/loicalleyne/bufarrowlib/gen/go/samplesb\x06proto3"
+	"\x05value\"v\n" +
+	"\tScalarMap\x12.\n" +
+	"\x06labels\x18\x01 \x03(\v2\x16.ScalarMap.LabelsEntryR\x06labels\x1a9\n" +
+	"\vLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x9a\x06\n" +
+	"\n" +
+	"MapVariety\x129\n" +
+	"\n" +
+	"string_map\x18\x01 \x03(\v2\x1a.MapVariety.StringMapEntryR\tstringMap\x12C\n" +
+	"\x0estring_int_map\x18\x02 \x03(\v2\x1d.MapVariety.StringIntMapEntryR\fstringIntMap\x12C\n" +
+	"\x0eint_string_map\x18\x03 \x03(\v2\x1d.MapVariety.IntStringMapEntryR\fintStringMap\x12I\n" +
+	"\x10int64_double_map\x18\x04 \x03(\v2\x1f.MapVariety.Int64DoubleMapEntryR\x0eint64DoubleMap\x12F\n" +
+	"\x0fbool_string_map\x18\x05 \x03(\v2\x1e.MapVariety.BoolStringMapEntryR\rboolStringMap\x123\n" +
+	"\buint_map\x18\x06 \x03(\v2\x18.MapVariety.UintMapEntryR\auintMap\x1a<\n" +
+	"\x0eStringMapEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a?\n" +
+	"\x11StringIntMapEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a?\n" +
+	"\x11IntStringMapEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x05R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aA\n" +
+	"\x13Int64DoubleMapEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x03R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x01R\x05value:\x028\x01\x1a@\n" +
+	"\x12BoolStringMapEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\bR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a:\n" +
+	"\fUintMapEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x04R\x05value:\x028\x01\"\x93\x01\n" +
+	"\rMapWithNested\x12<\n" +
+	"\n" +
+	"nested_map\x18\x01 \x03(\v2\x1d.MapWithNested.NestedMapEntryR\tnestedMap\x1aD\n" +
+	"\x0eNestedMapEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x1c\n" +
+	"\x05value\x18\x02 \x01(\v2\x06.ThreeR\x05value:\x028\x01\"\x9d\x01\n" +
+	"\x10MapWithTimestamp\x123\n" +
+	"\x06ts_map\x18\x01 \x03(\v2\x1c.MapWithTimestamp.TsMapEntryR\x05tsMap\x1aT\n" +
+	"\n" +
+	"TsMapEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x120\n" +
+	"\x05value\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\x05value:\x028\x01\"E\n" +
+	"\rNestedWithMap\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
+	"\x05inner\x18\x02 \x01(\v2\n" +
+	".ScalarMapR\x05innerBCB\fSamplesProtoP\x01Z1github.com/loicalleyne/bufarrowlib/gen/go/samplesb\x06proto3"
 
 var (
-	file_samples_samples_proto_rawDescOnce sync.Once
-	file_samples_samples_proto_rawDescData []byte
+	file_samples_proto_rawDescOnce sync.Once
+	file_samples_proto_rawDescData []byte
 )
 
-func file_samples_samples_proto_rawDescGZIP() []byte {
-	file_samples_samples_proto_rawDescOnce.Do(func() {
-		file_samples_samples_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_samples_samples_proto_rawDesc), len(file_samples_samples_proto_rawDesc)))
+func file_samples_proto_rawDescGZIP() []byte {
+	file_samples_proto_rawDescOnce.Do(func() {
+		file_samples_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_samples_proto_rawDesc), len(file_samples_proto_rawDesc)))
 	})
-	return file_samples_samples_proto_rawDescData
+	return file_samples_proto_rawDescData
 }
 
-var file_samples_samples_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
-var file_samples_samples_proto_goTypes = []any{
+var file_samples_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
+var file_samples_proto_goTypes = []any{
 	(*ScalarTypes)(nil),           // 0: ScalarTypes
 	(*ScalarTypesOptional)(nil),   // 1: ScalarTypesOptional
 	(*ScalarTypesRepeated)(nil),   // 2: ScalarTypesRepeated
@@ -1365,10 +1686,24 @@ var file_samples_samples_proto_goTypes = []any{
 	(*Known)(nil),                 // 8: Known
 	(*OneOfScala)(nil),            // 9: OneOfScala
 	(*SimpleOneOf)(nil),           // 10: SimpleOneOf
-	(*timestamppb.Timestamp)(nil), // 11: google.protobuf.Timestamp
-	(*durationpb.Duration)(nil),   // 12: google.protobuf.Duration
+	(*ScalarMap)(nil),             // 11: ScalarMap
+	(*MapVariety)(nil),            // 12: MapVariety
+	(*MapWithNested)(nil),         // 13: MapWithNested
+	(*MapWithTimestamp)(nil),      // 14: MapWithTimestamp
+	(*NestedWithMap)(nil),         // 15: NestedWithMap
+	nil,                           // 16: ScalarMap.LabelsEntry
+	nil,                           // 17: MapVariety.StringMapEntry
+	nil,                           // 18: MapVariety.StringIntMapEntry
+	nil,                           // 19: MapVariety.IntStringMapEntry
+	nil,                           // 20: MapVariety.Int64DoubleMapEntry
+	nil,                           // 21: MapVariety.BoolStringMapEntry
+	nil,                           // 22: MapVariety.UintMapEntry
+	nil,                           // 23: MapWithNested.NestedMapEntry
+	nil,                           // 24: MapWithTimestamp.TsMapEntry
+	(*timestamppb.Timestamp)(nil), // 25: google.protobuf.Timestamp
+	(*durationpb.Duration)(nil),   // 26: google.protobuf.Duration
 }
-var file_samples_samples_proto_depIdxs = []int32{
+var file_samples_proto_depIdxs = []int32{
 	0,  // 0: Nested.nested_scalar:type_name -> ScalarTypes
 	0,  // 1: Nested.nested_repeated_scalar:type_name -> ScalarTypes
 	4,  // 2: Nested.deep:type_name -> One
@@ -1376,26 +1711,38 @@ var file_samples_samples_proto_depIdxs = []int32{
 	6,  // 4: Two.three:type_name -> Three
 	4,  // 5: Cyclic.one:type_name -> One
 	7,  // 6: Cyclic.cylcic:type_name -> Cyclic
-	11, // 7: Known.ts:type_name -> google.protobuf.Timestamp
-	12, // 8: Known.duration:type_name -> google.protobuf.Duration
-	11, // 9: Known.ts_rep:type_name -> google.protobuf.Timestamp
-	12, // 10: Known.duration_rep:type_name -> google.protobuf.Duration
+	25, // 7: Known.ts:type_name -> google.protobuf.Timestamp
+	26, // 8: Known.duration:type_name -> google.protobuf.Duration
+	25, // 9: Known.ts_rep:type_name -> google.protobuf.Timestamp
+	26, // 10: Known.duration_rep:type_name -> google.protobuf.Duration
 	4,  // 11: OneOfScala.one:type_name -> One
 	4,  // 12: SimpleOneOf.one:type_name -> One
-	13, // [13:13] is the sub-list for method output_type
-	13, // [13:13] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	16, // 13: ScalarMap.labels:type_name -> ScalarMap.LabelsEntry
+	17, // 14: MapVariety.string_map:type_name -> MapVariety.StringMapEntry
+	18, // 15: MapVariety.string_int_map:type_name -> MapVariety.StringIntMapEntry
+	19, // 16: MapVariety.int_string_map:type_name -> MapVariety.IntStringMapEntry
+	20, // 17: MapVariety.int64_double_map:type_name -> MapVariety.Int64DoubleMapEntry
+	21, // 18: MapVariety.bool_string_map:type_name -> MapVariety.BoolStringMapEntry
+	22, // 19: MapVariety.uint_map:type_name -> MapVariety.UintMapEntry
+	23, // 20: MapWithNested.nested_map:type_name -> MapWithNested.NestedMapEntry
+	24, // 21: MapWithTimestamp.ts_map:type_name -> MapWithTimestamp.TsMapEntry
+	11, // 22: NestedWithMap.inner:type_name -> ScalarMap
+	6,  // 23: MapWithNested.NestedMapEntry.value:type_name -> Three
+	25, // 24: MapWithTimestamp.TsMapEntry.value:type_name -> google.protobuf.Timestamp
+	25, // [25:25] is the sub-list for method output_type
+	25, // [25:25] is the sub-list for method input_type
+	25, // [25:25] is the sub-list for extension type_name
+	25, // [25:25] is the sub-list for extension extendee
+	0,  // [0:25] is the sub-list for field type_name
 }
 
-func init() { file_samples_samples_proto_init() }
-func file_samples_samples_proto_init() {
-	if File_samples_samples_proto != nil {
+func init() { file_samples_proto_init() }
+func file_samples_proto_init() {
+	if File_samples_proto != nil {
 		return
 	}
-	file_samples_samples_proto_msgTypes[1].OneofWrappers = []any{}
-	file_samples_samples_proto_msgTypes[9].OneofWrappers = []any{
+	file_samples_proto_msgTypes[1].OneofWrappers = []any{}
+	file_samples_proto_msgTypes[9].OneofWrappers = []any{
 		(*OneOfScala_Double)(nil),
 		(*OneOfScala_Float)(nil),
 		(*OneOfScala_Int32)(nil),
@@ -1413,7 +1760,7 @@ func file_samples_samples_proto_init() {
 		(*OneOfScala_Bytes)(nil),
 		(*OneOfScala_One)(nil),
 	}
-	file_samples_samples_proto_msgTypes[10].OneofWrappers = []any{
+	file_samples_proto_msgTypes[10].OneofWrappers = []any{
 		(*SimpleOneOf_K)(nil),
 		(*SimpleOneOf_V)(nil),
 		(*SimpleOneOf_One)(nil),
@@ -1422,17 +1769,17 @@ func file_samples_samples_proto_init() {
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_samples_samples_proto_rawDesc), len(file_samples_samples_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_samples_proto_rawDesc), len(file_samples_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_samples_samples_proto_goTypes,
-		DependencyIndexes: file_samples_samples_proto_depIdxs,
-		MessageInfos:      file_samples_samples_proto_msgTypes,
+		GoTypes:           file_samples_proto_goTypes,
+		DependencyIndexes: file_samples_proto_depIdxs,
+		MessageInfos:      file_samples_proto_msgTypes,
 	}.Build()
-	File_samples_samples_proto = out.File
-	file_samples_samples_proto_goTypes = nil
-	file_samples_samples_proto_depIdxs = nil
+	File_samples_proto = out.File
+	file_samples_proto_goTypes = nil
+	file_samples_proto_depIdxs = nil
 }

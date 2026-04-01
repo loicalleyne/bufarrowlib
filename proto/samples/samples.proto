@@ -109,3 +109,34 @@ message SimpleOneOf {
     One one = 3;
   }
 }
+
+// ScalarMap tests a simple string→string map field.
+message ScalarMap {
+  map<string, string> labels = 1;
+}
+
+// MapVariety tests multiple map key/value type combinations.
+message MapVariety {
+  map<string, string> string_map = 1;
+  map<string, int32>  string_int_map = 2;
+  map<int32, string>  int_string_map = 3;
+  map<int64, double>  int64_double_map = 4;
+  map<bool, string>   bool_string_map = 5;
+  map<uint32, uint64> uint_map = 6;
+}
+
+// MapWithNested tests a map whose values are nested messages.
+message MapWithNested {
+  map<string, Three> nested_map = 1;
+}
+
+// MapWithTimestamp tests a map whose values are well-known Timestamp.
+message MapWithTimestamp {
+  map<string, google.protobuf.Timestamp> ts_map = 1;
+}
+
+// NestedWithMap tests a struct containing a map field.
+message NestedWithMap {
+  string name = 1;
+  ScalarMap inner = 2;
+}

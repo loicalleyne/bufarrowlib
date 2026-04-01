@@ -1,0 +1,152 @@
+# bufarrowlib denormalizer configuration
+#
+# This file is parsed by bufarrowlib.ParseDenormConfigFile / NewTranscoderFromConfigFile.
+# It describes:
+#  1. The protobuf source (proto.file + proto.message).
+#  2. An optional second message whose fields are merged into the schema
+#     (custom_message), enabling Transcoder.AppendWithCustom.
+#  3. The denormalizer plan: an ordered list of output Arrow columns.
+#
+# Each column is either a simple path or a computed expression (expr).
+# Paths support the full pbpath syntax: field access (.), list wildcard ([*]),
+# list range ([start:end:step]), and list index ([n]).
+
+proto:
+  file: proto/bidrequest.proto
+  message: BidRequestEvent
+  import_paths:
+    - proto
+
+# Optional: merge fields from a second proto message.
+# Remove or comment out this section if not needed.
+# custom_message:
+#   file: proto/extensions.proto
+#   message: BidRequestExtension
+#   import_paths:
+#     - proto
+
+denormalizer:
+  columns:
+    # ── Simple path columns ──────────────────────────────────────────────────
+
+    - name: auction_id
+      path: auction_id
+
+    - name: timestamp_ms
+      path: timestamp
+
+    # Fan-out: one output row per impression.
+    - name: imp_id
+      path: imp[*].id
+
+    - name: imp_floor
+      path: imp[*].bidfloor
+
+    # strict: true makes out-of-bounds range/index access return an error
+    # instead of silently clamping to the available elements.
+    - name: imp_floor_currency
+      path: imp[*].bidfloorcur
+      strict: true
+
+    - name: banner_w
+      path: imp[*].banner.w
+
+    - name: banner_h
+      path: imp[*].banner.h
+
+    - name: site_domain
+      path: site.domain
+
+    - name: user_id
+      path: user.id
+
+    - name: device_ua
+      path: device.ua
+
+    - name: device_ip
+      path: device.ip
+
+    # ── Expression columns ────────────────────────────────────────────────────
+    # Expressions are evaluated after path resolution.
+    # All source data must come from path args inside the expr tree.
+
+    # Boolean: is the video sub-object present on this impression?
+    - name: has_video
+      expr:
+        func: has
+        args:
+          - path: imp[*].video.id
+
+    # Integer: how many impressions are in this request?
+    - name: imp_count
+      expr:
+        func: len
+        args:
+          - path: imp[*].id
+
+    # String coalesce: use site.page when set, fall back to site.domain.
+    - name: page_or_domain
+      expr:
+        func: coalesce
+        args:
+          - path: site.page
+          - path: site.domain
+
+    # Default literal: replace empty geo region with "unknown".
+    - name: geo_region
+      expr:
+        func: default
+        args:
+          - path: user.geo.region
+        literal: "unknown"
+
+    # Concatenate imp id and banner id with a dash.
+    - name: imp_banner_key
+      expr:
+        func: concat
+        sep: "-"
+        args:
+          - path: imp[*].id
+          - path: imp[*].banner.id
+
+    # Arithmetic: multiply floor price by 1000 to get CPM in micros.
+    - name: floor_micros
+      expr:
+        func: mul
+        args:
+          - path: imp[*].bidfloor
+          - literal: 1000.0
+
+    # Cast: ensure the floor price is represented as an integer (truncated).
+    - name: floor_int
+      expr:
+        func: cast_int
+        args:
+          - path: imp[*].bidfloor
+
+    # Normalise domain to lower case.
+    - name: site_domain_lower
+      expr:
+        func: lower
+        args:
+          - path: site.domain
+
+    # Conditional: label impressions as "video" or "display".
+    - name: imp_type
+      expr:
+        func: cond
+        args:
+          - expr:
+              func: has
+              args:
+                - path: imp[*].video.id
+          - literal: "video"
+          - literal: "display"
+
+    # Bucket the floor price into $0.50 buckets (bucket size = 50 cents × 100).
+    - name: floor_bucket
+      expr:
+        func: bucket
+        param: 50
+        args:
+          - path: imp[*].bidfloor

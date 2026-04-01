@@ -264,6 +264,96 @@ tc, err := bufarrowlib.NewFromFile(
 )
 ```
 
+### Quick start — declarative YAML config
+
+When building a service or pipeline you can drive the entire `Transcoder` from a single YAML file instead of writing Go code for the denormalizer plan:
+
+```yaml
+# denorm.yaml
+proto:
+  file: path/to/schema.proto
+  message: BidRequestEvent
+  import_paths: [proto]
+
+denormalizer:
+  columns:
+    - name: auction_id
+      path: auction_id
+
+    - name: imp_id
+      path: imp[*].id          # fan-out: one row per impression
+
+    - name: floor_price
+      path: imp[*].bidfloor
+      strict: true             # error on out-of-bounds index
+
+    - name: has_video
+      expr:
+        func: has
+        args:
+          - path: imp[*].video.id
+
+    - name: imp_type
+      expr:
+        func: cond
+        args:
+          - expr: { func: has, args: [{path: imp[*].video.id}] }
+          - literal: "video"
+          - literal: "display"
+
+    - name: floor_micros
+      expr:
+        func: mul
+        args:
+          - path: imp[*].bidfloor
+          - literal: 1000.0
+
+    - name: geo_region
+      expr:
+        func: default
+        args:
+          - path: user.geo.region
+        literal: "unknown"
+```
+
+Load and use it in one call:
+
+```go
+tc, err := bufarrowlib.NewTranscoderFromConfigFile("denorm.yaml", memory.DefaultAllocator)
+if err != nil {
+    log.Fatal(err)
+}
+defer tc.Release()
+
+for msg := range stream {
+    tc.AppendDenorm(msg)
+}
+rec := tc.NewDenormalizerRecordBatch()
+```
+
+Or parse from any `io.Reader` for embedding in services:
+
+```go
+cfg, err := bufarrowlib.ParseDenormConfig(reader)
+tc, err := bufarrowlib.NewTranscoderFromConfig(cfg, mem)
+```
+
+**Supported `expr.func` values:**
+
+| Category | Values |
+|---|---|
+| Aggregation | `coalesce`, `default` |
+| Control flow | `cond` |
+| Predicates | `has`, `eq`, `ne`, `lt`, `le`, `gt`, `ge` |
+| Arithmetic | `add`, `sub`, `mul`, `div`, `mod`, `abs`, `ceil`, `floor`, `round`, `min`, `max` |
+| String | `concat`, `upper`, `lower`, `trim`, `trim_prefix`, `trim_suffix`, `len` |
+| Cast | `cast_int`, `cast_float`, `cast_string` |
+| Timestamp | `age`, `strptime`, `try_strptime`, `extract_year`, `extract_month`, `extract_day`, `extract_hour`, `extract_minute`, `extract_second`, `epoch_to_date`, `date_part` |
+| ETL | `hash`, `bucket`, `mask`, `coerce`, `enum_name`, `sum`, `distinct`, `list_concat` |
+| Logic | `and`, `or`, `not` |
+
+Auxiliary YAML fields: `sep` (separator / format / part name / mask char), `literal` / `literal2` (scalar fallback or coerce values), `param` (integer parameter for `bucket` and `mask`). See [testdata/example_denorm.yaml](testdata/example_denorm.yaml) for a fully annotated reference config.
+
 ### Quick start — computed columns with expressions
 
 ```go

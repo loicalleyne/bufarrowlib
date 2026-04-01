@@ -1,0 +1,6 @@
+schema:
+  fields: 2
+    - name: type=utf8
+      metadata: ["PARQUET:field_id": "1", "path": "name"]
+    - inner: type=struct<labels: map<utf8, utf8, items_nullable>>, nullable
+       metadata: ["PARQUET:field_id": "2", "path": "inner"]

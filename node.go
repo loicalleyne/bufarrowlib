@@ -126,7 +126,20 @@ func unmarshal(msgType *hyperpb.MessageType, n *node, r arrow.RecordBatch, rows 
 					msg.Set(fs, lv)
 				}
 			case fs.IsMap():
-				panic("MAP not supported")
+				ma := r.Column(i).(*array.Map)
+				start, end := ma.ValueOffsets(row)
+				if start != end {
+					lv := msg.NewField(fs)
+					mp := lv.Map()
+					keys := ma.Keys()
+					items := ma.Items()
+					for k := start; k < end; k++ {
+						mk := nx.children[0].encode(protoreflect.Value{}, keys, int(k))
+						mv := nx.children[1].encode(mp.NewValue(), items, int(k))
+						mp.Set(mk.MapKey(), mv)
+					}
+					msg.Set(fs, lv)
+				}
 			default:
 				// fmt.Printf("i: %d, %v %v %v %v \n", i, n.desc.FullName(), fs.FullName(), fs.Kind(), r.Column(i).DataType().String()) // debug
 				msg.Set(fs,
@@ -316,6 +329,87 @@ func createNode(parent *node, field protoreflect.FieldDescriptor, depth int) *no
 			}
 			return n
 		}
+		// Handle protobuf map fields → Arrow MAP type.
+		// Maps are represented as repeated MapEntry{key, value} in protobuf.
+		// Must be checked before the generic struct handler.
+		if field.IsMap() {
+			keyFD := msg.Fields().ByName("key")
+			valueFD := msg.Fields().ByName("value")
+
+			// Key node – always a scalar type in protobuf maps.
+			keyNode := &node{parent: n, desc: keyFD, depth: depth + 1, hash: make(map[string]*node),
+				field: arrow.Field{Name: "key"}}
+			keyType := keyNode.baseType(keyFD)
+			if keyType == nil {
+				panic(fmt.Sprintf("bufarrow: unsupported map key type %v", keyFD.Kind()))
+			}
+
+			// Value node – may be scalar, well-known type, or message.
+			valueNode := createNode(n, valueFD, depth+1)
+			valueType := valueNode.field.Type
+
+			n.children = []*node{keyNode, valueNode}
+			n.field.Type = arrow.MapOf(keyType, valueType)
+			n.field.Nullable = true
+
+			n.setup = func(b array.Builder) valueFn {
+				mb := b.(*array.MapBuilder)
+				keyWrite := keyNode.setup(mb.KeyBuilder())
+				valueWrite := valueNode.setup(mb.ItemBuilder())
+				return func(v protoreflect.Value, set bool) error {
+					if !v.IsValid() {
+						mb.AppendNull()
+						return nil
+					}
+					mb.Append(true)
+					var rangeErr error
+					v.Map().Range(func(mk protoreflect.MapKey, mv protoreflect.Value) bool {
+						if err := keyWrite(mk.Value(), true); err != nil {
+							rangeErr = err
+							return false
+						}
+						if err := valueWrite(mv, true); err != nil {
+							rangeErr = err
+							return false
+						}
+						return true
+					})
+					return rangeErr
+				}
+			}
+
+			n.encode = func(value protoreflect.Value, a arrow.Array, row int) protoreflect.Value {
+				ma := a.(*array.Map)
+				if ma.IsNull(row) {
+					return protoreflect.Value{}
+				}
+				start, end := ma.ValueOffsets(row)
+				keys := ma.Keys()
+				items := ma.Items()
+				mp := value.Map()
+				for k := start; k < end; k++ {
+					mk := keyNode.encode(protoreflect.Value{}, keys, int(k))
+					mv := valueNode.encode(mp.NewValue(), items, int(k))
+					mp.Set(mk.MapKey(), mv)
+				}
+				return value
+			}
+
+			if field.ContainingOneof() != nil {
+				setup := n.setup
+				n.setup = func(b array.Builder) valueFn {
+					do := setup(b)
+					return func(v protoreflect.Value, set bool) error {
+						if !set {
+							b.AppendNull()
+							return nil
+						}
+						return do(v, set)
+					}
+				}
+			}
+			return n
+		}
 		f := msg.Fields()
 		n.children = make([]*node, f.Len())
 		a := make([]arrow.Field, f.Len())
@@ -385,7 +479,20 @@ func createNode(parent *node, field protoreflect.FieldDescriptor, depth int) *no
 						msg.Set(fs, lv)
 					}
 				case fs.IsMap():
-					panic("MAP not supported")
+					ma := s.Field(j).(*array.Map)
+					start, end := ma.ValueOffsets(row)
+					if start != end {
+						lv := msg.NewField(fs)
+						mp := lv.Map()
+						keys := ma.Keys()
+						items := ma.Items()
+						for k := start; k < end; k++ {
+							mk := nx.children[0].encode(protoreflect.Value{}, keys, int(k))
+							mv := nx.children[1].encode(mp.NewValue(), items, int(k))
+							mp.Set(mk.MapKey(), mv)
+						}
+						msg.Set(fs, lv)
+					}
 				default:
 					msg.Set(fs, nx.encode(msg.NewField(fs), s.Field(j), row))
 				}
@@ -650,9 +757,6 @@ func (n *node) baseType(field protoreflect.FieldDescriptor) (t arrow.DataType) {
 			}
 		}
 
-	}
-	if field.IsMap() {
-		panic("MAP not supported")
 	}
 	return
 }

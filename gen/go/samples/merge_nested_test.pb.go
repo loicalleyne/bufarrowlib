@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.10
 // 	protoc        (unknown)
-// source: samples/merge_nested_test.proto
+// source: merge_nested_test.proto
 
 package samples
 
@@ -54,11 +54,11 @@ func (x WithEnumA_StatusA) String() string {
 }
 
 func (WithEnumA_StatusA) Descriptor() protoreflect.EnumDescriptor {
-	return file_samples_merge_nested_test_proto_enumTypes[0].Descriptor()
+	return file_merge_nested_test_proto_enumTypes[0].Descriptor()
 }
 
 func (WithEnumA_StatusA) Type() protoreflect.EnumType {
-	return &file_samples_merge_nested_test_proto_enumTypes[0]
+	return &file_merge_nested_test_proto_enumTypes[0]
 }
 
 func (x WithEnumA_StatusA) Number() protoreflect.EnumNumber {
@@ -67,7 +67,7 @@ func (x WithEnumA_StatusA) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use WithEnumA_StatusA.Descriptor instead.
 func (WithEnumA_StatusA) EnumDescriptor() ([]byte, []int) {
-	return file_samples_merge_nested_test_proto_rawDescGZIP(), []int{3, 0}
+	return file_merge_nested_test_proto_rawDescGZIP(), []int{3, 0}
 }
 
 type WithEnumB_LevelB int32
@@ -103,11 +103,11 @@ func (x WithEnumB_LevelB) String() string {
 }
 
 func (WithEnumB_LevelB) Descriptor() protoreflect.EnumDescriptor {
-	return file_samples_merge_nested_test_proto_enumTypes[1].Descriptor()
+	return file_merge_nested_test_proto_enumTypes[1].Descriptor()
 }
 
 func (WithEnumB_LevelB) Type() protoreflect.EnumType {
-	return &file_samples_merge_nested_test_proto_enumTypes[1]
+	return &file_merge_nested_test_proto_enumTypes[1]
 }
 
 func (x WithEnumB_LevelB) Number() protoreflect.EnumNumber {
@@ -116,7 +116,7 @@ func (x WithEnumB_LevelB) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use WithEnumB_LevelB.Descriptor instead.
 func (WithEnumB_LevelB) EnumDescriptor() ([]byte, []int) {
-	return file_samples_merge_nested_test_proto_rawDescGZIP(), []int{4, 0}
+	return file_merge_nested_test_proto_rawDescGZIP(), []int{4, 0}
 }
 
 type WithEnumConflict_StatusA int32
@@ -149,11 +149,11 @@ func (x WithEnumConflict_StatusA) String() string {
 }
 
 func (WithEnumConflict_StatusA) Descriptor() protoreflect.EnumDescriptor {
-	return file_samples_merge_nested_test_proto_enumTypes[2].Descriptor()
+	return file_merge_nested_test_proto_enumTypes[2].Descriptor()
 }
 
 func (WithEnumConflict_StatusA) Type() protoreflect.EnumType {
-	return &file_samples_merge_nested_test_proto_enumTypes[2]
+	return &file_merge_nested_test_proto_enumTypes[2]
 }
 
 func (x WithEnumConflict_StatusA) Number() protoreflect.EnumNumber {
@@ -162,7 +162,7 @@ func (x WithEnumConflict_StatusA) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use WithEnumConflict_StatusA.Descriptor instead.
 func (WithEnumConflict_StatusA) EnumDescriptor() ([]byte, []int) {
-	return file_samples_merge_nested_test_proto_rawDescGZIP(), []int{5, 0}
+	return file_merge_nested_test_proto_rawDescGZIP(), []int{5, 0}
 }
 
 // Message with a nested message type
@@ -176,7 +176,7 @@ type WithNestedA struct {
 
 func (x *WithNestedA) Reset() {
 	*x = WithNestedA{}
-	mi := &file_samples_merge_nested_test_proto_msgTypes[0]
+	mi := &file_merge_nested_test_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -188,7 +188,7 @@ func (x *WithNestedA) String() string {
 func (*WithNestedA) ProtoMessage() {}
 
 func (x *WithNestedA) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_merge_nested_test_proto_msgTypes[0]
+	mi := &file_merge_nested_test_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -201,7 +201,7 @@ func (x *WithNestedA) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WithNestedA.ProtoReflect.Descriptor instead.
 func (*WithNestedA) Descriptor() ([]byte, []int) {
-	return file_samples_merge_nested_test_proto_rawDescGZIP(), []int{0}
+	return file_merge_nested_test_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *WithNestedA) GetLabel() string {
@@ -229,7 +229,7 @@ type WithNestedB struct {
 
 func (x *WithNestedB) Reset() {
 	*x = WithNestedB{}
-	mi := &file_samples_merge_nested_test_proto_msgTypes[1]
+	mi := &file_merge_nested_test_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -241,7 +241,7 @@ func (x *WithNestedB) String() string {
 func (*WithNestedB) ProtoMessage() {}
 
 func (x *WithNestedB) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_merge_nested_test_proto_msgTypes[1]
+	mi := &file_merge_nested_test_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -254,7 +254,7 @@ func (x *WithNestedB) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WithNestedB.ProtoReflect.Descriptor instead.
 func (*WithNestedB) Descriptor() ([]byte, []int) {
-	return file_samples_merge_nested_test_proto_rawDescGZIP(), []int{1}
+	return file_merge_nested_test_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *WithNestedB) GetCount() int64 {
@@ -281,7 +281,7 @@ type WithNestedConflict struct {
 
 func (x *WithNestedConflict) Reset() {
 	*x = WithNestedConflict{}
-	mi := &file_samples_merge_nested_test_proto_msgTypes[2]
+	mi := &file_merge_nested_test_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -293,7 +293,7 @@ func (x *WithNestedConflict) String() string {
 func (*WithNestedConflict) ProtoMessage() {}
 
 func (x *WithNestedConflict) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_merge_nested_test_proto_msgTypes[2]
+	mi := &file_merge_nested_test_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -306,7 +306,7 @@ func (x *WithNestedConflict) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WithNestedConflict.ProtoReflect.Descriptor instead.
 func (*WithNestedConflict) Descriptor() ([]byte, []int) {
-	return file_samples_merge_nested_test_proto_rawDescGZIP(), []int{2}
+	return file_merge_nested_test_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *WithNestedConflict) GetFlag() bool {
@@ -327,7 +327,7 @@ type WithEnumA struct {
 
 func (x *WithEnumA) Reset() {
 	*x = WithEnumA{}
-	mi := &file_samples_merge_nested_test_proto_msgTypes[3]
+	mi := &file_merge_nested_test_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -339,7 +339,7 @@ func (x *WithEnumA) String() string {
 func (*WithEnumA) ProtoMessage() {}
 
 func (x *WithEnumA) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_merge_nested_test_proto_msgTypes[3]
+	mi := &file_merge_nested_test_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -352,7 +352,7 @@ func (x *WithEnumA) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WithEnumA.ProtoReflect.Descriptor instead.
 func (*WithEnumA) Descriptor() ([]byte, []int) {
-	return file_samples_merge_nested_test_proto_rawDescGZIP(), []int{3}
+	return file_merge_nested_test_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *WithEnumA) GetName() string {
@@ -380,7 +380,7 @@ type WithEnumB struct {
 
 func (x *WithEnumB) Reset() {
 	*x = WithEnumB{}
-	mi := &file_samples_merge_nested_test_proto_msgTypes[4]
+	mi := &file_merge_nested_test_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -392,7 +392,7 @@ func (x *WithEnumB) String() string {
 func (*WithEnumB) ProtoMessage() {}
 
 func (x *WithEnumB) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_merge_nested_test_proto_msgTypes[4]
+	mi := &file_merge_nested_test_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -405,7 +405,7 @@ func (x *WithEnumB) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WithEnumB.ProtoReflect.Descriptor instead.
 func (*WithEnumB) Descriptor() ([]byte, []int) {
-	return file_samples_merge_nested_test_proto_rawDescGZIP(), []int{4}
+	return file_merge_nested_test_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *WithEnumB) GetPriority() int32 {
@@ -432,7 +432,7 @@ type WithEnumConflict struct {
 
 func (x *WithEnumConflict) Reset() {
 	*x = WithEnumConflict{}
-	mi := &file_samples_merge_nested_test_proto_msgTypes[5]
+	mi := &file_merge_nested_test_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -444,7 +444,7 @@ func (x *WithEnumConflict) String() string {
 func (*WithEnumConflict) ProtoMessage() {}
 
 func (x *WithEnumConflict) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_merge_nested_test_proto_msgTypes[5]
+	mi := &file_merge_nested_test_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -457,7 +457,7 @@ func (x *WithEnumConflict) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WithEnumConflict.ProtoReflect.Descriptor instead.
 func (*WithEnumConflict) Descriptor() ([]byte, []int) {
-	return file_samples_merge_nested_test_proto_rawDescGZIP(), []int{5}
+	return file_merge_nested_test_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *WithEnumConflict) GetValue() float64 {
@@ -477,7 +477,7 @@ type WithNestedA_InnerA struct {
 
 func (x *WithNestedA_InnerA) Reset() {
 	*x = WithNestedA_InnerA{}
-	mi := &file_samples_merge_nested_test_proto_msgTypes[6]
+	mi := &file_merge_nested_test_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -489,7 +489,7 @@ func (x *WithNestedA_InnerA) String() string {
 func (*WithNestedA_InnerA) ProtoMessage() {}
 
 func (x *WithNestedA_InnerA) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_merge_nested_test_proto_msgTypes[6]
+	mi := &file_merge_nested_test_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -502,7 +502,7 @@ func (x *WithNestedA_InnerA) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WithNestedA_InnerA.ProtoReflect.Descriptor instead.
 func (*WithNestedA_InnerA) Descriptor() ([]byte, []int) {
-	return file_samples_merge_nested_test_proto_rawDescGZIP(), []int{0, 0}
+	return file_merge_nested_test_proto_rawDescGZIP(), []int{0, 0}
 }
 
 func (x *WithNestedA_InnerA) GetX() int32 {
@@ -528,7 +528,7 @@ type WithNestedB_InnerB struct {
 
 func (x *WithNestedB_InnerB) Reset() {
 	*x = WithNestedB_InnerB{}
-	mi := &file_samples_merge_nested_test_proto_msgTypes[7]
+	mi := &file_merge_nested_test_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -540,7 +540,7 @@ func (x *WithNestedB_InnerB) String() string {
 func (*WithNestedB_InnerB) ProtoMessage() {}
 
 func (x *WithNestedB_InnerB) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_merge_nested_test_proto_msgTypes[7]
+	mi := &file_merge_nested_test_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -553,7 +553,7 @@ func (x *WithNestedB_InnerB) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WithNestedB_InnerB.ProtoReflect.Descriptor instead.
 func (*WithNestedB_InnerB) Descriptor() ([]byte, []int) {
-	return file_samples_merge_nested_test_proto_rawDescGZIP(), []int{1, 0}
+	return file_merge_nested_test_proto_rawDescGZIP(), []int{1, 0}
 }
 
 func (x *WithNestedB_InnerB) GetDescription() string {
@@ -572,7 +572,7 @@ type WithNestedConflict_InnerA struct {
 
 func (x *WithNestedConflict_InnerA) Reset() {
 	*x = WithNestedConflict_InnerA{}
-	mi := &file_samples_merge_nested_test_proto_msgTypes[8]
+	mi := &file_merge_nested_test_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -584,7 +584,7 @@ func (x *WithNestedConflict_InnerA) String() string {
 func (*WithNestedConflict_InnerA) ProtoMessage() {}
 
 func (x *WithNestedConflict_InnerA) ProtoReflect() protoreflect.Message {
-	mi := &file_samples_merge_nested_test_proto_msgTypes[8]
+	mi := &file_merge_nested_test_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -597,7 +597,7 @@ func (x *WithNestedConflict_InnerA) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WithNestedConflict_InnerA.ProtoReflect.Descriptor instead.
 func (*WithNestedConflict_InnerA) Descriptor() ([]byte, []int) {
-	return file_samples_merge_nested_test_proto_rawDescGZIP(), []int{2, 0}
+	return file_merge_nested_test_proto_rawDescGZIP(), []int{2, 0}
 }
 
 func (x *WithNestedConflict_InnerA) GetZ() string {
@@ -607,11 +607,11 @@ func (x *WithNestedConflict_InnerA) GetZ() string {
 	return ""
 }
 
-var File_samples_merge_nested_test_proto protoreflect.FileDescriptor
+var File_merge_nested_test_proto protoreflect.FileDescriptor
 
-const file_samples_merge_nested_test_proto_rawDesc = "" +
+const file_merge_nested_test_proto_rawDesc = "" +
 	"\n" +
-	"\x1fsamples/merge_nested_test.proto\x12\asamples\"~\n" +
+	"\x17merge_nested_test.proto\x12\asamples\"~\n" +
 	"\vWithNestedA\x12\x14\n" +
 	"\x05label\x18\x01 \x01(\tR\x05label\x123\n" +
 	"\x06detail\x18\x02 \x01(\v2\x1b.samples.WithNestedA.InnerAR\x06detail\x1a$\n" +
@@ -649,20 +649,20 @@ const file_samples_merge_nested_test_proto_rawDesc = "" +
 	"\vcom.samplesB\x14MergeNestedTestProtoP\x01Z1github.com/loicalleyne/bufarrowlib/gen/go/samples\xa2\x02\x03SXX\xaa\x02\aSamples\xca\x02\aSamples\xe2\x02\x13Samples\\GPBMetadata\xea\x02\aSamplesb\x06proto3"
 
 var (
-	file_samples_merge_nested_test_proto_rawDescOnce sync.Once
-	file_samples_merge_nested_test_proto_rawDescData []byte
+	file_merge_nested_test_proto_rawDescOnce sync.Once
+	file_merge_nested_test_proto_rawDescData []byte
 )
 
-func file_samples_merge_nested_test_proto_rawDescGZIP() []byte {
-	file_samples_merge_nested_test_proto_rawDescOnce.Do(func() {
-		file_samples_merge_nested_test_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_samples_merge_nested_test_proto_rawDesc), len(file_samples_merge_nested_test_proto_rawDesc)))
+func file_merge_nested_test_proto_rawDescGZIP() []byte {
+	file_merge_nested_test_proto_rawDescOnce.Do(func() {
+		file_merge_nested_test_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_merge_nested_test_proto_rawDesc), len(file_merge_nested_test_proto_rawDesc)))
 	})
-	return file_samples_merge_nested_test_proto_rawDescData
+	return file_merge_nested_test_proto_rawDescData
 }
 
-var file_samples_merge_nested_test_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_samples_merge_nested_test_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
-var file_samples_merge_nested_test_proto_goTypes = []any{
+var file_merge_nested_test_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_merge_nested_test_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_merge_nested_test_proto_goTypes = []any{
 	(WithEnumA_StatusA)(0),            // 0: samples.WithEnumA.StatusA
 	(WithEnumB_LevelB)(0),             // 1: samples.WithEnumB.LevelB
 	(WithEnumConflict_StatusA)(0),     // 2: samples.WithEnumConflict.StatusA
@@ -676,7 +676,7 @@ var file_samples_merge_nested_test_proto_goTypes = []any{
 	(*WithNestedB_InnerB)(nil),        // 10: samples.WithNestedB.InnerB
 	(*WithNestedConflict_InnerA)(nil), // 11: samples.WithNestedConflict.InnerA
 }
-var file_samples_merge_nested_test_proto_depIdxs = []int32{
+var file_merge_nested_test_proto_depIdxs = []int32{
 	9,  // 0: samples.WithNestedA.detail:type_name -> samples.WithNestedA.InnerA
 	10, // 1: samples.WithNestedB.info:type_name -> samples.WithNestedB.InnerB
 	0,  // 2: samples.WithEnumA.status:type_name -> samples.WithEnumA.StatusA
@@ -688,27 +688,27 @@ var file_samples_merge_nested_test_proto_depIdxs = []int32{
 	0,  // [0:4] is the sub-list for field type_name
 }
 
-func init() { file_samples_merge_nested_test_proto_init() }
-func file_samples_merge_nested_test_proto_init() {
-	if File_samples_merge_nested_test_proto != nil {
+func init() { file_merge_nested_test_proto_init() }
+func file_merge_nested_test_proto_init() {
+	if File_merge_nested_test_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_samples_merge_nested_test_proto_rawDesc), len(file_samples_merge_nested_test_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_merge_nested_test_proto_rawDesc), len(file_merge_nested_test_proto_rawDesc)),
 			NumEnums:      3,
 			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
-		GoTypes:           file_samples_merge_nested_test_proto_goTypes,
-		DependencyIndexes: file_samples_merge_nested_test_proto_depIdxs,
-		EnumInfos:         file_samples_merge_nested_test_proto_enumTypes,
-		MessageInfos:      file_samples_merge_nested_test_proto_msgTypes,
+		GoTypes:           file_merge_nested_test_proto_goTypes,
+		DependencyIndexes: file_merge_nested_test_proto_depIdxs,
+		EnumInfos:         file_merge_nested_test_proto_enumTypes,
+		MessageInfos:      file_merge_nested_test_proto_msgTypes,
 	}.Build()
-	File_samples_merge_nested_test_proto = out.File
-	file_samples_merge_nested_test_proto_goTypes = nil
-	file_samples_merge_nested_test_proto_depIdxs = nil
+	File_merge_nested_test_proto = out.File
+	file_merge_nested_test_proto_goTypes = nil
+	file_merge_nested_test_proto_depIdxs = nil
 }

@@ -4,3 +4,4 @@ internal
 cmd
 test
 /gen_bidrequest
+/*.out
