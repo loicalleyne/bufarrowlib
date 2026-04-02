@@ -1,0 +1,4 @@
+schema:
+  fields: 1
+    - nested_map: type=map<utf8, struct<value: uint64>, items_nullable>, nullable
+            metadata: ["PARQUET:field_id": "1", "path": "nested_map"]

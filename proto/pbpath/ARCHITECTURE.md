@@ -76,8 +76,11 @@ for standard kinds and adds fan-out step kinds.
 | `AnyExpandStep` | `AnyExpand(md)` | `.(pkg.Msg)` | Expand a `google.protobuf.Any` |
 | `ListWildcardStep` | `ListWildcard()` | `[*]` | Fan-out: select all elements |
 | `ListRangeStep` | `ListRange(s,e)` | `[s:e]`, `[s:e:step]` | Fan-out: Python-style slice |
+| `FilterStep` | `Filter(pred)` | `[?(...)]` | Keep element if predicate is truthy |
+| `MapWildcardStep` | `MapWildcard()` | `[*]` (on maps) | Fan-out: iterate all map values |
 
-**Key design choice:** Fan-out steps (`ListWildcardStep`, `ListRangeStep`)
+**Key design choice:** Fan-out steps (`ListWildcardStep`, `ListRangeStep`,
+`MapWildcardStep`)
 produce multiple result branches during traversal. This is what enables the
 "UNNEST" / "CROSS JOIN" behaviour in denormalization without any explicit
 loop in user code.
@@ -98,6 +101,42 @@ type Values struct {
 - `Index(i)` returns the (step, value) pair at position `i` (negative indexing supported).
 - `ListIndices()` extracts the concrete list indices visited along the path.
 - `String()` returns a human-readable representation.
+
+### Value
+
+`Value` is the universal intermediate representation for all pbpath expression
+evaluation. It replaces raw `protoreflect.Value` in the expression pipeline
+with a tagged union that can also represent null, lists of values, and messages.
+
+```go
+type Value struct {
+    kind   ValueKind           // NullKind, ScalarKind, ListKind, MessageKind, ObjectKind
+    scalar protoreflect.Value  // valid when kind == ScalarKind
+    list   []Value             // valid when kind == ListKind
+    msg    protoreflect.Message // valid when kind == MessageKind
+    obj    []ObjectEntry       // valid when kind == ObjectKind
+}
+```
+
+`ObjectKind` values are schema-free key-value containers produced by `{...}`
+object construction syntax. Unlike `MessageKind` (which wraps a live protobuf
+message with a descriptor), `ObjectKind` holds arbitrary `ObjectEntry{Key, Value}`
+pairs. Both `MessageKind` and `ObjectKind` report `"object"` from `type`.
+
+At ≤56 bytes on 64-bit systems, `Value` is designed to pass by value on the
+stack. Constructors (`Null`, `Scalar`, `ScalarBool`, `ScalarInt64`, etc.)
+and typed accessors (`Kind`, `ProtoValue`, `List`, `Message`, `IsNull`,
+`IsNonZero`) avoid allocations.
+
+### Result and Query
+
+`Result` wraps `[]Value` from a single plan entry and exposes typed accessors
+(`String`, `Strings`, `Int64`, `Float64s`, `Bool`, etc.) for ergonomic
+consumption.
+
+`Query` wraps a `Plan` and evaluates to a `ResultSet` — a name-indexed
+collection of `Result` values, providing `Get(name)`, `Has(name)`, `Names()`,
+and `All()` for jq-style programmatic access.
 
 ### Plan
 
@@ -179,6 +218,8 @@ Without the trie, evaluating 4 paths would require 4 separate traversals of
 | `ListWildcardStep` | Always (all wildcards are equal) |
 | `ListRangeStep` | Same start, end, step, and omitted flags |
 | `AnyExpandStep` | Same message full name |
+| `FilterStep` | Never (each filter has its own predicate) |
+| `MapWildcardStep` | Always (all map wildcards are equal) |
 
 Different step kinds on the same field (e.g. `imp[*]` and `imp[0:3]`) create
 separate trie branches — they produce independent fan-out groups.
@@ -230,6 +271,7 @@ At `EvalLeaves` time:
 | **Timestamp** | `FuncStrptime`, `FuncTryStrptime`, `FuncAge`, `FuncExtract*` | Int64 |
 | **ETL** | `FuncHash`, `FuncEpochToDate`, `FuncDatePart`, `FuncBucket`, `FuncMask`, `FuncCoerce`, `FuncEnumName` | Varies |
 | **Aggregates** | `FuncSum`, `FuncDistinct`, `FuncListConcat` | Varies |
+| **Filter/Logic** | `FuncSelect`, `FuncAnd`, `FuncOr`, `FuncNot` | Same / Bool |
 
 ### Output kind override
 
@@ -252,6 +294,50 @@ FuncCond(
         protoreflect.ValueOfUint32(0)),
 )
 ```
+
+### Predicate parser (predparse.go)
+
+Filter predicates (`[?(...)]`) are parsed by a recursive descent parser
+separate from the main path parser. The grammar is:
+
+```
+orExpr      = andExpr { "||" andExpr }
+andExpr     = unaryExpr { "&&" unaryExpr }
+unaryExpr   = "!" unaryExpr | primary
+primary     = comparison | truthyCheck | "(" orExpr ")"
+comparison  = atom comparator atom
+atom        = relativePath | stringLit | intLit | floatLit | "true" | "false"
+relativePath = "." field { "." field }
+```
+
+**Key design decisions:**
+
+1. **Direct field descriptor resolution** — relative paths (`.field.sub`) are
+   resolved to `[]protoreflect.FieldDescriptor` chains at parse time via
+   `parseRelPath`. At eval time, `filterPathExpr.eval` walks the chain with
+   `msg.Get(fd)` — no sub-Plan is compiled, avoiding trie overhead entirely.
+
+2. **Literal constants** — `literalExpr` holds a pre-built `Value` that is
+   returned directly, with no per-eval allocation.
+
+3. **Integration with the path parser** — the `questionToken` method in
+   parse.go detects `[?`, switches to the predicate parser, and wraps the
+   result as a `FilterStep`. For repeated fields, a `ListWildcardStep` is
+   prepended to iterate elements before filtering.
+
+4. **Unscan** — single-token lookahead is implemented by resetting
+   `scanner.pos` to the token's start position, avoiding a token buffer.
+
+### Filter/logic expression types
+
+| Type | Role |
+|---|---|
+| `filterPathExpr` | Resolves a dotted path relative to the current message cursor; holds pre-resolved `[]protoreflect.FieldDescriptor` |
+| `literalExpr` | Returns a constant `Value` (string, int, float, bool) |
+| `FuncSelect` | If predicate truthy → pass-through input; else → Null |
+| `FuncAnd` | Short-circuit logical AND → `ScalarBool` |
+| `FuncOr` | Short-circuit logical OR → `ScalarBool` |
+| `FuncNot` | Logical NOT → `ScalarBool` |
 
 ## Fan-out and cross-join model
 
@@ -294,6 +380,213 @@ When a fan-out group produces zero branches (e.g. an impression has no deals),
 the denormalizer emits a single row with null values for that group's columns.
 This ensures outer-group rows are never silently dropped — matching SQL
 `LEFT JOIN UNNEST(...)` behaviour.
+
+## Pipeline system (jq-style)
+
+The Pipeline system is a separate evaluation engine from the Plan/Expr system.
+It provides a jq-compatible expression language parsed by a recursive descent
+parser and executed through a tree of `PipeExpr` nodes.
+
+### Architecture
+
+```
+ParsePipeline(md, ".items | .[] | select(.active) | .name")
+       │
+       ▼
+  ┌──────────────┐
+  │  pipeParser  │ ← recursive descent, schema cursor tracking
+  │  (pipeparse) │
+  └──────┬───────┘
+         │ produces
+         ▼
+  ┌──────────────────────────────────────────────┐
+  │  Pipeline{exprs: []PipeExpr}                 │
+  │    stage 0: pipePathAccess{items}            │
+  │    stage 1: pipeIterate{}                    │
+  │    stage 2: pipeSelectExpr{pred: ...}        │
+  │    stage 3: pipePathAccess{name}             │
+  └──────────────────┬───────────────────────────┘
+                     │ Exec([]Value) / ExecMessage(msg)
+                     ▼
+              ┌──────────────┐
+              │  []Value     │ ← output stream
+              └──────────────┘
+```
+
+### PipeExpr types
+
+| Type | Purpose |
+|---|---|
+| `pipeIdentity` | Pass input through (`.`) |
+| `pipePathAccess` | Navigate message fields (`.field.sub`) |
+| `pipeDynamicAccess` | Runtime field access (no static schema — e.g. on variables) |
+| `pipeIterate` | Expand list/map to elements (`.[]`) |
+| `pipeIndex` | Select nth element (`.[n]`) |
+| `pipeCollect` | Gather outputs into array (`[pipeline]`) |
+| `pipeSelectExpr` | Filter: keep if truthy (`select(pred)`) |
+| `pipeCompare` | `==`, `!=`, `<`, `<=`, `>`, `>=` |
+| `pipeArith` | Binary arithmetic: `+`, `-`, `*`, `/`, `%` |
+| `pipeNegate` | Unary numeric negation (`-expr`) |
+| `pipeBoolAnd` / `pipeBoolOr` | `and` / `or` |
+| `pipeNot` | Logical negation |
+| `pipeLiteral` | Constant value |
+| `pipeEmpty` | Produce zero outputs |
+| `pipeBuiltin` | Zero-arg function (wraps `func(*PipeContext, Value)`) |
+| `pipeComma` | Multiple outputs (`.a, .b`) |
+| `pipeAlternative` | Alternative operator (`//`) — left if truthy, else right |
+| `pipeOptional` | Error suppression (`?`) — empty on error |
+| `pipeVarRef` | Variable reference (`$name`) |
+| `pipeVarBind` | Variable binding (`expr as $name \| body`) |
+| `pipeIfThenElse` | Conditional (`if`/`then`/`elif`/`else`/`end`) |
+| `pipeTryCatch` | Error handling (`try`/`catch`) |
+| `pipeReduce` | Stream fold (`reduce expr as $var (init; update)`) |
+| `pipeForeach` | Stream scan (`foreach expr as $var (init; update; extract)`) |
+| `pipeLabel` / `pipeBreak` | Early exit via panic/recover (`label $out \| ... break $out`) |
+| `pipeObjectConstruct` | Object construction (`{key: value, ...}`) |
+| `pipeStringInterp` | String interpolation (future) |
+| `pipeChain` | Sequential: left then right on each result |
+| `pipeGroupExpr` | Wrap sub-pipeline as single PipeExpr |
+| `pipeFuncWithPipeline` | 1-arg function: `map(f)`, `sort_by(f)`, etc. |
+| `pipeFuncWith2Pipelines` | 2-arg function: `gsub(re; s)`, `limit(n; f)` |
+
+### Built-in registries
+
+Functions are organized into four registries:
+
+1. **`pipeBuiltins`** — zero-arg functions (`length`, `type`, `keys`, `values`,
+   `add`, `tostring`, `tonumber`, `ascii_downcase`, `ascii_upcase`, `explode`,
+   `implode`, `flatten`, `reverse`, `first`, `last`, `fabs`, `sqrt`, `pow`,
+   `log`, `nan`, `infinite`, `isnan`, `isinfinite`, `isnormal`, `tojson`,
+   `fromjson`, `recurse`, `env`, `debug`, `error`, `ascii`, `min`, `max`,
+   `any`, `all`, `range`, `floor`, `ceil`, `round`, `input`, `null`,
+   `to_entries`, `from_entries`, `paths`, `leaf_paths`, `builtins`,
+   `utf8bytelength`, `sort`, `unique`, `keys_unsorted`, `not_null`,
+   `transpose`, `inputs`, `objects`, `arrays`, `strings`, `numbers`,
+   `booleans`, `nulls`, `iterables`, `scalars`).
+   Looked up by `lookupBuiltin()`.
+
+2. **`pipeFuncsWith1Arg`** — functions taking one pipeline argument (`map`,
+   `sort_by`, `group_by`, `unique_by`, `min_by`, `max_by`, `ltrimstr`,
+   `rtrimstr`, `startswith`, `endswith`, `split`, `join`, `test`, `match`,
+   `capture`, `nth`, `indices`, `index`, `rindex`, `contains`, `inside`,
+   `recurse`, `repeat`, `any`, `all`, `error`, `has`, `in`, `with_entries`,
+   `getpath`, `delpaths`, `scan`, `splits`, `first`, `last`, `paths`, `path`).
+
+3. **`pipeFuncsWith2Args`** — functions taking two semicolon-separated pipeline
+   arguments (`gsub`, `sub`, `limit`, `while`, `until`, `setpath`).
+
+4. **`pipeFormatStrings`** — `@base64`, `@base64d`, `@uri`, `@csv`, `@tsv`,
+   `@html`, `@json`, `@text` format functions.
+
+### String interpolation
+
+String interpolation uses the syntax `"text \(expr) more text"`, matching jq.
+The implementation spans three layers:
+
+1. **Scanner** (`scan.go`): When the `string()` method encounters `\(` inside
+   a double-quoted string, it emits a `strbegin` token with the prefix text,
+   then returns control to `scan()` which parses the expression tokens normally.
+   An `interpDepth` counter tracks nested parentheses so that `\(f(x))` doesn't
+   prematurely end the interpolation. When the closing `)` is reached (depth
+   returns to 0), `scanStringTail()` resumes string scanning, emitting either
+   `strmid` (if another `\(` is found) or `strend` (at the closing `"`).
+
+2. **Parser** (`pipeparse.go`): `parseStringInterp()` assembles a
+   `pipeStringInterp` node from the token stream, alternating between literal
+   parts (`pipeLiteral`) and expression parts (full `parsePipeline()` calls
+   wrapped in `pipeGroupExpr`).
+
+3. **Runtime** (`pipe_control.go`): `pipeStringInterp.exec()` evaluates each
+   part, converts to string via `extractString()`, and concatenates.
+
+### User-defined functions (def)
+
+The `def` keyword enables user-defined functions following jq semantics:
+
+```
+def name: body;              -- zero-arg function
+def name(a; b): body;       -- multi-arg function
+```
+
+**Parse time**: `parseDef()` registers the function and its parameters in
+`pp.userFuncs`. Parameters are registered as pseudo zero-arg functions during
+body parsing so the parser accepts bare parameter names.
+
+**Runtime**: `pipeDefBind.exec()` adds the function to `PipeContext.userFuncs`.
+`pipeUserFuncCall.exec()` looks up the function by name and arity from the
+runtime context, creates child zero-arg functions from the argument pipelines
+(jq parameters are themselves functions), and evaluates the body.
+
+### Parser design
+
+The parser (`pipeparse.go`) is a recursive descent parser with these properties:
+
+- **Precedence levels**: pipeline > comma > alternative(//) > or > and > compare > add(+−) > mul(*/%) > postfix > primary
+- **Schema cursor tracking**: `pp.desc` tracks the current schema position and
+  is updated across `|` boundaries so field resolution works correctly.
+  Variable bindings (`as $name |`) save and restore the cursor so the body
+  sees the input cursor rather than the expression's output cursor.
+- **Dynamic field access**: When the schema cursor is nil (e.g., field access
+  on a variable reference or after object construction), the parser emits
+  `pipeDynamicAccess` nodes that resolve fields at runtime using
+  `protoreflect.Message.Descriptor()` for messages, or key lookup for objects.
+- **Single-token lookahead**: `pipeUnscan()` allows putting back one token.
+- **Arithmetic minus ambiguity**: The scanner's `decimalRe` greedily matches
+  `-N` as a single `intlit` token. The parser handles binary subtraction by
+  detecting negative literals in `parseAddExpr` where an operator is expected,
+  and decomposing them into `minus` + positive literal.
+- **Keyword identifiers**: `if`, `then`, `elif`, `else`, `end`, `try`, `catch`,
+  `reduce`, `foreach`, `as`, `label`, `break`, `def` are parsed as regular
+  identifiers by the scanner and dispatched in `parseIdentPrimary`.
+- **String interpolation**: The scanner handles `\(...)` inside double-quoted
+  strings via `strbegin`/`strmid`/`strend` tokens. The parser's
+  `parseStringInterp()` assembles these into `pipeStringInterp` nodes.
+- **User-defined functions**: `def name(params): body; rest` is parsed by
+  `parseDef()`, which registers functions in `pp.userFuncs` for subsequent
+  lookup in `parsePrimary` and `parseFuncCall`.
+- **Single-token lookahead**: `pipeUnscan()` allows putting back one token.
+- **Semicolon argument separator**: Inside function calls, `;` separates
+  arguments (e.g. `gsub(pattern; replacement)`). The parser naturally stops
+  at `;` since it's not consumed by `parsePipeline`.
+- **Format string syntax**: `@ident` is parsed as an `at` token followed by
+  an `ident`, looked up in `pipeFormatStrings`.
+
+### Execution model
+
+Pipeline execution is **stream-oriented**:
+1. Start with an input `[]Value` (typically one message).
+2. For each pipe stage, apply the expression to every input value.
+3. Concatenate all outputs to form the input for the next stage.
+4. The comma operator concatenates left and right outputs for each input.
+
+This matches jq's semantics where every filter is a generator that can
+produce zero, one, or many outputs per input.
+
+### Variable scoping and PipeContext
+
+`PipeContext` carries execution state through a pipeline: the root message
+descriptor, a `vars map[string][]Value` for variable bindings, a
+`userFuncs []*pipeUserFunc` for user-defined function definitions, and an
+optional `inputFn func() (Value, bool)` for `input`/`inputs` support.
+
+Variable binding (`expr as $name | body`) creates a **new** `PipeContext` with
+the binding added, using copy-on-write semantics (clone parent vars, add new
+binding). This ensures:
+- Inner bindings shadow outer ones within the body.
+- After the body completes, the outer scope's bindings are unaffected.
+- Variables are visible in nested constructs (`select`, `if`, `reduce`, etc.)
+  through the `PipeContext` chain.
+
+`Pipeline.execWith(ctx, input)` is the internal method that runs a pipeline
+with a caller-provided context, used by variable bindings, `if`/`then`/`else`,
+`reduce`, `foreach`, and other constructs that need to propagate context.
+
+### Label-break implementation
+
+`label $name | body` and `break $name` use Go's `panic`/`recover` mechanism.
+`pipeBreak.exec` panics with a `labelBreakError{label, value}`, and
+`pipeLabel.exec` recovers it if the label matches, returning the captured
+value. Unrelated panics are re-raised.
 
 ## Recommendations for use
 

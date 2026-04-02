@@ -500,13 +500,77 @@ func (p *parser) asteriskToken(t *token) error {
 	if p.state != needIndex {
 		return p.unexpected(t.Pos, "'*'")
 	}
-	if !p.isListField() {
-		return fmt.Errorf("%swildcard not supported on map fields", p.showState(t.Pos))
+	fd, ok := p.desc.(protoreflect.FieldDescriptor)
+	if !ok {
+		return fmt.Errorf("%swildcard requires a repeated or map field", p.showState(t.Pos))
 	}
-	fd := p.desc.(protoreflect.FieldDescriptor)
+	if fd.IsMap() {
+		// Map wildcard: select all values.
+		if fd.MapValue().Message() != nil {
+			p.desc = fd.MapValue().Message()
+		} else {
+			p.desc = fd.MapValue()
+		}
+		p.path = append(p.path, MapWildcard())
+		p.state = needIndexClose
+		return nil
+	}
+	if !fd.IsList() {
+		return fmt.Errorf("%swildcard not supported on non-repeated field", p.showState(t.Pos))
+	}
 	p.desc = fd.Message()
 	p.path = append(p.path, ListWildcard())
 	p.state = needIndexClose
+	return nil
+}
+
+// questionToken handles '?' inside brackets, starting a filter predicate.
+// Expected syntax: [?(...predicate...)].
+func (p *parser) questionToken(t *token) error {
+	if p.state != needIndex {
+		return p.unexpected(t.Pos, "'?'")
+	}
+	// Expect '(' to open the predicate.
+	next := p.s.scan()
+	if next.Kind != oparen {
+		return fmt.Errorf("%sexpected '(' after '?' for filter predicate, got %s", p.showState(next.Pos), describeToken(next))
+	}
+	// Determine the message descriptor at the cursor for predicate resolution.
+	var cursorMD protoreflect.MessageDescriptor
+	if fd, ok := p.desc.(protoreflect.FieldDescriptor); ok {
+		if fd.IsList() && fd.Message() != nil {
+			cursorMD = fd.Message()
+		} else if fd.IsMap() && fd.MapValue().Message() != nil {
+			cursorMD = fd.MapValue().Message()
+		} else if fd.Message() != nil {
+			cursorMD = fd.Message()
+		}
+	} else if md, ok := p.desc.(protoreflect.MessageDescriptor); ok {
+		cursorMD = md
+	}
+	if cursorMD == nil {
+		return fmt.Errorf("%sfilter predicate requires a message-typed field at position %d", p.showState(t.Pos), t.Pos)
+	}
+	// Parse the predicate expression; parsePredicate consumes through ")".
+	// It then expects "]" which it also consumes.
+	pred, err := parsePredicate(p.s, cursorMD)
+	if err != nil {
+		return fmt.Errorf("path %q filter predicate parse failure: %v", string(p.s.buf), err)
+	}
+	// The filter step doesn't advance the schema cursor — it merely filters branches.
+	// However, for list fields, we want to operate on elements, so we need a ListWildcard
+	// followed by a filter, or we treat [?(...)] as "wildcard + filter" in one step.
+	// Design choice: [?(...)] on a repeated field means "iterate elements, keep those matching".
+	// This is equivalent to [*] followed by a filter.
+	if fd, ok := p.desc.(protoreflect.FieldDescriptor); ok && fd.IsList() {
+		p.desc = fd.Message()
+		// Append ListWildcard + FilterStep.
+		p.path = append(p.path, ListWildcard(), Filter(pred))
+	} else {
+		// Single message: the filter just tests the current cursor.
+		p.path = append(p.path, Filter(pred))
+	}
+	p.state = needAccessor
 	return nil
 }
 
@@ -532,6 +596,15 @@ func (p *parser) step(tok *token) error {
 		return p.colonToken(tok)
 	case asterisk: // wildcard inside brackets.
 		return p.asteriskToken(tok)
+	case question: // filter predicate start: [?(...)].
+		return p.questionToken(tok)
+	// New tokens that are not yet supported in the base path parser.
+	// These are recognized by the scanner but only meaningful inside
+	// filter predicates (handled by the predicate sub-parser) or
+	// future pipe syntax. Encountering them in the base parser is an error.
+	case pipe, eqeq, bangeq, langle, langleeq, rangle, rangleeq,
+		comma, bang, ampamp, pipepipe, floatlit:
+		return fmt.Errorf("unexpected token at position %d (filter/expression syntax not supported in base path parser)", tok.Pos)
 	case illegal:
 		return fmt.Errorf("found illegal token %s at position %d", tok.Text, tok.Pos)
 	default:

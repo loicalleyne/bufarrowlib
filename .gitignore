@@ -4,3 +4,6 @@ internal
 cmd
 test
 /gen_bidrequest
+/*.out
+*.duckdb
+/plan

@@ -1,0 +1,4 @@
+schema:
+  fields: 1
+    - ts_map: type=map<utf8, struct<seconds: int64, nanos: int32>, items_nullable>, nullable
+        metadata: ["PARQUET:field_id": "1", "path": "ts_map"]

@@ -1,0 +1,1 @@
+[{"bool_string_map":[],"int64_double_map":[],"int_string_map":[],"string_int_map":[],"string_map":[],"uint_map":[]},{"bool_string_map":[{"key":true,"value":"yes"}],"int64_double_map":[{"key":100,"value":3.14}],"int_string_map":[{"key":7,"value":"seven"}],"string_int_map":[{"key":"x","value":42}],"string_map":[{"key":"a","value":"b"}],"uint_map":[{"key":1,"value":1000}]}]

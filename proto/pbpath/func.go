@@ -13,9 +13,8 @@ import (
 
 // funcEval dispatches funcExpr evaluation.
 // It is called from funcExpr.eval with the resolved leaf slices and the
-// current branch index. The [8]Value scratch avoids a heap allocation
-// when arity ≤ 8.
-func (e *funcExpr) eval(leafValues [][]protoreflect.Value, branchIdx int) protoreflect.Value {
+// current branch index.
+func (e *funcExpr) eval(leafValues [][]Value, branchIdx int) Value {
 	switch e.kind {
 	case funcCoalesce:
 		return evalCoalesce(e, leafValues, branchIdx)
@@ -104,8 +103,17 @@ func (e *funcExpr) eval(leafValues [][]protoreflect.Value, branchIdx int) protor
 		return evalDistinct(e, leafValues, branchIdx)
 	case funcListConcat:
 		return evalListConcat(e, leafValues, branchIdx)
+	// Wave 4 — filter / logic functions
+	case funcSelect:
+		return evalSelect(e, leafValues, branchIdx)
+	case funcAnd:
+		return evalAnd(e, leafValues, branchIdx)
+	case funcOr:
+		return evalOr(e, leafValues, branchIdx)
+	case funcNot:
+		return evalNot(e, leafValues, branchIdx)
 	default:
-		return protoreflect.Value{} // unknown function → null
+		return Value{} // unknown function → null
 	}
 }
 
@@ -115,23 +123,23 @@ func (e *funcExpr) eval(leafValues [][]protoreflect.Value, branchIdx int) protor
 // In proto3 semantics, an unset scalar field returns the default (e.g. 0 for
 // int64) which is a valid protoreflect.Value. Coalesce skips zero values,
 // treating them as "null".
-func evalCoalesce(e *funcExpr, lv [][]protoreflect.Value, bi int) protoreflect.Value {
+func evalCoalesce(e *funcExpr, lv [][]Value, bi int) Value {
 	for _, kid := range e.kids {
 		v := kid.eval(lv, bi)
-		if isNonZero(v) {
+		if isNonZeroValue(v) {
 			return v
 		}
 	}
-	return protoreflect.Value{}
+	return Value{}
 }
 
 // ---- Default ----
 
 // evalDefault returns the child value if non-zero, otherwise the literal.
-// See [evalCoalesce] for the rationale on using isNonZero.
-func evalDefault(e *funcExpr, lv [][]protoreflect.Value, bi int) protoreflect.Value {
+// See [evalCoalesce] for the rationale on using isNonZeroValue.
+func evalDefault(e *funcExpr, lv [][]Value, bi int) Value {
 	v := e.kids[0].eval(lv, bi)
-	if isNonZero(v) {
+	if isNonZeroValue(v) {
 		return v
 	}
 	return e.literal
@@ -140,9 +148,9 @@ func evalDefault(e *funcExpr, lv [][]protoreflect.Value, bi int) protoreflect.Va
 // ---- Cond (if/then/else) ----
 
 // evalCond evaluates predicate → if non-zero returns then-branch, else else-branch.
-func evalCond(e *funcExpr, lv [][]protoreflect.Value, bi int) protoreflect.Value {
+func evalCond(e *funcExpr, lv [][]Value, bi int) Value {
 	pred := e.kids[0].eval(lv, bi)
-	if isNonZero(pred) {
+	if isNonZeroValue(pred) {
 		return e.kids[1].eval(lv, bi)
 	}
 	return e.kids[2].eval(lv, bi)
@@ -151,130 +159,137 @@ func evalCond(e *funcExpr, lv [][]protoreflect.Value, bi int) protoreflect.Value
 // ---- Has ----
 
 // evalHas returns Bool true if the child evaluates to a valid, non-zero value.
-func evalHas(e *funcExpr, lv [][]protoreflect.Value, bi int) protoreflect.Value {
+func evalHas(e *funcExpr, lv [][]Value, bi int) Value {
 	v := e.kids[0].eval(lv, bi)
-	return protoreflect.ValueOfBool(v.IsValid() && isNonZero(v))
+	return ScalarBool(!v.IsNull() && isNonZeroValue(v))
 }
 
 // ---- Len ----
 
 // evalLen returns the length of a repeated/map/string/bytes field as Int64.
-// Scalars return 0, invalid values return 0.
-func evalLen(e *funcExpr, lv [][]protoreflect.Value, bi int) protoreflect.Value {
+// Scalars return 0, null values return 0.
+func evalLen(e *funcExpr, lv [][]Value, bi int) Value {
 	v := e.kids[0].eval(lv, bi)
-	if !v.IsValid() {
-		return protoreflect.ValueOfInt64(0)
+	if v.IsNull() {
+		return ScalarInt64(0)
 	}
-	// Try List, Map, String, Bytes — in approximate frequency order.
-	switch iface := v.Interface().(type) {
-	case protoreflect.List:
-		return protoreflect.ValueOfInt64(int64(iface.Len()))
-	case protoreflect.Map:
-		return protoreflect.ValueOfInt64(int64(iface.Len()))
-	case string:
-		return protoreflect.ValueOfInt64(int64(len(iface)))
-	case []byte:
-		return protoreflect.ValueOfInt64(int64(len(iface)))
-	default:
-		return protoreflect.ValueOfInt64(0)
+	// List-kind values have a direct length.
+	if v.kind == ListKind {
+		return ScalarInt64(int64(len(v.list)))
 	}
+	// For scalars wrapping proto List/Map/String/Bytes.
+	if v.kind == ScalarKind {
+		switch iface := v.scalar.Interface().(type) {
+		case protoreflect.List:
+			return ScalarInt64(int64(iface.Len()))
+		case protoreflect.Map:
+			return ScalarInt64(int64(iface.Len()))
+		case string:
+			return ScalarInt64(int64(len(iface)))
+		case []byte:
+			return ScalarInt64(int64(len(iface)))
+		}
+	}
+	return ScalarInt64(0)
 }
 
 // ---- Arithmetic (Add, Sub, Mul, Div, Mod) ----
 
 // evalArith handles all binary arithmetic operations. If either operand is
-// invalid (null), the result is invalid.
+// null, the result is null.
 //
 // Type promotion rules (Go-style):
 //   - Both int  → int result
 //   - Mixed int/float → float result (int is promoted)
 //   - Both float → float result
-//   - Non-numeric → invalid
-func evalArith(e *funcExpr, lv [][]protoreflect.Value, bi int, op funcKind) protoreflect.Value {
+//   - Non-numeric → null
+func evalArith(e *funcExpr, lv [][]Value, bi int, op funcKind) Value {
 	a := e.kids[0].eval(lv, bi)
 	b := e.kids[1].eval(lv, bi)
-	if !a.IsValid() || !b.IsValid() {
-		return protoreflect.Value{}
+	if a.IsNull() || b.IsNull() {
+		return Value{}
 	}
 
-	aInt, aIsInt := toInt64(a)
-	bInt, bIsInt := toInt64(b)
+	aInt, aIsInt := toInt64Value(a)
+	bInt, bIsInt := toInt64Value(b)
 
 	if aIsInt && bIsInt {
-		return intArith(aInt, bInt, op)
+		return intArithV(aInt, bInt, op)
 	}
 
 	// At least one is float (or promote int to float).
-	aFloat, aOk := toFloat64(a, aInt, aIsInt)
-	bFloat, bOk := toFloat64(b, bInt, bIsInt)
+	aFloat, aOk := toFloat64Value(a, aInt, aIsInt)
+	bFloat, bOk := toFloat64Value(b, bInt, bIsInt)
 	if !aOk || !bOk {
-		return protoreflect.Value{} // non-numeric
+		return Value{} // non-numeric
 	}
-	return floatArith(aFloat, bFloat, op)
+	return floatArithV(aFloat, bFloat, op)
 }
 
-func intArith(a, b int64, op funcKind) protoreflect.Value {
+// intArithV performs integer arithmetic and returns the result as a [Value].
+func intArithV(a, b int64, op funcKind) Value {
 	switch op {
 	case funcAdd:
-		return protoreflect.ValueOfInt64(a + b)
+		return ScalarInt64(a + b)
 	case funcSub:
-		return protoreflect.ValueOfInt64(a - b)
+		return ScalarInt64(a - b)
 	case funcMul:
-		return protoreflect.ValueOfInt64(a * b)
+		return ScalarInt64(a * b)
 	case funcDiv:
 		if b == 0 {
-			return protoreflect.ValueOfInt64(0)
+			return ScalarInt64(0)
 		}
-		return protoreflect.ValueOfInt64(a / b) // truncating
+		return ScalarInt64(a / b) // truncating
 	case funcMod:
 		if b == 0 {
-			return protoreflect.ValueOfInt64(0)
+			return ScalarInt64(0)
 		}
-		return protoreflect.ValueOfInt64(a % b)
+		return ScalarInt64(a % b)
 	default:
-		return protoreflect.Value{}
+		return Value{}
 	}
 }
 
-func floatArith(a, b float64, op funcKind) protoreflect.Value {
+// floatArithV performs floating-point arithmetic and returns the result as a [Value].
+func floatArithV(a, b float64, op funcKind) Value {
 	switch op {
 	case funcAdd:
-		return protoreflect.ValueOfFloat64(a + b)
+		return ScalarFloat64(a + b)
 	case funcSub:
-		return protoreflect.ValueOfFloat64(a - b)
+		return ScalarFloat64(a - b)
 	case funcMul:
-		return protoreflect.ValueOfFloat64(a * b)
+		return ScalarFloat64(a * b)
 	case funcDiv:
 		if b == 0 {
-			return protoreflect.ValueOfFloat64(0)
+			return ScalarFloat64(0)
 		}
-		return protoreflect.ValueOfFloat64(a / b)
+		return ScalarFloat64(a / b)
 	case funcMod:
 		if b == 0 {
-			return protoreflect.ValueOfFloat64(0)
+			return ScalarFloat64(0)
 		}
-		return protoreflect.ValueOfFloat64(math.Mod(a, b))
+		return ScalarFloat64(math.Mod(a, b))
 	default:
-		return protoreflect.Value{}
+		return Value{}
 	}
 }
 
 // ---- Concat ----
 
 // evalConcat joins the string representations of all children with the
-// separator. If any child is invalid, it is treated as an empty string.
-func evalConcat(e *funcExpr, lv [][]protoreflect.Value, bi int) protoreflect.Value {
+// separator. If any child is null, it is treated as an empty string.
+func evalConcat(e *funcExpr, lv [][]Value, bi int) Value {
 	var b strings.Builder
 	for i, kid := range e.kids {
 		if i > 0 && e.separator != "" {
 			b.WriteString(e.separator)
 		}
 		v := kid.eval(lv, bi)
-		if v.IsValid() {
-			b.WriteString(valueToString(v))
+		if !v.IsNull() {
+			b.WriteString(valueToStringValue(v))
 		}
 	}
-	return protoreflect.ValueOfString(b.String())
+	return ScalarString(b.String())
 }
 
 // ---- Helpers ----
@@ -282,14 +297,20 @@ func evalConcat(e *funcExpr, lv [][]protoreflect.Value, bi int) protoreflect.Val
 // compareResult is the outcome of a type-aware comparison: -1, 0, or 1.
 // cmpOk is false when the operands are non-comparable (e.g. different
 // non-numeric/non-string types).
-func compareValues(a, b protoreflect.Value) (cmp int, ok bool) {
-	if !a.IsValid() || !b.IsValid() {
+func compareValuesV(a, b Value) (cmp int, ok bool) {
+	if a.IsNull() || b.IsNull() {
+		return 0, false
+	}
+	// Both must be scalars for comparison.
+	ai := scalarInterface(a)
+	bi := scalarInterface(b)
+	if ai == nil || bi == nil {
 		return 0, false
 	}
 
 	// string vs string
-	aStr, aIsStr := a.Interface().(string)
-	bStr, bIsStr := b.Interface().(string)
+	aStr, aIsStr := ai.(string)
+	bStr, bIsStr := bi.(string)
 	if aIsStr && bIsStr {
 		switch {
 		case aStr < bStr:
@@ -302,20 +323,20 @@ func compareValues(a, b protoreflect.Value) (cmp int, ok bool) {
 	}
 
 	// bool vs bool
-	aBool, aIsBool := a.Interface().(bool)
-	bBool, bIsBool := b.Interface().(bool)
+	aBool, aIsBool := ai.(bool)
+	bBool, bIsBool := bi.(bool)
 	if aIsBool && bIsBool {
-		ai, bi := int64(0), int64(0)
+		aI, bI := int64(0), int64(0)
 		if aBool {
-			ai = 1
+			aI = 1
 		}
 		if bBool {
-			bi = 1
+			bI = 1
 		}
 		switch {
-		case ai < bi:
+		case aI < bI:
 			return -1, true
-		case ai > bi:
+		case aI > bI:
 			return 1, true
 		default:
 			return 0, true
@@ -323,8 +344,8 @@ func compareValues(a, b protoreflect.Value) (cmp int, ok bool) {
 	}
 
 	// numeric comparison with int→float promotion
-	aInt, aIsInt := toInt64(a)
-	bInt, bIsInt := toInt64(b)
+	aInt, aIsInt := toInt64Value(a)
+	bInt, bIsInt := toInt64Value(b)
 
 	if aIsInt && bIsInt {
 		switch {
@@ -337,8 +358,8 @@ func compareValues(a, b protoreflect.Value) (cmp int, ok bool) {
 		}
 	}
 
-	aFloat, aOk := toFloat64(a, aInt, aIsInt)
-	bFloat, bOk := toFloat64(b, bInt, bIsInt)
+	aFloat, aOk := toFloat64Value(a, aInt, aIsInt)
+	bFloat, bOk := toFloat64Value(b, bInt, bIsInt)
 	if aOk && bOk {
 		switch {
 		case aFloat < bFloat:
@@ -355,14 +376,14 @@ func compareValues(a, b protoreflect.Value) (cmp int, ok bool) {
 // ---- Compare (Eq, Ne, Lt, Le, Gt, Ge) ----
 
 // evalCompare handles all binary comparison operations. If either operand is
-// invalid or the types are non-comparable, returns false.
-func evalCompare(e *funcExpr, lv [][]protoreflect.Value, bi int) protoreflect.Value {
+// null or the types are non-comparable, returns false.
+func evalCompare(e *funcExpr, lv [][]Value, bi int) Value {
 	a := e.kids[0].eval(lv, bi)
 	b := e.kids[1].eval(lv, bi)
 
-	cmp, ok := compareValues(a, b)
+	cmp, ok := compareValuesV(a, b)
 	if !ok {
-		return protoreflect.ValueOfBool(false)
+		return ScalarBool(false)
 	}
 
 	var result bool
@@ -380,72 +401,74 @@ func evalCompare(e *funcExpr, lv [][]protoreflect.Value, bi int) protoreflect.Va
 	case funcGe:
 		result = cmp >= 0
 	}
-	return protoreflect.ValueOfBool(result)
+	return ScalarBool(result)
 }
 
 // ---- String functions ----
 
 // evalStringUnary applies a unary string→string function.
-// If the child is not a string, converts via valueToString first.
-func evalStringUnary(e *funcExpr, lv [][]protoreflect.Value, bi int, fn func(string) string) protoreflect.Value {
+// If the child is not a string, converts via valueToStringValue first.
+func evalStringUnary(e *funcExpr, lv [][]Value, bi int, fn func(string) string) Value {
 	v := e.kids[0].eval(lv, bi)
-	if !v.IsValid() {
-		return protoreflect.ValueOfString("")
+	if v.IsNull() {
+		return ScalarString("")
 	}
-	s, ok := v.Interface().(string)
+	s, ok := scalarInterface(v).(string)
 	if !ok {
-		s = valueToString(v)
+		s = valueToStringValue(v)
 	}
-	return protoreflect.ValueOfString(fn(s))
+	return ScalarString(fn(s))
 }
 
 // evalTrimFix applies TrimPrefix or TrimSuffix. The fix string is stored
 // in funcExpr.separator.
-func evalTrimFix(e *funcExpr, lv [][]protoreflect.Value, bi int, fn func(string, string) string) protoreflect.Value {
+func evalTrimFix(e *funcExpr, lv [][]Value, bi int, fn func(string, string) string) Value {
 	v := e.kids[0].eval(lv, bi)
-	if !v.IsValid() {
-		return protoreflect.ValueOfString("")
+	if v.IsNull() {
+		return ScalarString("")
 	}
-	s, ok := v.Interface().(string)
+	s, ok := scalarInterface(v).(string)
 	if !ok {
-		s = valueToString(v)
+		s = valueToStringValue(v)
 	}
-	return protoreflect.ValueOfString(fn(s, e.separator))
+	return ScalarString(fn(s, e.separator))
 }
 
 // ---- Math functions (unary) ----
 
 // evalMathUnary applies Abs, Ceil, Floor, or Round. Preserves int vs float kind.
-func evalMathUnary(e *funcExpr, lv [][]protoreflect.Value, bi int, op funcKind) protoreflect.Value {
+func evalMathUnary(e *funcExpr, lv [][]Value, bi int, op funcKind) Value {
 	v := e.kids[0].eval(lv, bi)
-	if !v.IsValid() {
-		return protoreflect.Value{}
+	if v.IsNull() {
+		return Value{}
 	}
 
-	if i, ok := toInt64(v); ok {
+	if i, ok := toInt64Value(v); ok {
 		switch op {
 		case funcAbs:
 			if i < 0 {
 				i = -i
 			}
-			return protoreflect.ValueOfInt64(i)
+			return ScalarInt64(i)
 		case funcCeil, funcFloor, funcRound:
 			// No-op for integers.
-			return protoreflect.ValueOfInt64(i)
+			return ScalarInt64(i)
 		}
 	}
 
-	switch iface := v.Interface().(type) {
+	iface := scalarInterface(v)
+	switch val := iface.(type) {
 	case float32:
-		f := float64(iface)
-		return protoreflect.ValueOfFloat64(applyMathFloat(f, op))
+		f := float64(val)
+		return ScalarFloat64(applyMathFloat(f, op))
 	case float64:
-		return protoreflect.ValueOfFloat64(applyMathFloat(iface, op))
+		return ScalarFloat64(applyMathFloat(val, op))
 	default:
-		return protoreflect.Value{} // non-numeric
+		return Value{} // non-numeric
 	}
 }
 
+// applyMathFloat applies a math function to a float64 value.
 func applyMathFloat(f float64, op funcKind) float64 {
 	switch op {
 	case funcAbs:
@@ -465,175 +488,177 @@ func applyMathFloat(f float64, op funcKind) float64 {
 
 // evalMinMax returns the minimum (isMin=true) or maximum (isMin=false) of two
 // numeric children. Go-style int→float promotion for mixed types.
-func evalMinMax(e *funcExpr, lv [][]protoreflect.Value, bi int, isMin bool) protoreflect.Value {
+func evalMinMax(e *funcExpr, lv [][]Value, bi int, isMin bool) Value {
 	a := e.kids[0].eval(lv, bi)
 	b := e.kids[1].eval(lv, bi)
-	if !a.IsValid() || !b.IsValid() {
-		return protoreflect.Value{}
+	if a.IsNull() || b.IsNull() {
+		return Value{}
 	}
 
-	aInt, aIsInt := toInt64(a)
-	bInt, bIsInt := toInt64(b)
+	aInt, aIsInt := toInt64Value(a)
+	bInt, bIsInt := toInt64Value(b)
 
 	if aIsInt && bIsInt {
 		if isMin {
 			if aInt < bInt {
-				return protoreflect.ValueOfInt64(aInt)
+				return ScalarInt64(aInt)
 			}
-			return protoreflect.ValueOfInt64(bInt)
+			return ScalarInt64(bInt)
 		}
 		if aInt > bInt {
-			return protoreflect.ValueOfInt64(aInt)
+			return ScalarInt64(aInt)
 		}
-		return protoreflect.ValueOfInt64(bInt)
+		return ScalarInt64(bInt)
 	}
 
-	aFloat, aOk := toFloat64(a, aInt, aIsInt)
-	bFloat, bOk := toFloat64(b, bInt, bIsInt)
+	aFloat, aOk := toFloat64Value(a, aInt, aIsInt)
+	bFloat, bOk := toFloat64Value(b, bInt, bIsInt)
 	if !aOk || !bOk {
-		return protoreflect.Value{}
+		return Value{}
 	}
 	if isMin {
-		return protoreflect.ValueOfFloat64(math.Min(aFloat, bFloat))
+		return ScalarFloat64(math.Min(aFloat, bFloat))
 	}
-	return protoreflect.ValueOfFloat64(math.Max(aFloat, bFloat))
+	return ScalarFloat64(math.Max(aFloat, bFloat))
 }
 
 // ---- Cast functions ----
 
 // evalCastInt casts the child value to Int64.
-func evalCastInt(e *funcExpr, lv [][]protoreflect.Value, bi int) protoreflect.Value {
+func evalCastInt(e *funcExpr, lv [][]Value, bi int) Value {
 	v := e.kids[0].eval(lv, bi)
-	if !v.IsValid() {
-		return protoreflect.Value{}
+	if v.IsNull() {
+		return Value{}
 	}
 	// Already int?
-	if i, ok := toInt64(v); ok {
-		return protoreflect.ValueOfInt64(i)
+	if i, ok := toInt64Value(v); ok {
+		return ScalarInt64(i)
 	}
-	switch iface := v.Interface().(type) {
+	iface := scalarInterface(v)
+	switch val := iface.(type) {
 	case float32:
-		return protoreflect.ValueOfInt64(int64(iface))
+		return ScalarInt64(int64(val))
 	case float64:
-		return protoreflect.ValueOfInt64(int64(iface))
+		return ScalarInt64(int64(val))
 	case string:
-		n, err := strconv.ParseInt(iface, 10, 64)
+		n, err := strconv.ParseInt(val, 10, 64)
 		if err != nil {
 			// Try float parse then truncate.
-			f, err2 := strconv.ParseFloat(iface, 64)
+			f, err2 := strconv.ParseFloat(val, 64)
 			if err2 != nil {
-				return protoreflect.Value{} // unparseable
+				return Value{} // unparseable
 			}
-			return protoreflect.ValueOfInt64(int64(f))
+			return ScalarInt64(int64(f))
 		}
-		return protoreflect.ValueOfInt64(n)
+		return ScalarInt64(n)
 	default:
-		return protoreflect.Value{}
+		return Value{}
 	}
 }
 
 // evalCastFloat casts the child value to Float64 (DoubleKind).
-func evalCastFloat(e *funcExpr, lv [][]protoreflect.Value, bi int) protoreflect.Value {
+func evalCastFloat(e *funcExpr, lv [][]Value, bi int) Value {
 	v := e.kids[0].eval(lv, bi)
-	if !v.IsValid() {
-		return protoreflect.Value{}
+	if v.IsNull() {
+		return Value{}
 	}
-	if i, ok := toInt64(v); ok {
-		return protoreflect.ValueOfFloat64(float64(i))
+	if i, ok := toInt64Value(v); ok {
+		return ScalarFloat64(float64(i))
 	}
-	switch iface := v.Interface().(type) {
+	iface := scalarInterface(v)
+	switch val := iface.(type) {
 	case float32:
-		return protoreflect.ValueOfFloat64(float64(iface))
+		return ScalarFloat64(float64(val))
 	case float64:
-		return protoreflect.ValueOfFloat64(iface)
+		return ScalarFloat64(val)
 	case string:
-		f, err := strconv.ParseFloat(iface, 64)
+		f, err := strconv.ParseFloat(val, 64)
 		if err != nil {
-			return protoreflect.Value{} // unparseable
+			return Value{} // unparseable
 		}
-		return protoreflect.ValueOfFloat64(f)
+		return ScalarFloat64(f)
 	default:
-		return protoreflect.Value{}
+		return Value{}
 	}
 }
 
 // evalCastString casts the child value to String.
-func evalCastString(e *funcExpr, lv [][]protoreflect.Value, bi int) protoreflect.Value {
+func evalCastString(e *funcExpr, lv [][]Value, bi int) Value {
 	v := e.kids[0].eval(lv, bi)
-	if !v.IsValid() {
-		return protoreflect.ValueOfString("")
+	if v.IsNull() {
+		return ScalarString("")
 	}
-	return protoreflect.ValueOfString(valueToString(v))
+	return ScalarString(valueToStringValue(v))
 }
 
 // ---- Timestamp functions ----
 
 // evalStrptime parses a string child into a Unix-millisecond Int64 timestamp.
-// When tryMode is true, parse failures return zero (epoch) instead of invalid.
-func evalStrptime(e *funcExpr, lv [][]protoreflect.Value, bi int, tryMode bool) protoreflect.Value {
+// When tryMode is true, parse failures return zero (epoch) instead of null.
+func evalStrptime(e *funcExpr, lv [][]Value, bi int, tryMode bool) Value {
 	v := e.kids[0].eval(lv, bi)
-	if !v.IsValid() {
+	if v.IsNull() {
 		if tryMode {
-			return protoreflect.ValueOfInt64(0)
+			return ScalarInt64(0)
 		}
-		return protoreflect.Value{}
+		return Value{}
 	}
-	s, ok := v.Interface().(string)
+	s, ok := scalarInterface(v).(string)
 	if !ok {
-		s = valueToString(v)
+		s = valueToStringValue(v)
 	}
 
 	t, err := ParseStrptime(e.separator, s)
 	if err != nil {
 		if tryMode {
-			return protoreflect.ValueOfInt64(0)
+			return ScalarInt64(0)
 		}
-		return protoreflect.Value{}
+		return Value{}
 	}
-	return protoreflect.ValueOfInt64(t.UnixMilli())
+	return ScalarInt64(t.UnixMilli())
 }
 
 // evalAge computes the duration between timestamps in milliseconds.
 // 1 child: now − child. 2 children: child[0] − child[1].
-func evalAge(e *funcExpr, lv [][]protoreflect.Value, bi int) protoreflect.Value {
+func evalAge(e *funcExpr, lv [][]Value, bi int) Value {
 	switch len(e.kids) {
 	case 1:
 		v := e.kids[0].eval(lv, bi)
-		if !v.IsValid() {
-			return protoreflect.Value{}
+		if v.IsNull() {
+			return Value{}
 		}
-		ts, ok := toInt64(v)
+		ts, ok := toInt64Value(v)
 		if !ok {
-			return protoreflect.Value{}
+			return Value{}
 		}
 		nowMs := time.Now().UnixMilli()
-		return protoreflect.ValueOfInt64(nowMs - ts)
+		return ScalarInt64(nowMs - ts)
 	case 2:
 		a := e.kids[0].eval(lv, bi)
 		b := e.kids[1].eval(lv, bi)
-		if !a.IsValid() || !b.IsValid() {
-			return protoreflect.Value{}
+		if a.IsNull() || b.IsNull() {
+			return Value{}
 		}
-		aTs, aOk := toInt64(a)
-		bTs, bOk := toInt64(b)
+		aTs, aOk := toInt64Value(a)
+		bTs, bOk := toInt64Value(b)
 		if !aOk || !bOk {
-			return protoreflect.Value{}
+			return Value{}
 		}
-		return protoreflect.ValueOfInt64(aTs - bTs)
+		return ScalarInt64(aTs - bTs)
 	default:
-		return protoreflect.Value{}
+		return Value{}
 	}
 }
 
 // evalExtract extracts a date/time component from a Unix-millisecond timestamp.
-func evalExtract(e *funcExpr, lv [][]protoreflect.Value, bi int) protoreflect.Value {
+func evalExtract(e *funcExpr, lv [][]Value, bi int) Value {
 	v := e.kids[0].eval(lv, bi)
-	if !v.IsValid() {
-		return protoreflect.Value{}
+	if v.IsNull() {
+		return Value{}
 	}
-	ms, ok := toInt64(v)
+	ms, ok := toInt64Value(v)
 	if !ok {
-		return protoreflect.Value{}
+		return Value{}
 	}
 	t := time.UnixMilli(ms).UTC()
 	var result int64
@@ -651,13 +676,14 @@ func evalExtract(e *funcExpr, lv [][]protoreflect.Value, bi int) protoreflect.Va
 	case funcExtractSecond:
 		result = int64(t.Second())
 	}
-	return protoreflect.ValueOfInt64(result)
+	return ScalarInt64(result)
 }
 
 // ---- Shared helpers ----
 
 // isNonZero returns true when v is valid and not the protobuf zero value
-// for its kind.
+// for its kind. This operates on raw [protoreflect.Value] and is used by
+// the [Value]-aware wrapper [isNonZeroValue] and legacy code paths.
 func isNonZero(v protoreflect.Value) bool {
 	if !v.IsValid() {
 		return false
@@ -694,9 +720,8 @@ func isNonZero(v protoreflect.Value) bool {
 	}
 }
 
-// toInt64 attempts to extract an integer value. Returns (val, true) for
-// int32, int64, uint32, uint64, sint32, sint64, sfixed32/64, fixed32/64,
-// enum, and bool.
+// toInt64 attempts to extract an integer value from a [protoreflect.Value].
+// Returns (val, true) for int32, int64, uint32, uint64, enum, and bool.
 func toInt64(v protoreflect.Value) (int64, bool) {
 	switch iface := v.Interface().(type) {
 	case int32:
@@ -719,9 +744,9 @@ func toInt64(v protoreflect.Value) (int64, bool) {
 	}
 }
 
-// toFloat64 attempts to extract or promote to float64. If the value was
-// already parsed as int64, it promotes from that. Otherwise tries the
-// float interface types.
+// toFloat64 attempts to extract or promote a [protoreflect.Value] to float64.
+// If the value was already parsed as int64, it promotes from that. Otherwise
+// tries the float interface types.
 func toFloat64(v protoreflect.Value, asInt int64, wasInt bool) (float64, bool) {
 	if wasInt {
 		return float64(asInt), true
@@ -736,8 +761,8 @@ func toFloat64(v protoreflect.Value, asInt int64, wasInt bool) (float64, bool) {
 	}
 }
 
-// valueToString converts a protoreflect.Value to its string representation
-// for use in Concat.
+// valueToString converts a [protoreflect.Value] to its string representation.
+// Used by [valueToStringValue] and legacy code paths.
 func valueToString(v protoreflect.Value) string {
 	switch iface := v.Interface().(type) {
 	case string:
@@ -782,63 +807,62 @@ func valueToString(v protoreflect.Value) string {
 
 // evalHash computes an FNV-1a 64-bit hash of the concatenated string
 // representations of all children (no separator).
-func evalHash(e *funcExpr, leafValues [][]protoreflect.Value, branchIdx int) protoreflect.Value {
+func evalHash(e *funcExpr, leafValues [][]Value, branchIdx int) Value {
 	h := fnv.New64a()
 	for _, kid := range e.kids {
 		v := kid.eval(leafValues, branchIdx)
-		if !v.IsValid() {
-			continue
+		if !v.IsNull() {
+			_, _ = h.Write([]byte(valueToStringValue(v)))
 		}
-		_, _ = h.Write([]byte(valueToString(v)))
 	}
-	return protoreflect.ValueOfInt64(int64(h.Sum64()))
+	return ScalarInt64(int64(h.Sum64()))
 }
 
 // ---- EpochToDate ----
 
 // evalEpochToDate converts a Unix-epoch-second value to a day offset
 // (seconds / 86400) as Int32.
-func evalEpochToDate(e *funcExpr, leafValues [][]protoreflect.Value, branchIdx int) protoreflect.Value {
+func evalEpochToDate(e *funcExpr, leafValues [][]Value, branchIdx int) Value {
 	v := e.kids[0].eval(leafValues, branchIdx)
-	if !v.IsValid() {
-		return protoreflect.Value{}
+	if v.IsNull() {
+		return Value{}
 	}
-	sec, ok := toInt64(v)
+	sec, ok := toInt64Value(v)
 	if !ok {
-		return protoreflect.Value{}
+		return Value{}
 	}
-	return protoreflect.ValueOfInt32(int32(sec / 86400))
+	return ScalarInt32(int32(sec / 86400))
 }
 
 // ---- DatePart ----
 
 // evalDatePart extracts a calendar component from a Unix-epoch-second value.
 // The component name is in e.separator.
-func evalDatePart(e *funcExpr, leafValues [][]protoreflect.Value, branchIdx int) protoreflect.Value {
+func evalDatePart(e *funcExpr, leafValues [][]Value, branchIdx int) Value {
 	v := e.kids[0].eval(leafValues, branchIdx)
-	if !v.IsValid() {
-		return protoreflect.Value{}
+	if v.IsNull() {
+		return Value{}
 	}
-	sec, ok := toInt64(v)
+	sec, ok := toInt64Value(v)
 	if !ok {
-		return protoreflect.Value{}
+		return Value{}
 	}
 	t := time.Unix(sec, 0).UTC()
 	switch strings.ToLower(e.separator) {
 	case "year":
-		return protoreflect.ValueOfInt64(int64(t.Year()))
+		return ScalarInt64(int64(t.Year()))
 	case "month":
-		return protoreflect.ValueOfInt64(int64(t.Month()))
+		return ScalarInt64(int64(t.Month()))
 	case "day":
-		return protoreflect.ValueOfInt64(int64(t.Day()))
+		return ScalarInt64(int64(t.Day()))
 	case "hour":
-		return protoreflect.ValueOfInt64(int64(t.Hour()))
+		return ScalarInt64(int64(t.Hour()))
 	case "minute":
-		return protoreflect.ValueOfInt64(int64(t.Minute()))
+		return ScalarInt64(int64(t.Minute()))
 	case "second":
-		return protoreflect.ValueOfInt64(int64(t.Second()))
+		return ScalarInt64(int64(t.Second()))
 	default:
-		return protoreflect.Value{} // unknown part → null
+		return Value{} // unknown part → null
 	}
 }
 
@@ -846,21 +870,21 @@ func evalDatePart(e *funcExpr, leafValues [][]protoreflect.Value, branchIdx int)
 
 // evalBucket floors the child value to the nearest multiple of e.intParam.
 // result = value − value%size.
-func evalBucket(e *funcExpr, leafValues [][]protoreflect.Value, branchIdx int) protoreflect.Value {
+func evalBucket(e *funcExpr, leafValues [][]Value, branchIdx int) Value {
 	v := e.kids[0].eval(leafValues, branchIdx)
-	if !v.IsValid() {
-		return protoreflect.Value{}
+	if v.IsNull() {
+		return Value{}
 	}
-	n, ok := toInt64(v)
+	n, ok := toInt64Value(v)
 	if !ok {
-		return protoreflect.Value{}
+		return Value{}
 	}
 	size := int64(e.intParam)
 	if size <= 0 {
 		return v // no bucketing
 	}
 	bucketed := n - n%size
-	return protoreflect.ValueOfInt64(bucketed)
+	return ScalarInt64(bucketed)
 }
 
 // ---- Mask ----
@@ -869,16 +893,20 @@ func evalBucket(e *funcExpr, leafValues [][]protoreflect.Value, branchIdx int) p
 // Keeps keepFirst leading and keepLast trailing runes; fills the middle
 // with the mask character (e.separator). keepFirst is stored in e.literal
 // (as int64), keepLast in e.intParam.
-func evalMask(e *funcExpr, leafValues [][]protoreflect.Value, branchIdx int) protoreflect.Value {
+func evalMask(e *funcExpr, leafValues [][]Value, branchIdx int) Value {
 	v := e.kids[0].eval(leafValues, branchIdx)
-	if !v.IsValid() {
-		return protoreflect.Value{}
+	if v.IsNull() {
+		return Value{}
 	}
-	s := valueToString(v)
+	s := valueToStringValue(v)
 	runes := []rune(s)
 	total := len(runes)
 
-	keepFirst := int(e.literal.Int())
+	// Extract keepFirst from the literal (stored as ScalarInt64).
+	keepFirst := 0
+	if kf, ok := toInt64Value(e.literal); ok {
+		keepFirst = int(kf)
+	}
 	keepLast := e.intParam
 	if keepFirst < 0 {
 		keepFirst = 0
@@ -887,7 +915,7 @@ func evalMask(e *funcExpr, leafValues [][]protoreflect.Value, branchIdx int) pro
 		keepLast = 0
 	}
 	if keepFirst+keepLast >= total {
-		return protoreflect.ValueOfString(s) // nothing to mask
+		return ScalarString(s) // nothing to mask
 	}
 
 	maskLen := total - keepFirst - keepLast
@@ -906,16 +934,16 @@ func evalMask(e *funcExpr, leafValues [][]protoreflect.Value, branchIdx int) pro
 	for i := total - keepLast; i < total; i++ {
 		b.WriteRune(runes[i])
 	}
-	return protoreflect.ValueOfString(b.String())
+	return ScalarString(b.String())
 }
 
 // ---- Coerce ----
 
 // evalCoerce maps a boolean child to one of two literal values.
 // Non-zero → e.literal (ifTrue); zero → e.literal2 (ifFalse).
-func evalCoerce(e *funcExpr, leafValues [][]protoreflect.Value, branchIdx int) protoreflect.Value {
+func evalCoerce(e *funcExpr, leafValues [][]Value, branchIdx int) Value {
 	v := e.kids[0].eval(leafValues, branchIdx)
-	if isNonZero(v) {
+	if isNonZeroValue(v) {
 		return e.literal
 	}
 	return e.literal2
@@ -925,57 +953,58 @@ func evalCoerce(e *funcExpr, leafValues [][]protoreflect.Value, branchIdx int) p
 
 // evalEnumName maps an enum numeric value to its string name using the
 // EnumDescriptor resolved at plan compile time and stored in e.enumDesc.
-func evalEnumName(e *funcExpr, leafValues [][]protoreflect.Value, branchIdx int) protoreflect.Value {
+func evalEnumName(e *funcExpr, leafValues [][]Value, branchIdx int) Value {
 	v := e.kids[0].eval(leafValues, branchIdx)
-	if !v.IsValid() {
-		return protoreflect.Value{}
+	if v.IsNull() {
+		return Value{}
 	}
 	if e.enumDesc == nil {
-		return protoreflect.Value{} // not resolved — should not happen
+		return Value{} // not resolved — should not happen
 	}
+	iface := scalarInterface(v)
 	var num protoreflect.EnumNumber
-	switch iface := v.Interface().(type) {
+	switch val := iface.(type) {
 	case protoreflect.EnumNumber:
-		num = iface
+		num = val
 	case int32:
-		num = protoreflect.EnumNumber(iface)
+		num = protoreflect.EnumNumber(val)
 	case int64:
-		num = protoreflect.EnumNumber(iface)
+		num = protoreflect.EnumNumber(val)
 	default:
-		return protoreflect.Value{} // not an enum-compatible type
+		return Value{} // not an enum-compatible type
 	}
 	evd := e.enumDesc.Values().ByNumber(num)
 	if evd == nil {
-		return protoreflect.Value{} // unknown enum value
+		return Value{} // unknown enum value
 	}
-	return protoreflect.ValueOfString(string(evd.Name()))
+	return ScalarString(string(evd.Name()))
 }
 
 // ---- Sum (aggregate) ----
 
 // evalSum sums all fan-out branches of the single child leaf.
 // Returns the same total for every branchIdx.
-func evalSum(e *funcExpr, leafValues [][]protoreflect.Value, _ int) protoreflect.Value {
+func evalSum(e *funcExpr, leafValues [][]Value, _ int) Value {
 	child := e.kids[0]
 	// Collect all branches of the child.
 	leaves := resolvePathExprs(child)
 	if len(leaves) == 0 {
-		return protoreflect.Value{}
+		return Value{}
 	}
 	// Determine total branches from the first leaf.
 	vals := leafValues[leaves[0].entryIdx]
 	if len(vals) == 0 {
-		return protoreflect.Value{}
+		return Value{}
 	}
 	var sumI int64
 	var sumF float64
 	isFloat := false
 	for bi := range len(vals) {
 		v := child.eval(leafValues, bi)
-		if !v.IsValid() {
+		if v.IsNull() {
 			continue
 		}
-		n, okI := toInt64(v)
+		n, okI := toInt64Value(v)
 		if okI {
 			if isFloat {
 				sumF += float64(n)
@@ -984,7 +1013,7 @@ func evalSum(e *funcExpr, leafValues [][]protoreflect.Value, _ int) protoreflect
 			}
 			continue
 		}
-		f, okF := toFloat64(v, 0, false)
+		f, okF := toFloat64Value(v, 0, false)
 		if okF {
 			if !isFloat {
 				isFloat = true
@@ -994,51 +1023,96 @@ func evalSum(e *funcExpr, leafValues [][]protoreflect.Value, _ int) protoreflect
 		}
 	}
 	if isFloat {
-		return protoreflect.ValueOfFloat64(sumF)
+		return ScalarFloat64(sumF)
 	}
-	return protoreflect.ValueOfInt64(sumI)
+	return ScalarInt64(sumI)
 }
 
 // ---- Distinct (aggregate) ----
 
 // evalDistinct counts distinct values across all fan-out branches.
 // Returns the same count for every branchIdx.
-func evalDistinct(e *funcExpr, leafValues [][]protoreflect.Value, _ int) protoreflect.Value {
+func evalDistinct(e *funcExpr, leafValues [][]Value, _ int) Value {
 	child := e.kids[0]
 	leaves := resolvePathExprs(child)
 	if len(leaves) == 0 {
-		return protoreflect.ValueOfInt64(0)
+		return ScalarInt64(0)
 	}
 	vals := leafValues[leaves[0].entryIdx]
 	seen := make(map[string]struct{}, len(vals))
 	for bi := range len(vals) {
 		v := child.eval(leafValues, bi)
-		if !v.IsValid() {
+		if v.IsNull() {
 			continue
 		}
-		seen[valueToString(v)] = struct{}{}
+		seen[valueToStringValue(v)] = struct{}{}
 	}
-	return protoreflect.ValueOfInt64(int64(len(seen)))
+	return ScalarInt64(int64(len(seen)))
 }
 
 // ---- ListConcat (aggregate) ----
 
 // evalListConcat joins the string representation of all fan-out branches
 // with e.separator. Returns the same string for every branchIdx.
-func evalListConcat(e *funcExpr, leafValues [][]protoreflect.Value, _ int) protoreflect.Value {
+func evalListConcat(e *funcExpr, leafValues [][]Value, _ int) Value {
 	child := e.kids[0]
 	leaves := resolvePathExprs(child)
 	if len(leaves) == 0 {
-		return protoreflect.ValueOfString("")
+		return ScalarString("")
 	}
 	vals := leafValues[leaves[0].entryIdx]
 	parts := make([]string, 0, len(vals))
 	for bi := range len(vals) {
 		v := child.eval(leafValues, bi)
-		if !v.IsValid() {
+		if v.IsNull() {
 			continue
 		}
-		parts = append(parts, valueToString(v))
+		parts = append(parts, valueToStringValue(v))
 	}
-	return protoreflect.ValueOfString(strings.Join(parts, e.separator))
+	return ScalarString(strings.Join(parts, e.separator))
+}
+
+// ---- Wave 4: Select (filter pass-through) ----
+
+// evalSelect evaluates the predicate (child 0) and, if truthy, returns the
+// value of the input (child 1). If the predicate is falsy (null, false, zero,
+// empty), returns null — which downstream consumers interpret as "filtered out".
+//
+// This implements jq's `select(pred)` semantics: the value is passed through
+// unchanged when the predicate holds, and dropped (null) when it does not.
+func evalSelect(e *funcExpr, leafValues [][]Value, branchIdx int) Value {
+	pred := e.kids[0].eval(leafValues, branchIdx)
+	if !isNonZeroValue(pred) {
+		return Null()
+	}
+	return e.kids[1].eval(leafValues, branchIdx)
+}
+
+// ---- Wave 4: Logical combinators ----
+
+// evalAnd returns true (BoolKind) when both children are truthy.
+func evalAnd(e *funcExpr, leafValues [][]Value, branchIdx int) Value {
+	a := e.kids[0].eval(leafValues, branchIdx)
+	if !isNonZeroValue(a) {
+		return ScalarBool(false)
+	}
+	b := e.kids[1].eval(leafValues, branchIdx)
+	return ScalarBool(isNonZeroValue(b))
+}
+
+// evalOr returns true (BoolKind) when at least one child is truthy.
+func evalOr(e *funcExpr, leafValues [][]Value, branchIdx int) Value {
+	a := e.kids[0].eval(leafValues, branchIdx)
+	if isNonZeroValue(a) {
+		return ScalarBool(true)
+	}
+	b := e.kids[1].eval(leafValues, branchIdx)
+	return ScalarBool(isNonZeroValue(b))
+}
+
+// evalNot returns true (BoolKind) when the child is falsy (null, false,
+// zero, empty string, empty list).
+func evalNot(e *funcExpr, leafValues [][]Value, branchIdx int) Value {
+	v := e.kids[0].eval(leafValues, branchIdx)
+	return ScalarBool(!isNonZeroValue(v))
 }

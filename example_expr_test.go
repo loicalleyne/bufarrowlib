@@ -150,7 +150,7 @@ func ExampleTranscoder_AppendDenorm_default() {
 			pbpath.PlanPath("region",
 				pbpath.WithExpr(pbpath.FuncDefault(
 					pbpath.PathRef("region"),
-					protoreflect.ValueOfString("UNKNOWN"),
+					pbpath.ScalarString("UNKNOWN"),
 				)),
 				pbpath.Alias("region"),
 			),

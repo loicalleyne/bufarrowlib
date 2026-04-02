@@ -36,6 +36,22 @@ import (
 // TODO: add a WithTimestampUnit(arrow.TimeUnit) option to allow callers to
 // override the default Millisecond precision.
 func ProtoKindToArrowType(fd protoreflect.FieldDescriptor) arrow.DataType {
+	// Map fields are represented as repeated MapEntry messages;
+	// resolve key/value types and return an Arrow MAP.
+	if fd.IsMap() {
+		mapMsg := fd.Message()
+		keyFD := mapMsg.Fields().ByName("key")
+		valueFD := mapMsg.Fields().ByName("value")
+		keyType := ProtoKindToArrowType(keyFD)
+		if keyType == nil {
+			return nil
+		}
+		valueType := ProtoKindToArrowType(valueFD)
+		if valueType == nil {
+			return nil
+		}
+		return arrow.MapOf(keyType, valueType)
+	}
 	switch fd.Kind() {
 	case protoreflect.EnumKind:
 		return arrow.PrimitiveTypes.Int32
@@ -121,6 +137,26 @@ type protoAppendFunc func(protoreflect.Value)
 //
 // Returns nil if the field's kind is not a recognized scalar mapping.
 func ProtoKindToAppendFunc(fd protoreflect.FieldDescriptor, b array.Builder) protoAppendFunc {
+	// Map fields: iterate the protoreflect.Map and append key/value pairs.
+	if fd.IsMap() {
+		mapMsg := fd.Message()
+		keyFD := mapMsg.Fields().ByName("key")
+		valueFD := mapMsg.Fields().ByName("value")
+		mb := b.(*array.MapBuilder)
+		keyAppend := ProtoKindToAppendFunc(keyFD, mb.KeyBuilder())
+		valueAppend := ProtoKindToAppendFunc(valueFD, mb.ItemBuilder())
+		if keyAppend == nil || valueAppend == nil {
+			return nil
+		}
+		return func(v protoreflect.Value) {
+			mb.Append(true)
+			v.Map().Range(func(mk protoreflect.MapKey, mv protoreflect.Value) bool {
+				keyAppend(mk.Value())
+				valueAppend(mv)
+				return true
+			})
+		}
+	}
 	switch fd.Kind() {
 	case protoreflect.EnumKind:
 		a := b.(*array.Int32Builder)

@@ -256,12 +256,12 @@ func ExamplePlan_EvalLeaves() {
 	}
 
 	// leaves[0] = top_name → 1 value
-	fmt.Printf("top_name: %s\n", leaves[0][0].String())
+	fmt.Printf("top_name: %s\n", leaves[0][0].ToProtoValue().String())
 
 	// leaves[1] = child_name → 2 values (one per repeat)
 	fmt.Printf("child_names: %d values\n", len(leaves[1]))
 	for _, v := range leaves[1] {
-		fmt.Printf("  %s\n", v.String())
+		fmt.Printf("  %s\n", v.ToProtoValue().String())
 	}
 
 	// Output:
