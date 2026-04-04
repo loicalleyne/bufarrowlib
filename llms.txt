@@ -1,0 +1,83 @@
+# bufarrowlib
+
+> Protobuf → Apache Arrow RecordBatches — raw bytes in, columnar data out. No codegen, no deserialization, no copies. Declarative denormalization with fan-out, expressions, and YAML config.
+
+- Module: `github.com/loicalleyne/bufarrowlib`
+- Install: `go get github.com/loicalleyne/bufarrowlib@latest`
+- License: Apache 2.0
+- pybufarrow (Python bindings): `pip install pybufarrow`
+
+## Docs
+
+- [Full API reference](llms-full.txt)
+- [README](README.md)
+- [pbpath path engine](proto/pbpath/README.md)
+- [pbpath Architecture](proto/pbpath/ARCHITECTURE.md)
+- [pbpath-playground](cmd/pbpath-playground/README.md)
+- [Performance guide](docs/benchmark-results.md)
+- [Python bindings](python/README.md)
+
+## What it does
+
+Given a protobuf message descriptor and a stream of wire bytes, bufarrowlib outputs Apache Arrow `RecordBatch`es.
+
+Two output modes:
+- **Full-fidelity** — nested Arrow schema mirroring the full protobuf structure. Flush with `NewRecordBatch()`.
+- **Denormalization** — flat Arrow schema with selected field paths. Fan-out across repeated fields, cross-joined between groups. Flush with `NewDenormalizerRecordBatch()`.
+
+Both modes run on the same `Transcoder`. The denormlizer is driven by a `WithDenormalizerPlan(paths...)` option or a YAML config file.
+
+## Key types
+
+- `Transcoder` — central type; not goroutine-safe; use `Clone` per goroutine
+- `HyperType` — goroutine-safe shared compiled parser (`hyperpb`); enables 2–4× faster raw-bytes parsing with online PGO
+- `DenormConfig` / `ColumnDef` — YAML config structs for `NewTranscoderFromConfigFile`
+
+## Performance (i7-13700H, realistic BidRequest corpus)
+
+| Method | msg/s | allocs/msg |
+|--------|-------|------------|
+| `AppendDenormRaw` + HyperType | **296 k** | 57 |
+| `AppendRaw` + HyperType | 151 k | 98 |
+| `AppendRaw` no HyperType | 47 k | 275 |
+| Concurrent (80 workers) | **463 k** | — |
+
+Batch size ≥ 100 is critical. Align to 122,880 (DuckDB row group) for direct Parquet ingest.
+`Clone` is ~2× cheaper than `New`. Never construct a `Transcoder` inside a message loop.
+
+## Quick example
+
+```go
+import (
+    ba    "github.com/loicalleyne/bufarrowlib"
+    "github.com/loicalleyne/bufarrowlib/proto/pbpath"
+    "github.com/apache/arrow-go/v18/arrow/memory"
+)
+
+ht := ba.NewHyperType(md, ba.WithAutoRecompile(10_000, 0.01))
+
+tc, _ := ba.New(md, memory.DefaultAllocator,
+    ba.WithHyperType(ht),
+    ba.WithDenormalizerPlan(
+        pbpath.PlanPath("id",              pbpath.Alias("request_id")),
+        pbpath.PlanPath("imp[*].id",       pbpath.Alias("imp_id")),
+        pbpath.PlanPath("imp[*].bidfloor", pbpath.Alias("floor")),
+    ),
+)
+defer tc.Release()
+
+for _, raw := range messages {
+    tc.AppendDenormRaw(raw)
+}
+rec := tc.NewDenormalizerRecordBatch()
+defer rec.Release()
+```
+
+## Subpackages
+
+| Package | Purpose |
+|---------|---------|
+| `proto/pbpath` | Field-path engine: dot-paths, wildcards `[*]`, slices `[0:3]`, Plan API, expression engine (30+ funcs), Pipeline/jq API |
+| `cmd/pbpath-playground` | Local web UI — test paths and YAML denorm configs against live proto messages |
+| `python/pybufarrow` | Python bindings via Arrow C Data Interface (zero-copy Go→Python) |
+| `cbinding/` | C shared library (`libbufarrow.so`) |

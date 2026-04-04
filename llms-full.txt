@@ -1,0 +1,498 @@
+# bufarrowlib
+
+> Converts Protocol Buffer messages into Apache Arrow RecordBatches — directly from raw wire bytes, without deserializing into generated Go types, without codegen, without copying data. Supports full-fidelity nested schema output and a declarative flat-denormalization mode with fan-out across repeated fields and computed expression columns.
+
+Module: `github.com/loicalleyne/bufarrowlib`
+Import path: `github.com/loicalleyne/bufarrowlib`
+Go version: 1.21+
+Install: `go get github.com/loicalleyne/bufarrowlib@latest`
+
+## Core Model
+
+There are two output modes:
+
+**Full-fidelity** — mirrors the entire protobuf message as a nested Arrow Struct schema. Use `Append` / `AppendRaw` / `AppendRawMerged` and flush with `NewRecordBatch()`.
+
+**Denormalization** — produces a flat Arrow schema from a declared path list. Fan-out across repeated fields (one output row per element); multiple repeated fields are cross-joined. Use `AppendDenorm` / `AppendDenormRaw` / `AppendDenormRawMerged` and flush with `NewDenormalizerRecordBatch()`.
+
+Both modes can be active on the same `Transcoder` simultaneously.
+
+## Key Types
+
+### `Transcoder`
+
+The central type. Holds the compiled message schema, Arrow record builders, an optional denormalization plan, and an optional hyperpb parser. **Not goroutine-safe** — use `Clone` to get an independent copy per goroutine (immutable state like the plan and HyperType are shared).
+
+### `HyperType`
+
+Thread-safe, shared PGO coordinator for `hyperpb.MessageType`. All `Transcoder` clones sharing a `HyperType` contribute profiling data. Call `Recompile()` or use `WithAutoRecompile` to upgrade the parser automatically after N messages. Required for `AppendRaw`; optional (but recommended) for `AppendDenormRaw`.
+
+### `DenormConfig` (YAML)
+
+Top-level struct for YAML-driven configuration. Fields:
+- `proto.file` — path to `.proto` file
+- `proto.message` — root message name
+- `proto.import_paths` — additional proto import directories
+- `custom_message.file` / `.message` — optional second proto to merge
+- `denormalizer.columns` — ordered list of `ColumnDef` entries
+
+### `ColumnDef`
+
+One output column in the denormalization plan:
+- `name` — output Arrow field name
+- `path` — pbpath expression (e.g. `imp[*].bidfloor`)
+- `strict` — if true, out-of-bounds list access returns an error instead of null
+- `expr` — computed column expression tree (alternative to `path`)
+
+### `ExprDef` / `ArgDef`
+
+Expression tree nodes for computed columns. `ExprDef` has:
+- `func` — function name (see pbpath expression functions)
+- `args` — `[]ArgDef` (each arg is a `path`, a `literal`/`literal2`, or a nested `expr`)
+- `sep` — separator string for `concat` / `join`
+- `param` — secondary string parameter
+
+## Constructors
+
+```go
+// From a compiled protoreflect.MessageDescriptor
+func New(
+    msgDesc protoreflect.MessageDescriptor,
+    mem     memory.Allocator,
+    opts    ...Option,
+) (*Transcoder, error)
+
+// From a .proto file at runtime — no protoc, no codegen
+func NewFromFile(
+    protoFilePath string,
+    messageName   string,
+    importPaths   []string,
+    mem           memory.Allocator,
+    opts          ...Option,
+) (*Transcoder, error)
+
+// From a parsed DenormConfig struct
+func NewTranscoderFromConfig(cfg *DenormConfig, mem memory.Allocator) (*Transcoder, error)
+
+// From a YAML config file path
+func NewTranscoderFromConfigFile(configPath string, mem memory.Allocator) (*Transcoder, error)
+
+// Shared PGO parser coordinator — create once, share across all Transcoders for a message type
+func NewHyperType(md protoreflect.MessageDescriptor, opts ...HyperTypeOption) *HyperType
+```
+
+## Options
+
+```go
+// Merge a second descriptor's fields into the schema.
+// Enables AppendWithCustom and AppendRawMerged.
+bufarrowlib.WithCustomMessage(msgDesc protoreflect.MessageDescriptor) Option
+
+// Same as above, but compiles the descriptor at runtime from a .proto file.
+bufarrowlib.WithCustomMessageFile(protoFilePath, messageName string, importPaths []string) Option
+
+// Compile a flat denormalization plan. Required for AppendDenorm / AppendDenormRaw.
+// paths is a variadic list of pbpath.PlanPathSpec (created via pbpath.PlanPath).
+bufarrowlib.WithDenormalizerPlan(paths ...pbpath.PlanPathSpec) Option
+
+// Attach a shared HyperType for hyperpb fast parsing.
+// Required for AppendRaw / AppendRawMerged; optional for AppendDenormRaw (falls back to proto.Unmarshal).
+bufarrowlib.WithHyperType(ht *HyperType) Option
+```
+
+```go
+// HyperType option: auto-recompile after threshold messages at the given sample rate.
+// threshold=0 means manual recompile only. rate is the fraction of messages profiled (e.g. 0.01 = 1%).
+bufarrowlib.WithAutoRecompile(threshold int64, rate float64) HyperTypeOption
+```
+
+## Transcoder Methods
+
+### Appending data
+
+```go
+// Full-fidelity: append a deserialized proto.Message.
+func (t *Transcoder) Append(msg proto.Message)
+
+// Full-fidelity: append a base + custom message, merging their fields.
+// Requires WithCustomMessage / WithCustomMessageFile.
+func (t *Transcoder) AppendWithCustom(base, custom proto.Message) error
+
+// Full-fidelity: append from raw wire bytes. Requires WithHyperType.
+func (t *Transcoder) AppendRaw(b []byte) error
+
+// Full-fidelity: merge two raw wire byte slices (base + custom) then append.
+// Fields in custom are renumbered above base's max field number before merge.
+func (t *Transcoder) AppendRawMerged(baseBytes, customBytes []byte) error
+
+// Denorm: append from a deserialized proto.Message.
+// Requires WithDenormalizerPlan.
+func (t *Transcoder) AppendDenorm(msg proto.Message) error
+
+// Denorm: append from raw wire bytes.
+// Uses hyperpb if WithHyperType was set, else falls back to proto.Unmarshal.
+// Requires WithDenormalizerPlan.
+func (t *Transcoder) AppendDenormRaw(b []byte) error
+
+// Denorm: merge two raw wire byte slices, then denorm-append.
+func (t *Transcoder) AppendDenormRawMerged(baseBytes, customBytes []byte) error
+```
+
+### Flushing to Arrow
+
+```go
+// Flush full-fidelity builder → RecordBatch; resets builder. Caller must Release.
+func (t *Transcoder) NewRecordBatch() arrow.RecordBatch
+
+// Flush denorm builder → RecordBatch; resets builder. Caller must Release.
+func (t *Transcoder) NewDenormalizerRecordBatch() arrow.RecordBatch
+```
+
+### Schema inspection
+
+```go
+func (t *Transcoder) Schema() *arrow.Schema            // full message Arrow schema
+func (t *Transcoder) DenormalizerSchema() *arrow.Schema // flat denorm output schema
+func (t *Transcoder) Parquet() *schema.Schema           // full message Parquet schema
+func (t *Transcoder) FieldNames() []string              // top-level Arrow field names
+func (t *Transcoder) DenormalizerBuilder() *array.RecordBuilder // raw builder access
+```
+
+### Parquet I/O
+
+```go
+// Read selected columns from a Parquet source (nil cols = all).
+func (t *Transcoder) ReadParquet(ctx context.Context, r parquet.ReaderAtSeeker, cols []int) (arrow.RecordBatch, error)
+
+// Write current buffered full-fidelity record to Parquet.
+func (t *Transcoder) WriteParquet(w io.Writer) error
+
+// Write one or more RecordBatches to Parquet.
+func (t *Transcoder) WriteParquetRecords(w io.Writer, records ...arrow.RecordBatch) error
+```
+
+### Back-decode and lifecycle
+
+```go
+// Decode Arrow rows → []proto.Message. Pass nil for rows to decode all.
+func (t *Transcoder) Proto(rec arrow.RecordBatch, rows []int) []proto.Message
+
+// Independent copy for a goroutine. Shares immutable Plan + HyperType; gets its own builder.
+func (t *Transcoder) Clone(mem memory.Allocator) (*Transcoder, error)
+
+// Release underlying Arrow RecordBuilder. Call when done.
+func (t *Transcoder) Release()
+```
+
+## HyperType Methods
+
+```go
+func (ht *HyperType) Type() *hyperpb.MessageType      // current compiled parser (atomic)
+func (ht *HyperType) Profile() *hyperpb.Profile        // current profile accumulator
+func (ht *HyperType) SampleRate() float64              // configured sample rate
+func (ht *HyperType) RecordMessage() bool              // increment counter; true = threshold reached
+func (ht *HyperType) Recompile() error                 // synchronous CAS-guarded recompile
+func (ht *HyperType) RecompileAsync() <-chan struct{}   // background recompile; channel closed when done
+```
+
+## Proto Utility Functions
+
+```go
+// Compile a .proto file at runtime to a FileDescriptor.
+func CompileProtoToFileDescriptor(protoFilePath string, importPaths []string) (protoreflect.FileDescriptor, error)
+
+// Retrieve a MessageDescriptor by name from a compiled FileDescriptor.
+func GetMessageDescriptorByName(fd protoreflect.FileDescriptor, messageName string) (protoreflect.MessageDescriptor, error)
+
+// Merge two MessageDescriptors. Fields from b are renumbered above a's max field number.
+// This makes their wire bytes safe to concatenate for AppendRawMerged.
+func MergeMessageDescriptors(a, b protoreflect.MessageDescriptor, newName string) (protoreflect.MessageDescriptor, error)
+```
+
+## YAML Config Functions
+
+```go
+func ParseDenormConfig(r io.Reader) (*DenormConfig, error)
+func ParseDenormConfigFile(path string) (*DenormConfig, error)
+func ColumnsToPlanSpecs(columns []ColumnDef) ([]pbpath.PlanPathSpec, error)
+```
+
+## pbpath Subpackage
+
+Import: `github.com/loicalleyne/bufarrowlib/proto/pbpath`
+
+Builds field-path specifications for `WithDenormalizerPlan`.
+
+```go
+// Declare a column. name is the dotted field path. opts are column modifiers.
+pbpath.PlanPath(name string, opts ...PlanPathOption) PlanPathSpec
+
+// Modifier: set output column alias.
+pbpath.Alias(name string) PlanPathOption
+
+// Modifier: attach a computed expression instead of reading a field directly.
+pbpath.WithExpr(expr ExprNode) PlanPathOption
+```
+
+### Path syntax
+
+| Syntax | Meaning |
+|--------|---------|
+| `field` | scalar field |
+| `parent.child` | nested message field |
+| `repeated[*]` | fan-out wildcard — one output row per element |
+| `repeated[N]` | fixed index, returns scalar (no fan-out) |
+| `repeated[1:3]` | Python-style slice (start:stop), fan-out |
+| `repeated[-2:]` | negative indices supported |
+| `repeated[::2]` | step-only slice |
+
+### Expression functions (pbpath)
+
+Call via `pbpath.Func*(...)` constructors or reference by name in YAML `expr.func`:
+
+| Function | Purpose |
+|----------|---------|
+| `has(path)` | bool: field is present and non-empty |
+| `cond(pred, then, else)` | ternary conditional |
+| `coalesce(a, b, ...)` | first non-null/non-empty value |
+| `concat(a, b, ...)` | string concatenation with optional `sep` |
+| `join(path, sep)` | join repeated string field |
+| `upper(s)` / `lower(s)` | string case |
+| `trim(s)` | trim whitespace |
+| `substr(s, start, len)` | substring |
+| `replace(s, old, new)` | string replace |
+| `split(s, sep)[N]` | split string and index |
+| `eq(a,b)` / `ne` / `lt` / `le` / `gt` / `ge` | comparisons → bool |
+| `and(a,b)` / `or(a,b)` / `not(a)` | boolean logic |
+| `add(a,b)` / `sub` / `mul` / `div` / `mod` | arithmetic |
+| `abs(n)` / `min(a,b)` / `max(a,b)` | numeric |
+| `tostr(v)` | any → string |
+| `literal(v)` | constant value |
+
+## Protobuf → Arrow Type Mapping
+
+| Protobuf type | Arrow type |
+|---------------|------------|
+| `bool` | `Boolean` |
+| `int32`, `sint32`, `sfixed32`, `enum` | `Int32` |
+| `uint32`, `fixed32` | `Uint32` |
+| `int64`, `sint64`, `sfixed64` | `Int64` |
+| `uint64`, `fixed64` | `Uint64` |
+| `float` | `Float32` |
+| `double` | `Float64` |
+| `string` | `Utf8` |
+| `bytes` | `Binary` |
+| `google.protobuf.Timestamp` | `Timestamp(ms, UTC)` |
+| `google.protobuf.Duration` | `Duration(ms)` |
+| `google.protobuf.FieldMask` | `Utf8` |
+| `google.protobuf.*Value` wrappers | unwrapped scalar type |
+| `google.type.Date` | `Date32` |
+| `google.type.TimeOfDay` | `Time64(µs)` |
+| `google.type.Money` / `LatLng` / `Color` / etc. | `Utf8` (protojson-encoded) |
+| `opentelemetry AnyValue` | `Binary` (proto-marshalled) |
+| repeated field | `List<T>` |
+| map field | `Map<K,V>` |
+| embedded message (other) | `Struct{...}` |
+
+## Sentinel Errors
+
+```go
+bufarrowlib.ErrMxDepth     // message nesting exceeds maxDepth (10 levels)
+bufarrowlib.ErrPathNotFound // field name not found in schema tree
+```
+
+## Concurrency Model
+
+- `HyperType` — fully goroutine-safe (atomic pointers + CAS).
+- `Transcoder` — **not** goroutine-safe. One per goroutine.
+- `Clone(mem)` — produces an independent `Transcoder` sharing the immutable denorm plan and `HyperType`. Each clone has its own `array.RecordBuilder` and scratch buffers.
+- `denormPlan` (the `pbpath.Plan`) is immutable after construction; `Clone` calls `plan.Clone()` only to get independent scratch-buffer space, not to copy the trie.
+
+## Usage Recipes
+
+### Minimal full-fidelity (from descriptor)
+
+```go
+import (
+    "github.com/apache/arrow-go/v18/arrow/memory"
+    ba "github.com/loicalleyne/bufarrowlib"
+)
+
+tc, err := ba.New(msg.ProtoReflect().Descriptor(), memory.DefaultAllocator)
+if err != nil { ... }
+defer tc.Release()
+
+tc.Append(msg)
+rec := tc.NewRecordBatch()
+defer rec.Release()
+// rec is a standard arrow.RecordBatch
+```
+
+### Raw bytes → flat Arrow (fastest path)
+
+```go
+import (
+    ba    "github.com/loicalleyne/bufarrowlib"
+    "github.com/loicalleyne/bufarrowlib/proto/pbpath"
+    "github.com/apache/arrow-go/v18/arrow/memory"
+)
+
+ht := ba.NewHyperType(md, ba.WithAutoRecompile(10_000, 0.01))
+
+tc, _ := ba.New(md, memory.DefaultAllocator,
+    ba.WithHyperType(ht),
+    ba.WithDenormalizerPlan(
+        pbpath.PlanPath("id",                 pbpath.Alias("request_id")),
+        pbpath.PlanPath("imp[*].id",          pbpath.Alias("imp_id")),
+        pbpath.PlanPath("imp[*].bidfloor",    pbpath.Alias("floor")),
+        pbpath.PlanPath("device.geo.country", pbpath.Alias("country")),
+    ),
+)
+defer tc.Release()
+
+for _, raw := range kafkaMessages {
+    if err := tc.AppendDenormRaw(raw); err != nil { ... }
+}
+rec := tc.NewDenormalizerRecordBatch()
+defer rec.Release()
+```
+
+### Fan-out cross-join (two independent repeated fields)
+
+```go
+// 2 items × 3 tags = 6 output rows per input message
+tc, _ := ba.New(md, mem,
+    ba.WithDenormalizerPlan(
+        pbpath.PlanPath("items[*].id",   pbpath.Alias("item_id")),   // group A
+        pbpath.PlanPath("tags[*]",       pbpath.Alias("tag")),       // group B
+        pbpath.PlanPath("order_id"),                                 // scalar (repeated per row)
+    ),
+)
+```
+
+### Multi-goroutine pipeline
+
+```go
+// Create one base Transcoder, then Clone per goroutine.
+base, _ := ba.New(md, memory.DefaultAllocator,
+    ba.WithHyperType(ht),
+    ba.WithDenormalizerPlan(paths...),
+)
+
+for i := 0; i < numWorkers; i++ {
+    clone, _ := base.Clone(memory.NewGoAllocator())
+    go func(tc *ba.Transcoder) {
+        defer tc.Release()
+        for raw := range ch {
+            tc.AppendDenormRaw(raw)
+        }
+        rec := tc.NewDenormalizerRecordBatch()
+        // send rec downstream
+    }(clone)
+}
+```
+
+### YAML-driven configuration
+
+```yaml
+# denorm.yaml
+proto:
+  file: schema/bidrequest.proto
+  message: BidRequest
+  import_paths: [./schema]
+
+denormalizer:
+  columns:
+    - name: request_id
+      path: id
+    - name: imp_id
+      path: imp[*].id
+    - name: floor_price
+      path: imp[*].bidfloor
+    - name: imp_type
+      expr:
+        func: cond
+        args:
+          - expr: {func: has, args: [{path: imp[*].video.id}]}
+          - literal: "video"
+          - literal: "display"
+```
+
+```go
+tc, err := ba.NewTranscoderFromConfigFile("denorm.yaml", memory.DefaultAllocator)
+```
+
+### Schema merging (base + custom proto)
+
+```go
+// Wire-safe merge: customMD fields are renumbered above baseMD's max field number,
+// allowing raw bytes from both messages to be concatenated at the wire level.
+tc, _ := ba.New(baseMD, mem, ba.WithCustomMessage(customMD))
+
+// Deserialised path:
+tc.AppendWithCustom(baseMsg, customMsg)
+
+// Raw bytes path (most efficient):
+tc.AppendRawMerged(baseWireBytes, customWireBytes)
+```
+
+### Runtime .proto compilation (no protoc)
+
+```go
+fd, err := ba.CompileProtoToFileDescriptor("schema/event.proto", []string{"./schema"})
+if err != nil { ... }
+md, err := ba.GetMessageDescriptorByName(fd, "EventMessage")
+if err != nil { ... }
+tc, _ := ba.New(md, memory.DefaultAllocator, ...)
+```
+
+### Parquet round-trip
+
+```go
+var buf bytes.Buffer
+tc.Append(msg)
+tc.WriteParquet(&buf)
+
+// Read back specific columns (nil = all)
+rec, err := tc.ReadParquet(ctx, bytes.NewReader(buf.Bytes()), nil)
+```
+
+### Arrow → Protobuf back-decode
+
+```go
+msgs := tc.Proto(rec, nil)       // nil = all rows
+msgs := tc.Proto(rec, []int{0,2}) // rows 0 and 2 only
+```
+
+### Manual HyperType lifecycle
+
+```go
+ht := ba.NewHyperType(md) // no auto-recompile
+
+// After processing a batch, trigger recompile manually:
+if ht.RecordMessage() {
+    if err := ht.Recompile(); err != nil { ... }
+}
+
+// Or asynchronously:
+done := ht.RecompileAsync()
+<-done
+```
+
+## Performance Notes
+
+- `AppendDenormRaw` with a realistic, production-shaped protobuf stream: ~296K msg/s, ~2.5 KB/msg, ~57 allocs/msg.
+- `AppendDenormRaw` is 39% faster and 57% fewer allocations than an equivalent hand-written Arrow builder.
+- Schema construction (`New`): ~220 µs. `NewFromFile`: ~5.5 ms. `Clone` + denorm plan: ~110 µs.
+- Reuse the same `Transcoder` across a batch of messages; flush with `NewDenormalizerRecordBatch()` at batch boundaries.
+- Use `Clone` rather than calling `New` per goroutine — `Clone` is ~50× cheaper.
+- `mergeScratch` inside each `Transcoder` is a reusable buffer that grows once and is forever reused — no per-message heap allocation for `AppendRawMerged`.
+
+## Subpackages
+
+| Package | Role |
+|---------|------|
+| `proto/pbpath` | Field-path engine: parse/evaluate dot-paths with wildcards, slices, and expressions |
+| `cmd/pbpath-playground` | Local web UI for testing paths + YAML configs against real data |
+| `python/` (`pybufarrow`) | Python bindings via Arrow C Data Interface (zero-copy Go→Python) |
+| `cbinding/` | C bindings |

@@ -242,11 +242,23 @@ func ExampleTranscoder_AppendDenormRaw_batch() {
 	// Simulate a batch of raw messages from a Kafka consumer.
 	messages := []struct {
 		name  string
-		items []struct{ id string; price float64 }
+		items []struct {
+			id    string
+			price float64
+		}
 	}{
-		{"Order-1", []struct{ id string; price float64 }{{"A", 1.0}, {"B", 2.0}}},
-		{"Order-2", []struct{ id string; price float64 }{{"C", 3.0}}},
-		{"Order-3", []struct{ id string; price float64 }{{"D", 4.0}, {"E", 5.0}, {"F", 6.0}}},
+		{"Order-1", []struct {
+			id    string
+			price float64
+		}{{"A", 1.0}, {"B", 2.0}}},
+		{"Order-2", []struct {
+			id    string
+			price float64
+		}{{"C", 3.0}}},
+		{"Order-3", []struct {
+			id    string
+			price float64
+		}{{"D", 4.0}, {"E", 5.0}, {"F", 6.0}}},
 	}
 
 	for _, m := range messages {
@@ -352,7 +364,10 @@ func ExampleHyperType_Recompile() {
 	for i := 0; i < 100; i++ {
 		msg := newOuterMessage(outerMD, innerMD,
 			fmt.Sprintf("product-%d", i), "",
-			[]struct{ id string; price float64 }{
+			[]struct {
+				id    string
+				price float64
+			}{
 				{fmt.Sprintf("item-%d", i), float64(i) + 0.99},
 			}, int64(i),
 		)

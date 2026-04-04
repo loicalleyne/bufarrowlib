@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pybufarrow"
+version = "0.1.0"
+description = "Python bindings for bufarrowlib — protobuf to Arrow/Parquet transcoder"
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.9"
+dependencies = [
+    "pyarrow>=14.0",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+]
+
+[project.urls]
+Homepage = "https://github.com/loicalleyne/bufarrowlib"
+Repository = "https://github.com/loicalleyne/bufarrowlib"
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0",
+    "pytest-benchmark>=4.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["pybufarrow*"]
+
+[tool.setuptools.package-data]
+pybufarrow = ["*.so", "*.dylib"]

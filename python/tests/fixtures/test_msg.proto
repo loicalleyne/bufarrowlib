@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+// Simple test message for pybufarrow tests.
+message TestMsg {
+  string name = 1;
+  int32  age  = 2;
+  double score = 3;
+  bool   active = 4;
+}

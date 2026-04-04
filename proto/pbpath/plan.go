@@ -538,6 +538,19 @@ func (p *Plan) EvalLeaves(m proto.Message) ([][]Value, error) {
 	return s.out[:p.userCount], nil
 }
 
+// Clone returns a shallow copy of p with its own scratch buffer.
+// The trie, entries, and schema are shared (all immutable after construction);
+// only the mutable [scratch] field is reset so that the clone's
+// [Plan.EvalLeaves] calls do not race with the original or other clones.
+//
+// Use Clone when creating independent workers (e.g. [Transcoder.Clone]) that
+// each need to call [Plan.EvalLeaves] without synchronisation.
+func (p *Plan) Clone() *Plan {
+	c := *p        // shallow copy — trie and entries are immutable, safe to share
+	c.scratch = nil // fresh scratch; lazily initialised on first EvalLeaves call
+	return &c
+}
+
 // EvalLeavesConcurrent is like [Plan.EvalLeaves] but allocates fresh buffers
 // per call, making it safe for concurrent use by multiple goroutines.
 func (p *Plan) EvalLeavesConcurrent(m proto.Message) ([][]Value, error) {

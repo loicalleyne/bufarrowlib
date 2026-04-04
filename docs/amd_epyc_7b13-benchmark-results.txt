@@ -1,0 +1,141 @@
+goos: linux
+goarch: amd64
+pkg: github.com/loicalleyne/bufarrowlib
+cpu: AMD EPYC 7B13
+BenchmarkNew/ScalarTypes-8                             	   39117	     92712 ns/op	     66787 B/msg	       694.0 allocs/msg	     10786 msg/s	     92712 ns/msg	   66786 B/op	     694 allocs/op
+BenchmarkNew/MetricsData-8                             	    2484	   1238874 ns/op	    831854 B/msg	      8449 allocs/msg	       807.2 msg/s	   1238874 ns/msg	  831854 B/op	    8449 allocs/op
+BenchmarkNew/BidRequest-8                              	    4168	    837799 ns/op	    509716 B/msg	      5913 allocs/msg	      1194 msg/s	    837799 ns/msg	  509715 B/op	    5913 allocs/op
+BenchmarkNewFromFile/ScalarTypes-8                     	    3277	   1090481 ns/op	    481965 B/msg	      7564 allocs/msg	       917.0 msg/s	   1090481 ns/msg	  481964 B/op	    7564 allocs/op
+BenchmarkNewFromFile/BidRequest-8                      	    1942	   1838624 ns/op	    935036 B/msg	     11291 allocs/msg	       543.9 msg/s	   1838624 ns/msg	  935036 B/op	   11290 allocs/op
+BenchmarkAppend/ScalarTypes-8                          	   34717	    104150 ns/op	 111.11 MB/s	       348.8 B/msg	         1.520 allocs/msg	    960157 msg/s	      1041 ns/msg	   34880 B/op	     152 allocs/op
+BenchmarkAppend/MetricsData-8                          	     843	   4049776 ns/op	  24.12 MB/s	     13456 B/msg	       122.7 allocs/msg	     24693 msg/s	     40498 ns/msg	 1345571 B/op	   12272 allocs/op
+BenchmarkAppend/BidRequest-8                           	    1525	   2343544 ns/op	  48.38 MB/s	      4890 B/msg	        28.60 allocs/msg	     42670 msg/s	     23435 ns/msg	  489001 B/op	    2860 allocs/op
+BenchmarkAppendDenorm/2x2-8                            	   10837	    332239 ns/op	  15.95 MB/s	      2289 B/msg	        25.74 allocs/msg	    300988 msg/s	      3322 ns/msg	  228860 B/op	    2574 allocs/op
+BenchmarkAppendDenorm/5x5-8                            	    3241	   1085755 ns/op	  10.96 MB/s	     10171 B/msg	        43.06 allocs/msg	     92102 msg/s	     10858 ns/msg	 1017070 B/op	    4306 allocs/op
+BenchmarkAppendDenorm/10x10-8                          	    1359	   2760237 ns/op	   8.30 MB/s	     26135 B/msg	        62.28 allocs/msg	     36229 msg/s	     27602 ns/msg	 2613530 B/op	    6228 allocs/op
+BenchmarkWriteParquet/ScalarTypes_100rows-8            	    3777	    932585 ns/op	  14.34 MB/s	      8881 B/msg	        39.31 allocs/msg	    107229 msg/s	      9326 ns/msg	  888146 B/op	    3930 allocs/op
+BenchmarkWriteParquet/BidRequest_100rows-8             	     348	   9973611 ns/op	  10.36 MB/s	     70890 B/msg	       316.9 allocs/msg	     10026 msg/s	     99736 ns/msg	 7088963 B/op	   31694 allocs/op
+BenchmarkReadParquet/ScalarTypes_100rows-8             	    4620	    806677 ns/op	  16.58 MB/s	      8718 B/msg	        35.41 allocs/msg	    123965 msg/s	      8067 ns/msg	  871771 B/op	    3541 allocs/op
+BenchmarkReadParquet/BidRequest_100rows-8              	     454	   7967064 ns/op	  12.98 MB/s	     65283 B/msg	       400.1 allocs/msg	     12552 msg/s	     79671 ns/msg	 6528307 B/op	   40012 allocs/op
+BenchmarkProto/ScalarTypes_100rows-8                   	    8971	    399710 ns/op	  28.95 MB/s	      2404 B/msg	        23.04 allocs/msg	    250181 msg/s	      3997 ns/msg	  240385 B/op	    2304 allocs/op
+BenchmarkProto/BidRequest_100rows-8                    	     817	   4410401 ns/op	  25.71 MB/s	     23780 B/msg	       339.2 allocs/msg	     22674 msg/s	     44104 ns/msg	 2378015 B/op	   33923 allocs/op
+BenchmarkClone/ScalarTypes-8                           	   70291	     54373 ns/op	     42536 B/msg	       417.0 allocs/msg	     18391 msg/s	     54373 ns/msg	   42536 B/op	     417 allocs/op
+BenchmarkClone/BidRequest_with_denorm-8                	    8450	    424750 ns/op	    289314 B/msg	      3421 allocs/msg	      2354 msg/s	    424750 ns/msg	  289314 B/op	    3421 allocs/op
+BenchmarkParquetRoundTrip/BidRequest_100rows-8         	     175	  20543266 ns/op	   5.52 MB/s	    214925 B/msg	       718.0 allocs/msg	      4868 msg/s	    205433 ns/msg	21492497 B/op	   71799 allocs/op
+BenchmarkEndToEnd_DenormPipeline-8                     	    3710	    898983 ns/op	  12.12 MB/s	      7888 B/msg	        39.96 allocs/msg	    111237 msg/s	      8990 ns/msg	  788833 B/op	    3996 allocs/op
+BenchmarkAppendBidRequest_Custom-8                     	     702	   5179302 ns/op	 109.56 MB/s	      5562 B/msg	       131.2 allocs/msg	     97697 msg/s	     10236 ns/msg	 2814431 B/op	   66372 allocs/op
+BenchmarkAppendBidRequest_AppendDenorm-8               	     338	  10500810 ns/op	  54.04 MB/s	     10938 B/msg	       230.2 allocs/msg	     48187 msg/s	     20753 ns/msg	 5534748 B/op	  116463 allocs/op
+BenchmarkAppendBidRequest_HyperpbRaw/Random-8          	     580	   6335237 ns/op	  89.57 MB/s	      7901 B/msg	       108.0 allocs/msg	     79871 msg/s	     12520 ns/msg	 3998020 B/op	   54646 allocs/op
+BenchmarkAppendBidRequest_HyperpbRaw/Realistic-8       	     714	   4942397 ns/op	  30.56 MB/s	      6203 B/msg	        97.53 allocs/msg	    102379 msg/s	      9768 ns/msg	 3138909 B/op	   49347 allocs/op
+BenchmarkAppendBidRequest_HyperpbPGO-8                 	     451	   7956761 ns/op	  18.98 MB/s	      6209 B/msg	       107.4 allocs/msg	     63594 msg/s	     15725 ns/msg	 3141506 B/op	   54324 allocs/op
+BenchmarkAppendRaw/Random-8                            	     348	  10282515 ns/op	  55.19 MB/s	      6152 B/msg	       140.2 allocs/msg	     49210 msg/s	     20321 ns/msg	 3112865 B/op	   70961 allocs/op
+BenchmarkAppendRaw/Realistic-8                         	     536	   6706670 ns/op	  22.52 MB/s	      2867 B/msg	        27.85 allocs/msg	     75447 msg/s	     13254 ns/msg	 1450735 B/op	   14090 allocs/op
+BenchmarkAppendRawMerged/HyperType-8                   	     486	   7225504 ns/op	  22.31 MB/s	      3508 B/msg	        29.93 allocs/msg	     70030 msg/s	     14280 ns/msg	 1775197 B/op	   15144 allocs/op
+BenchmarkAppendRawMerged/Fallback-8                    	     166	  21293008 ns/op	   7.57 MB/s	     17285 B/msg	       251.3 allocs/msg	     23764 msg/s	     42081 ns/msg	 8746334 B/op	  127134 allocs/op
+BenchmarkAppendDenormRawMerged-8                       	     946	   3878922 ns/op	  41.55 MB/s	      5275 B/msg	        65.52 allocs/msg	    130449 msg/s	      7666 ns/msg	 2669397 B/op	   33151 allocs/op
+BenchmarkAppendWithCustom-8                            	    3619	    915724 ns/op	      2842 B/msg	        45.84 allocs/msg	    109203 msg/s	      9157 ns/msg	  284174 B/op	    4583 allocs/op
+BenchmarkAppendDenormRaw_Fallback-8                    	     196	  18103059 ns/op	   8.34 MB/s	     17723 B/msg	       275.1 allocs/msg	     27951 msg/s	     35777 ns/msg	 8967677 B/op	  139212 allocs/op
+BenchmarkConcurrent_CloneAppendDenormRaw-8             	    2532	   1372634 ns/op	 110.05 MB/s	      3262 B/msg	        38.37 allocs/msg	    368634 msg/s	      2713 ns/msg	 1650421 B/op	   19416 allocs/op
+BenchmarkAppendRaw_BatchSize/1-8                       	   14448	    240721 ns/op	   0.91 MB/s	    203244 B/msg	      2446 allocs/msg	      4154 msg/s	    240721 ns/msg	  203244 B/op	    2445 allocs/op
+BenchmarkAppendRaw_BatchSize/100-8                     	    2292	   1573336 ns/op	  18.95 MB/s	      4776 B/msg	        47.39 allocs/msg	     63559 msg/s	     15733 ns/msg	  477574 B/op	    4738 allocs/op
+BenchmarkAppendRaw_BatchSize/1000-8                    	     267	  13797519 ns/op	  21.67 MB/s	      2717 B/msg	        26.15 allocs/msg	     72477 msg/s	     13798 ns/msg	 2717104 B/op	   26145 allocs/op
+BenchmarkAppendRaw_BatchSize/10000-8                   	      27	 131546722 ns/op	  22.74 MB/s	      2850 B/msg	        24.30 allocs/msg	     76019 msg/s	     13155 ns/msg	28504367 B/op	  242979 allocs/op
+BenchmarkAppendRaw_BatchSize/122880-8                  	       2	1588198562 ns/op	  23.21 MB/s	      2372 B/msg	        24.04 allocs/msg	     77371 msg/s	     12925 ns/msg	291479084 B/op	 2953701 allocs/op
+BenchmarkAppendRaw_BatchSize/245760-8                  	       1	3112072920 ns/op	  23.70 MB/s	      2356 B/msg	        24.03 allocs/msg	     78970 msg/s	     12663 ns/msg	578917304 B/op	 5904426 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-01/batch-0000100-8         	       1	5161861564 ns/op	  14.19 MB/s	      4756 B/msg	        56.25 allocs/msg	         8.000 cpu	     47599 msg/s	     21009 ns/msg	1168639640 B/op	13820870 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-01/batch-0001000-8         	       1	4769129729 ns/op	  15.36 MB/s	      2736 B/msg	        36.47 allocs/msg	         8.000 cpu	     51372 msg/s	     19466 ns/msg	670253160 B/op	 8935453 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-01/batch-0010000-8         	       1	4514920969 ns/op	  15.90 MB/s	      2901 B/msg	        35.08 allocs/msg	         8.000 cpu	     53157 msg/s	     18812 ns/msg	696165480 B/op	 8420145 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-01/batch-0122880-8         	       1	4609032018 ns/op	  16.00 MB/s	      2428 B/msg	        34.87 allocs/msg	         8.000 cpu	     53321 msg/s	     18754 ns/msg	596582968 B/op	 8570687 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-01/batch-0245760-8         	       1	4654952842 ns/op	  15.84 MB/s	      2412 B/msg	        34.86 allocs/msg	         8.000 cpu	     52795 msg/s	     18941 ns/msg	592658568 B/op	 8567949 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-02/batch-0000100-8         	       2	2730823930 ns/op	  13.41 MB/s	      4751 B/msg	        56.25 allocs/msg	         8.000 cpu	     89936 msg/s	     11119 ns/msg	1166966644 B/op	13815193 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-02/batch-0001000-8         	       2	2568238458 ns/op	  14.21 MB/s	      2736 B/msg	        36.47 allocs/msg	         8.000 cpu	     95007 msg/s	     10526 ns/msg	667562860 B/op	 8899031 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-02/batch-0010000-8         	       2	2638450500 ns/op	  13.61 MB/s	      2901 B/msg	        35.08 allocs/msg	         8.000 cpu	     90962 msg/s	     10994 ns/msg	696168828 B/op	 8420196 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-02/batch-0122880-8         	       2	2581044417 ns/op	  14.28 MB/s	      2428 B/msg	        34.87 allocs/msg	         8.000 cpu	     95217 msg/s	     10502 ns/msg	596583024 B/op	 8570712 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-02/batch-0245760-8         	       1	5180536662 ns/op	  14.24 MB/s	      2412 B/msg	        34.86 allocs/msg	         8.000 cpu	     94878 msg/s	     10540 ns/msg	1185353280 B/op	17135915 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-04/batch-0000100-8         	       2	1751500243 ns/op	  10.45 MB/s	      4752 B/msg	        56.25 allocs/msg	         8.000 cpu	    140223 msg/s	      7132 ns/msg	1167108188 B/op	13815314 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-04/batch-0001000-8         	       3	1410779334 ns/op	  12.93 MB/s	      2736 B/msg	        36.47 allocs/msg	         8.000 cpu	    172954 msg/s	      5782 ns/msg	667652386 B/op	 8899092 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-04/batch-0010000-8         	       2	1581387192 ns/op	  11.35 MB/s	      2901 B/msg	        35.08 allocs/msg	         8.000 cpu	    151765 msg/s	      6589 ns/msg	696221960 B/op	 8420245 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-04/batch-0122880-8         	       1	3114677631 ns/op	  11.84 MB/s	      2428 B/msg	        34.87 allocs/msg	         8.000 cpu	    157808 msg/s	      6337 ns/msg	1193309088 B/op	17141472 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-04/batch-0245760-8         	       1	5902240019 ns/op	  12.50 MB/s	      2411 B/msg	        34.86 allocs/msg	         8.000 cpu	    166554 msg/s	      6004 ns/msg	2370582032 B/op	34271875 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-08/batch-0000100-8         	       3	1403156358 ns/op	   6.52 MB/s	      4751 B/msg	        56.25 allocs/msg	         8.000 cpu	    175034 msg/s	      5713 ns/msg	1166875301 B/op	13815394 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-08/batch-0001000-8         	       3	1255275798 ns/op	   7.15 MB/s	      2736 B/msg	        36.47 allocs/msg	         8.000 cpu	    191193 msg/s	      5230 ns/msg	656690061 B/op	 8753258 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-08/batch-0010000-8         	       3	1281753939 ns/op	   7.00 MB/s	      2901 B/msg	        35.08 allocs/msg	         8.000 cpu	    187243 msg/s	      5341 ns/msg	696216360 B/op	 8420287 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-08/batch-0122880-8         	       1	5177669722 ns/op	   7.12 MB/s	      2428 B/msg	        34.87 allocs/msg	         8.000 cpu	    189861 msg/s	      5267 ns/msg	2386408608 B/op	34282953 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-08/batch-0245760-8         	       1	9936873483 ns/op	   7.42 MB/s	      2411 B/msg	        34.86 allocs/msg	         8.000 cpu	    197857 msg/s	      5054 ns/msg	4740617856 B/op	68543690 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-16/batch-0000100-8         	       3	1494677221 ns/op	   3.05 MB/s	      4752 B/msg	        56.25 allocs/msg	         8.000 cpu	    163781 msg/s	      6106 ns/msg	1163284136 B/op	13770483 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-16/batch-0001000-8         	       3	1311025908 ns/op	   3.42 MB/s	      2736 B/msg	        36.47 allocs/msg	         8.000 cpu	    183063 msg/s	      5463 ns/msg	656730781 B/op	 8753307 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-16/batch-0010000-8         	       4	 880945046 ns/op	   3.40 MB/s	      2901 B/msg	        35.08 allocs/msg	         8.000 cpu	    181623 msg/s	      5506 ns/msg	464184982 B/op	 5613558 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-16/batch-0122880-8         	       1	9439174920 ns/op	   3.91 MB/s	      2427 B/msg	        34.87 allocs/msg	         8.000 cpu	    208289 msg/s	      4801 ns/msg	4772258640 B/op	68565716 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-16/batch-0245760-8         	       1	19952069516 ns/op	   3.70 MB/s	      2411 B/msg	        34.86 allocs/msg	         8.000 cpu	    197080 msg/s	      5074 ns/msg	9480873808 B/op	137087149 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-32/batch-0000100-8         	       3	1436174021 ns/op	   1.58 MB/s	      4753 B/msg	        56.25 allocs/msg	         8.000 cpu	    169339 msg/s	      5905 ns/msg	1155862040 B/op	13680550 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-32/batch-0001000-8         	       3	1225506085 ns/op	   1.71 MB/s	      2737 B/msg	        36.47 allocs/msg	         8.000 cpu	    182782 msg/s	      5471 ns/msg	613078365 B/op	 8169841 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-32/batch-0010000-8         	       2	1636614536 ns/op	   1.83 MB/s	      2902 B/msg	        35.08 allocs/msg	         8.000 cpu	    195526 msg/s	      5114 ns/msg	928482556 B/op	11227122 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-32/batch-0122880-8         	       1	19714681433 ns/op	   1.87 MB/s	      2427 B/msg	        34.87 allocs/msg	         8.000 cpu	    199453 msg/s	      5014 ns/msg	9544485248 B/op	137131207 allocs/op
+BenchmarkAppendRaw_BatchSizeWorkers/workers-32/batch-0245760-8         	       1	39126157231 ns/op	   1.89 MB/s	      2411 B/msg	        34.86 allocs/msg	         8.000 cpu	    200999 msg/s	      4975 ns/msg	18961203440 B/op	274173901 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendRaw/workers-01-8                	       2	2337708616 ns/op	  15.77 MB/s	      2434 B/msg	        34.87 allocs/msg	         8.000 cpu	     52564 msg/s	     19024 ns/msg	299145764 B/op	 4285439 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendRaw/workers-02-8                	       3	1276074453 ns/op	  28.89 MB/s	      2455 B/msg	        34.91 allocs/msg	         8.000 cpu	     96295 msg/s	     10385 ns/msg	301621432 B/op	 4289492 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendRaw/workers-04-8                	       4	 820646063 ns/op	  44.93 MB/s	      2494 B/msg	        34.97 allocs/msg	         8.000 cpu	    149736 msg/s	      6678 ns/msg	306472936 B/op	 4297339 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendRaw/workers-08-8                	       5	 670227733 ns/op	  55.01 MB/s	      2551 B/msg	        35.09 allocs/msg	         8.000 cpu	    183341 msg/s	      5454 ns/msg	313472894 B/op	 4312245 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendRaw/workers-16-8                	       5	 641304388 ns/op	  57.49 MB/s	      2622 B/msg	        35.32 allocs/msg	         8.000 cpu	    191609 msg/s	      5219 ns/msg	322147636 B/op	 4340535 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendRaw/workers-32-8                	       5	 652300597 ns/op	  56.52 MB/s	      2681 B/msg	        35.76 allocs/msg	         8.000 cpu	    188379 msg/s	      5308 ns/msg	329405443 B/op	 4394099 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendRawMerged/workers-01-8          	       2	2418320200 ns/op	  16.26 MB/s	      3068 B/msg	        37.88 allocs/msg	         8.000 cpu	     50812 msg/s	     19680 ns/msg	376945256 B/op	 4654150 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendRawMerged/workers-02-8          	       3	1327066773 ns/op	  29.63 MB/s	      3217 B/msg	        37.91 allocs/msg	         8.000 cpu	     92595 msg/s	     10800 ns/msg	395326288 B/op	 4658274 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendRawMerged/workers-04-8          	       4	 853695359 ns/op	  46.07 MB/s	      3387 B/msg	        37.97 allocs/msg	         8.000 cpu	    143939 msg/s	      6947 ns/msg	416195682 B/op	 4666262 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendRawMerged/workers-08-8          	       5	 658858158 ns/op	  59.69 MB/s	      3510 B/msg	        38.10 allocs/msg	         8.000 cpu	    186504 msg/s	      5362 ns/msg	431330288 B/op	 4681394 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendRawMerged/workers-16-8          	       5	 698296307 ns/op	  56.32 MB/s	      3614 B/msg	        38.33 allocs/msg	         8.000 cpu	    175971 msg/s	      5683 ns/msg	444140318 B/op	 4710060 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendRawMerged/workers-32-8          	       5	 721397847 ns/op	  54.52 MB/s	      3692 B/msg	        38.77 allocs/msg	         8.000 cpu	    170336 msg/s	      5871 ns/msg	453619483 B/op	 4764340 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendDenormRaw/workers-01-8          	       2	1804677356 ns/op	  20.43 MB/s	      6097 B/msg	       109.1 allocs/msg	         8.000 cpu	     68090 msg/s	     14687 ns/msg	749227456 B/op	13400756 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendDenormRaw/workers-02-8          	       3	1014769883 ns/op	  36.33 MB/s	      6099 B/msg	       109.1 allocs/msg	         8.000 cpu	    121091 msg/s	      8258 ns/msg	749439736 B/op	13401109 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendDenormRaw/workers-04-8          	       5	 687095417 ns/op	  53.66 MB/s	      6108 B/msg	       109.1 allocs/msg	         8.000 cpu	    178840 msg/s	      5592 ns/msg	750515923 B/op	13401790 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendDenormRaw/workers-08-8          	       6	 552575494 ns/op	  66.72 MB/s	      6120 B/msg	       109.1 allocs/msg	         8.000 cpu	    222377 msg/s	      4497 ns/msg	751983564 B/op	13403018 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendDenormRaw/workers-16-8          	       6	 545596389 ns/op	  67.58 MB/s	      6133 B/msg	       109.1 allocs/msg	         8.000 cpu	    225221 msg/s	      4440 ns/msg	753662580 B/op	13405092 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendDenormRaw/workers-32-8          	       6	 542866661 ns/op	  67.92 MB/s	      6153 B/msg	       109.1 allocs/msg	         8.000 cpu	    226354 msg/s	      4418 ns/msg	756052624 B/op	13408823 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendRaw_TestMsg/workers-01-8        	     762	   4814153 ns/op	  23.24 MB/s	       199.8 B/msg	         2.018 allocs/msg	         8.000 cpu	   1063531 msg/s	       940.3 ns/msg	 1023139 B/op	   10334 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendRaw_TestMsg/workers-02-8        	    1101	   3211794 ns/op	  34.83 MB/s	       202.7 B/msg	         2.033 allocs/msg	         8.000 cpu	   1594125 msg/s	       627.3 ns/msg	 1037568 B/op	   10408 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendRaw_TestMsg/workers-04-8        	    1539	   2407124 ns/op	  46.47 MB/s	       201.8 B/msg	         2.058 allocs/msg	         8.000 cpu	   2127020 msg/s	       470.1 ns/msg	 1033221 B/op	   10538 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendRaw_TestMsg/workers-08-8        	    1696	   2002847 ns/op	  55.85 MB/s	       204.0 B/msg	         2.102 allocs/msg	         8.000 cpu	   2556361 msg/s	       391.2 ns/msg	 1044613 B/op	   10761 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendRaw_TestMsg/workers-16-8        	    1833	   1895009 ns/op	  59.03 MB/s	       205.0 B/msg	         2.174 allocs/msg	         8.000 cpu	   2701834 msg/s	       370.1 ns/msg	 1049474 B/op	   11129 allocs/op
+BenchmarkMaxThroughput_ConcurrentAppendRaw_TestMsg/workers-32-8        	    1767	   2155859 ns/op	  51.89 MB/s	       211.6 B/msg	         2.321 allocs/msg	         8.000 cpu	   2374923 msg/s	       421.1 ns/msg	 1083332 B/op	   11881 allocs/op
+PASS
+ok  	github.com/loicalleyne/bufarrowlib	450.628s
+PASS
+ok  	github.com/loicalleyne/bufarrowlib/cbinding	0.011s
+?   	github.com/loicalleyne/bufarrowlib/cmd/pbpath-playground	[no test files]
+?   	github.com/loicalleyne/bufarrowlib/gen/go/samples	[no test files]
+?   	github.com/loicalleyne/bufarrowlib/gen/go/samples/custom	[no test files]
+goos: linux
+goarch: amd64
+pkg: github.com/loicalleyne/bufarrowlib/proto/pbpath
+cpu: AMD EPYC 7B13
+BenchmarkParsePath/scalar-8          	 1548369	      2335 ns/op	    1161 B/op	      14 allocs/op
+BenchmarkParsePath/deep_scalar-8     	  711684	      5300 ns/op	    2380 B/op	      23 allocs/op
+BenchmarkParsePath/wildcard-8        	   56071	     62130 ns/op	   15963 B/op	     425 allocs/op
+BenchmarkParsePath/slice-8           	   58533	     58555 ns/op	   16218 B/op	     433 allocs/op
+BenchmarkPathValues/scalar-8         	 3534946	      1030 ns/op	    1553 B/op	      14 allocs/op
+BenchmarkPathValues/wildcard_fanout-8         	 1215674	      2958 ns/op	    5217 B/op	      29 allocs/op
+BenchmarkPathValues/nested_wildcard-8         	  339158	     11185 ns/op	   23633 B/op	      69 allocs/op
+BenchmarkPlanEval/single_scalar-8             	 4631704	       743.9 ns/op	    1104 B/op	      12 allocs/op
+BenchmarkPlanEval/5_paths_mixed-8             	  783074	      4441 ns/op	    6960 B/op	      53 allocs/op
+BenchmarkPlanEval/shared_prefix_fanout-8      	  432963	      8461 ns/op	   15536 B/op	      73 allocs/op
+BenchmarkEvalLeaves/single_scalar-8           	 8973721	       401.0 ns/op	     288 B/op	       5 allocs/op
+BenchmarkEvalLeaves/5_paths_mixed-8           	 1704472	      2084 ns/op	    1912 B/op	      28 allocs/op
+BenchmarkEvalLeaves/shared_prefix_fanout-8    	 1000000	      3523 ns/op	    3856 B/op	      37 allocs/op
+BenchmarkNewPlan/5_paths-8                    	  196111	     17867 ns/op	    9039 B/op	     111 allocs/op
+BenchmarkEvalLeavesWave3/with_hash-8          	 5750494	       627.7 ns/op	     416 B/op	       9 allocs/op
+BenchmarkEvalLeavesWave3/with_aggregates-8    	 1247583	      2864 ns/op	    2216 B/op	      50 allocs/op
+BenchmarkEvalLeavesWave3/with_mask-8          	 5172241	       713.5 ns/op	     432 B/op	      10 allocs/op
+BenchmarkEvalLeavesWave3/with_bucket-8        	 6725522	       552.2 ns/op	     392 B/op	       9 allocs/op
+BenchmarkFilterEvalLeaves-8                   	 1461950	      2367 ns/op	    2096 B/op	      22 allocs/op
+BenchmarkPipelineReduce-8                     	  881940	      3729 ns/op
+BenchmarkPipelineIfThenElse-8                 	 1491957	      2435 ns/op
+BenchmarkPipelineStringInterp-8               	 2347747	      1536 ns/op
+BenchmarkPipelineSort-8                       	 1808526	      2137 ns/op
+BenchmarkPipelineDef-8                        	  898964	      3955 ns/op
+BenchmarkPipelineMapSortBy-8                  	  738480	      5069 ns/op
+BenchmarkPipelineObjectConstruct-8            	 1000000	      3089 ns/op
+BenchmarkPipelineObjectMerge-8                	 2272467	      1686 ns/op
+BenchmarkPipelineSelectField-8                	 1000000	      3027 ns/op
+BenchmarkPipelineCollectAdd-8                 	 2077728	      1766 ns/op
+PASS
+ok  	github.com/loicalleyne/bufarrowlib/proto/pbpath	115.557s
+?   	github.com/loicalleyne/bufarrowlib/test	[no test files]

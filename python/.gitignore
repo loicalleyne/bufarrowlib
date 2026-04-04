@@ -1,0 +1,19 @@
+# Virtual environment
+.venv/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.egg
+
+# Bytecode
+__pycache__/
+*.py[cod]
+
+# Shared libraries (built, not source)
+*.so
+*.dylib
+
+# Pytest
+.pytest_cache/

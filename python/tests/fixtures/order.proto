@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+// Test message with nested and repeated fields for denormalization tests.
+message Item {
+  string id    = 1;
+  double price = 2;
+}
+
+message Order {
+  string        name  = 1;
+  repeated Item items = 2;
+  int64         seq   = 3;
+}

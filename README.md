@@ -1,470 +1,462 @@
-bufarrowLib 🦬
-===================
-[![Go Reference](https://pkg.go.dev/badge/github.com/loicalleyne/bufarrowlib.svg)](https://pkg.go.dev/github.com/loicalleyne/bufarrowlib)
+# bufarrowLib 🦬
 
-Go library to build Apache Arrow records from Protocol Buffers — with high-performance raw-bytes ingestion, automatic denormalization, Parquet I/O, and an embedded expression engine.
+<p align="center">
+  <img src="assets/bufarrowlib-logo.png" alt="bufarrowlib-logo" width="800"/>
+</p>
+
+<p align="center">
+  <a href="https://pkg.go.dev/github.com/loicalleyne/bufarrowlib"><img src="https://pkg.go.dev/badge/github.com/loicalleyne/bufarrowlib.svg" alt="Go Reference"></a>
+  <a href="https://goreportcard.com/report/github.com/loicalleyne/bufarrowlib"><img src="https://goreportcard.com/badge/github.com/loicalleyne/bufarrowlib" alt="Go Report Card"></a>
+</p>
+
+**Protobuf → Apache Arrow. Raw bytes in, RecordBatches out. No codegen. No deserialization. No copies.**
+
+Give bufarrowlib a protobuf descriptor and a stream of wire-format bytes. Get back Arrow `RecordBatch`es ready for DuckDB, Parquet, or any Arrow-native tool. Replace hundreds of lines of hand-written builder code with a YAML file or a path list. On production-shaped ad-tech traffic, `AppendDenormRaw` delivers **~296K msg/s — 39% faster than hand-written Arrow builders** with 57% fewer allocations.
+
+Python bindings ([pybufarrow](python/)) give zero-copy access via the Arrow C Data Interface — all parsing runs in Go.
+
+---
+
+## Use cases
+
+| Scenario | Why bufarrowlib |
+|---|---|
+| Kafka / gRPC → columnar analytics | Parse raw wire bytes directly; zero deserialization cost |
+| ETL to Parquet / DuckDB / ClickHouse | Declarative denormalization via YAML or path list |
+| OpenRTB / ad-tech event flattening | Fan-out across nested repeated fields in one pass |
+| Schema-driven services | Runtime `.proto` compilation — no `protoc`, no codegen |
+| Multi-goroutine stream processors | `Clone` + shared `HyperType`: independent builders, aggregated PGO |
+
+---
+
+## Install
+
+```sh
+go get -u github.com/loicalleyne/bufarrowlib@latest
+```
+
+---
+
+## Quick Start
+
+### Raw bytes → flat Arrow (fastest path)
+
+```go
+import (
+    ba    "github.com/loicalleyne/bufarrowlib"
+    "github.com/loicalleyne/bufarrowlib/proto/pbpath"
+    "github.com/apache/arrow-go/v18/arrow/memory"
+)
+
+// Create once per message type — thread-safe, shared across goroutines.
+ht := ba.NewHyperType(md, ba.WithAutoRecompile(10_000, 0.01))
+
+tc, _ := ba.New(md, memory.DefaultAllocator,
+    ba.WithHyperType(ht),
+    ba.WithDenormalizerPlan(
+        pbpath.PlanPath("id",                 pbpath.Alias("request_id")),
+        pbpath.PlanPath("imp[*].id",          pbpath.Alias("imp_id")),
+        pbpath.PlanPath("imp[*].bidfloor",    pbpath.Alias("floor")),
+        pbpath.PlanPath("device.geo.country", pbpath.Alias("country")),
+    ),
+)
+defer tc.Release()
+
+for _, raw := range kafkaMessages {
+    tc.AppendDenormRaw(raw)
+}
+rec := tc.NewDenormalizerRecordBatch()
+defer rec.Release()
+```
+
+### YAML-driven config (no Go for the plan)
+
+```yaml
+# denorm.yaml
+proto:
+  file: schema/bidrequest.proto
+  message: BidRequest
+  import_paths: [./schema]
+
+denormalizer:
+  columns:
+    - name: request_id
+      path: id
+    - name: imp_id
+      path: imp[*].id
+    - name: floor_price
+      path: imp[*].bidfloor
+    - name: imp_type
+      expr:
+        func: cond
+        args:
+          - expr: {func: has, args: [{path: imp[*].video.id}]}
+          - literal: "video"
+          - literal: "display"
+```
+
+```go
+tc, _ := ba.NewTranscoderFromConfigFile("denorm.yaml", memory.DefaultAllocator)
+```
+
+### Full-fidelity proto → Arrow
+
+```go
+tc, _ := ba.New(md, memory.DefaultAllocator)
+defer tc.Release()
+tc.Append(msg)
+rec := tc.NewRecordBatch()
+defer rec.Release()
+_ = tc.Schema()  // *arrow.Schema
+_ = tc.Parquet() // *schema.Schema
+```
+
+### Multi-goroutine pipeline
+
+```go
+// Clone is ~2× cheaper than New. Shares the immutable plan + HyperType.
+for i := 0; i < numWorkers; i++ {
+    clone, _ := tc.Clone(memory.NewGoAllocator())
+    go func(w *ba.Transcoder) {
+        defer w.Release()
+        for raw := range ch {
+            w.AppendDenormRaw(raw)
+        }
+        rec := w.NewDenormalizerRecordBatch()
+        // send rec downstream
+    }(clone)
+}
+```
+
+---
+
+## Output modes
+
+Two modes, one `Transcoder`. Use them individually or together.
+
+| Mode | Append methods | Flush | Output |
+|---|---|---|---|
+| **Full-fidelity** | `Append`, `AppendRaw`, `AppendWithCustom`, `AppendRawMerged` | `NewRecordBatch()` | Nested Arrow schema mirroring the full protobuf structure |
+| **Denormalization** | `AppendDenorm`, `AppendDenormRaw`, `AppendDenormRawMerged` | `NewDenormalizerRecordBatch()` | Flat Arrow schema from declared paths; fan-out across repeated fields |
+
+---
 
 ## Features
 
-### Schema generation
-- Derive Arrow and Parquet schemas automatically from any protobuf message descriptor, including deeply-nested and recursive messages.
-- Construct a `Transcoder` from compiled Go types (`protoreflect.MessageDescriptor`) or from `.proto` files at runtime via `NewFromFile`.
-- Merge extra "custom" fields into the base schema with `WithCustomMessage` / `WithCustomMessageFile` — useful for enriching data with sidecar metadata.
+### Ingestion API
 
-### Full-fidelity transcoding
-- **Proto → Arrow** — `Append` / `AppendWithCustom` populate an Arrow `RecordBuilder` that mirrors the full protobuf structure (structs, lists, maps, oneofs).
-- **Arrow → Proto** — `Proto` reconstructs typed protobuf messages from Arrow record batches.
-- **Proto → Parquet → Arrow** — `WriteParquet` / `WriteParquetRecords` write Arrow records to Parquet; `ReadParquet` reads them back.
+| Method | Input | Speed | Notes |
+|---|---|---|---|
+| `Append(msg)` | `proto.Message` | baseline | Full-fidelity |
+| `AppendRaw(b)` | `[]byte` | 110–151 k/s | Requires `HyperType` |
+| `AppendRawMerged(base, custom)` | `[]byte, []byte` | 106 k/s | Field-safe wire merge |
+| `AppendDenorm(msg)` | `proto.Message` | 73–535 k/s | Plan-based; fan-out dependent |
+| `AppendDenormRaw(b)` | `[]byte` | **121–296 k/s** | Fastest; + `HyperType` recommended |
+| `AppendDenormRawMerged(base, custom)` | `[]byte, []byte` | 204 k/s | Merge + denorm in one pass |
 
-### High-performance raw-bytes ingestion
+> Throughputs are single-threaded, realistic BidRequest corpus, i7-13700H. Scale linearly with `Clone` workers — see [Performance](#performance).
 
-`AppendRaw` and `AppendDenormRaw` accept raw protobuf wire bytes and decode them using [hyperpb](https://buf.build/docs/bsr/remote-packages/go#hyperpb) — a TDP-based parser that is 2–3× faster than generated code. Combined with `hyperpb.Shared` arena reuse and optional profile-guided optimization (PGO), this is the fastest path for streaming protobuf data into Arrow.
+### HyperType — compiled parser + online PGO
 
-| Method | What it does | When to use |
-|---|---|---|
-| `AppendRaw([]byte)` | Unmarshal → full Arrow record | You have raw bytes from Kafka/gRPC and want the full protobuf structure in Arrow |
-| `AppendDenormRaw([]byte)` | Unmarshal → flat denormalized record | You have raw bytes and want a flat analytics table (selected columns, fan-out) |
-
-Both methods require a `HyperType` coordinator (see below).
-
-### HyperType — shared compiled parser with online PGO
-
-`HyperType` wraps a compiled `hyperpb.MessageType` in a thread-safe coordinator that can be shared across multiple `Transcoder` instances (including clones in separate goroutines). It supports optional **online profile-guided optimization** (PGO): all transcoders contribute profiling data, and a recompile atomically upgrades the parser for all of them.
+`HyperType` wraps a [`hyperpb`](https://buf.build/docs/bsr/remote-packages/go#hyperpb) compiled message parser. Without it, `AppendRaw*` falls back to `dynamicpb` — consistently **2.9–4.7× slower**.
 
 ```go
-// Create once, share across goroutines.
-ht := bufarrowlib.NewHyperType(md,
-    bufarrowlib.WithAutoRecompile(10_000, 0.01), // recompile every 10K messages, 1% sampling
+// Create once per message type. Thread-safe. Share across all goroutines.
+ht := ba.NewHyperType(md,
+    ba.WithAutoRecompile(100_000, 0.01), // recompile every 100K msgs; 1% sampling
 )
 
-// Each goroutine gets its own Transcoder, sharing the same HyperType.
-tc, _ := bufarrowlib.New(md, mem, bufarrowlib.WithHyperType(ht), /* ... */)
-clone, _ := tc.Clone(mem)
+tc, _ := ba.New(md, mem, ba.WithHyperType(ht), ...)
 
-// Feed raw bytes — profiling happens automatically.
-tc.AppendDenormRaw(rawBytes)
-
-// Manual recompile (if not using auto-recompile):
-ht.Recompile()      // synchronous — blocks until done
-ht.RecompileAsync()  // non-blocking — returns a channel
+// Manual recompile when traffic is representative:
+ht.Recompile()         // synchronous
+ht.RecompileAsync()    // background goroutine; returns <-chan struct{}
 ```
 
-**Key HyperType concepts:**
+Recompilation is atomic — all `Transcoder`s sharing the `HyperType` pick up the new parser on their next call, no restarts.
 
-| Concept | Description |
-|---|---|
-| `NewHyperType(md)` | Compile a `hyperpb.MessageType` from a message descriptor |
-| `WithAutoRecompile(threshold, rate)` | Automatically recompile after `threshold` messages; `rate` is the profiling sample fraction (e.g. 0.01 = 1%) |
-| `ht.Type()` | Load the current compiled parser (atomic, lock-free) |
-| `ht.Recompile()` | Recompile using collected profile data (CAS-guarded — safe to call concurrently) |
-| `ht.RecompileAsync()` | Non-blocking recompile in a background goroutine |
-
-### Well-known & common type support
-
-The denormalizer automatically maps [protobuf well-known types and common types](https://protobuf.dev/best-practices/dos-donts/#well-known-common) to flat Arrow scalars — no manual conversion needed.
-
-| Protobuf type | Arrow type |
-|---|---|
-| `google.protobuf.Timestamp` | `Timestamp(ms, UTC)` |
-| `google.protobuf.Duration` | `Duration(ms)` |
-| `google.protobuf.FieldMask` | `String` (comma-joined paths) |
-| `google.protobuf.*Value` wrappers | unwrapped scalar (`BoolValue` → `Boolean`, `Int64Value` → `Int64`, etc.) |
-| `google.type.Date` | `Date32` |
-| `google.type.TimeOfDay` | `Time64(µs)` |
-| `google.type.Money` | `String` (protojson) |
-| `google.type.LatLng` | `String` (protojson) |
-| `google.type.Color` | `String` (protojson) |
-| `google.type.PostalAddress` | `String` (protojson) |
-| `google.type.Interval` | `String` (protojson) |
-| OpenTelemetry `AnyValue` | `Binary` (proto-marshalled) |
-
-### Denormalization
-
-Use `WithDenormalizerPlan` to project selected protobuf field paths into a flat Arrow record — like SQL `SELECT … FROM msg CROSS JOIN UNNEST(msg.items)`.
-
-- Paths are specified with the [`pbpath`](#pbpath) path language: `"items[*].id"`, `"tags[*]"`, `"imp[0:3].banner.w"`, `"name"`, etc.
-- Column aliases via `pbpath.Alias("col_name")`.
-- Independent repeated-field fan-outs are **cross-joined**; empty groups emit a single null row (**left-join** semantics).
-- Fixed-index paths (`items[0].id`) broadcast as scalars; ranges and wildcards fan out.
-- Computed columns via the [Expr engine](#expression-engine): `FuncCoalesce`, `FuncCond`, `FuncConcat`, arithmetic, string ops, timestamp parsing, and more.
-- All type mapping and append closures are compiled once at construction time for minimal per-message overhead.
+### Denormalization + fan-out
 
 ```go
-tc, _ := bufarrowlib.New(md, mem,
-    bufarrowlib.WithDenormalizerPlan(
-        pbpath.PlanPath("name",            pbpath.Alias("order_name")),
-        pbpath.PlanPath("items[*].id",     pbpath.Alias("item_id")),
-        pbpath.PlanPath("items[*].price",  pbpath.Alias("item_price")),
-        pbpath.PlanPath("tags[*]",         pbpath.Alias("tag")),
+// 2 items × 3 tags → 6 output rows per message
+tc, _ := ba.New(md, mem,
+    ba.WithDenormalizerPlan(
+        pbpath.PlanPath("order_id"),
+        pbpath.PlanPath("items[*].id",    pbpath.Alias("item_id")),   // group A
+        pbpath.PlanPath("items[*].price", pbpath.Alias("price")),
+        pbpath.PlanPath("tags[*]",        pbpath.Alias("tag")),       // group B (cross-joined)
     ),
 )
-tc.AppendDenorm(msg) // 2 items × 3 tags → 6 rows
-rec := tc.NewDenormalizerRecordBatch()
 ```
+
+**Path syntax:**
+
+| Syntax | Behaviour |
+|---|---|
+| `field` / `a.b.c` | scalar or nested message path |
+| `repeated[*]` | wildcard fan-out — one row per element |
+| `repeated[N]` | fixed index — scalar, no fan-out |
+| `repeated[1:3]` | Python-style slice — fan-out over elements 1–2 |
+| `repeated[-2:]` | negative indices supported |
+| `repeated[::2]` | step-only slice |
+
+Columns sharing the same wildcard steps are in the same **fan-out group** (lockstep). Different groups are **cross-joined**: `totalRows = ∏ groupSizes`. Empty groups emit one null row (left-join semantics).
 
 ### Expression engine
 
-The denormalizer's Plan API supports computed columns through a composable `Expr` tree. Expressions reference protobuf field paths via `PathRef` and apply functions to produce derived values — all evaluated inline during plan traversal with zero extra passes over the data.
+Computed columns, evaluated inline during plan traversal — no extra pass over the data.
 
 ```go
-// Coalesce: first non-zero value from multiple paths
-pbpath.PlanPath("device_id",
+pbpath.PlanPath("buyer",
     pbpath.WithExpr(pbpath.FuncCoalesce(
         pbpath.PathRef("user.id"),
-        pbpath.PathRef("site.id"),
         pbpath.PathRef("device.ifa"),
     )),
-    pbpath.Alias("device_id"),
-)
-
-// Conditional: banner dimensions if present, else video
-pbpath.PlanPath("width",
-    pbpath.WithExpr(pbpath.FuncCond(
-        pbpath.FuncHas(pbpath.PathRef("imp[0].banner.w")),
-        pbpath.PathRef("imp[0].banner.w"),
-        pbpath.PathRef("imp[0].video.w"),
-    )),
-    pbpath.Alias("width"),
-)
+    pbpath.Alias("buyer_id"),
+),
 ```
 
 **Available expression functions:**
 
 | Category | Functions |
 |---|---|
-| Control flow | `FuncCoalesce`, `FuncDefault`, `FuncCond` |
-| Predicates | `FuncHas`, `FuncLen`, `FuncEq`, `FuncNe`, `FuncLt`, `FuncLe`, `FuncGt`, `FuncGe` |
-| Arithmetic | `FuncAdd`, `FuncSub`, `FuncMul`, `FuncDiv`, `FuncMod` |
-| Math | `FuncAbs`, `FuncCeil`, `FuncFloor`, `FuncRound`, `FuncMin`, `FuncMax` |
-| String | `FuncUpper`, `FuncLower`, `FuncTrim`, `FuncTrimPrefix`, `FuncTrimSuffix`, `FuncConcat` |
-| Cast | `FuncCastInt`, `FuncCastFloat`, `FuncCastString` |
-| Timestamp | `FuncStrptime`, `FuncTryStrptime`, `FuncAge`, `FuncExtractYear`/`Month`/`Day`/`Hour`/`Minute`/`Second` |
-| ETL | `FuncHash`, `FuncEpochToDate`, `FuncDatePart`, `FuncBucket`, `FuncMask`, `FuncCoerce`, `FuncEnumName` |
-| Aggregates | `FuncSum`, `FuncDistinct`, `FuncListConcat` |
+| Control flow | `cond`, `coalesce`, `default` |
+| Predicates | `has`, `eq`, `ne`, `lt`, `le`, `gt`, `ge`, `and`, `or`, `not` |
+| Arithmetic | `add`, `sub`, `mul`, `div`, `mod`, `abs`, `ceil`, `floor`, `round`, `min`, `max` |
+| String | `concat`, `upper`, `lower`, `trim`, `trim_prefix`, `trim_suffix`, `len` |
+| Cast | `cast_int`, `cast_float`, `cast_string` |
+| Timestamp | `strptime`, `try_strptime`, `age`, `epoch_to_date`, `extract_year`…`extract_second`, `date_part` |
+| ETL | `hash`, `bucket`, `mask`, `coerce`, `enum_name`, `sum`, `distinct`, `list_concat` |
 
-### Cloning
+Auxiliary YAML fields: `sep`, `literal` / `literal2`, `param`.
 
-`Transcoder.Clone` creates an independent copy (separate builders and stencils) that can be used in another goroutine. All options — including denormalization plans and `HyperType` references — carry over. The immutable `Plan` is shared; only the mutable Arrow builders and scratch buffers are freshly allocated.
+### Schema merging
 
-```go
-// Original transcoder
-tc, _ := bufarrowlib.New(md, mem, bufarrowlib.WithHyperType(ht), /* ... */)
-
-// Clone for another goroutine — shares HyperType + Plan, fresh builders
-clone, _ := tc.Clone(mem)
-
-go func() {
-    defer clone.Release()
-    for raw := range ch {
-        clone.AppendDenormRaw(raw)
-    }
-    rec := clone.NewDenormalizerRecordBatch()
-    // ... process rec
-}()
-```
-
-### Protobuf Editions support
-bufarrowlib works at the `protoreflect` descriptor level, so it is inherently compatible with [Protobuf Editions](https://protobuf.dev/editions/overview/) (Edition 2023+) as well as proto2 and proto3. Editions features such as `features.field_presence` are resolved by the protobuf runtime into the same descriptor properties (`HasPresence`, `Kind`, `Cardinality`, etc.) that bufarrowlib already uses — no special configuration is needed. The `CompileProtoToFileDescriptor` / `NewFromFile` path uses `protocompile`, which supports Edition 2023.
-
-## pbpath
-
-The [`proto/pbpath`](proto/pbpath) subpackage is a standalone protobuf field-path engine that can be used independently of the rest of bufarrowlib.
-
-- **Parse** a dot-delimited path string against a message descriptor, with support for list wildcards (`[*]`), Python-style slices (`[1:3]`, `[-2:]`, `[::2]`), ranges, and negative indices.
-- **Evaluate** a compiled path against a live `proto.Message` to extract values, including fan-out across repeated fields.
-- **Plan API** — compile multiple paths into a trie-based execution plan that traverses shared prefixes only once, ideal for hot-path extraction of many fields from the same message type.
-- **Expr engine** — composable expression trees for computed columns: `Coalesce`, `Cond`, arithmetic, string ops, timestamp parsing, and 30+ built-in functions.
-
-See the full [pbpath README](proto/pbpath/README.md), [Architecture Guide](proto/pbpath/ARCHITECTURE.md), and [pkg.go.dev reference](https://pkg.go.dev/github.com/loicalleyne/bufarrowlib/proto/pbpath) for details.
-
-## 🚀 Install
-
-```sh
-go get -u github.com/loicalleyne/bufarrowlib@latest
-```
-
-## 💡 Usage
+Add fields from a second `.proto` to the base schema. Fields are renumbered above the base's max field number so raw wire bytes from both messages can be safely concatenated.
 
 ```go
-import "github.com/loicalleyne/bufarrowlib"
+tc, _ := ba.New(baseMD, mem, ba.WithCustomMessage(customMD))
+tc.AppendRawMerged(baseBytes, customBytes)
 ```
 
-### Quick start — full record
+### Parquet I/O
 
 ```go
-tc, err := bufarrowlib.New(md, memory.DefaultAllocator)
-tc.Append(msg)
-rec := tc.NewRecordBatch()
-defer rec.Release()
-
-// Arrow schema & Parquet schema are available:
-_ = tc.Schema()   // *arrow.Schema
-_ = tc.Parquet()  // *schema.Schema
-```
-
-### Quick start — denormalized record
-
-```go
-tc, err := bufarrowlib.New(md, memory.DefaultAllocator,
-    bufarrowlib.WithDenormalizerPlan(
-        pbpath.PlanPath("items[*].id",    pbpath.Alias("item_id")),
-        pbpath.PlanPath("items[*].price", pbpath.Alias("item_price")),
-    ),
-)
-tc.AppendDenorm(msg)
-rec := tc.NewDenormalizerRecordBatch()
-defer rec.Release()
-```
-
-### Quick start — high-performance raw-bytes ingestion
-
-```go
-// 1. Create a shared HyperType (once per message type, thread-safe).
-ht := bufarrowlib.NewHyperType(md)
-
-// 2. Create a Transcoder with HyperType + denormalization plan.
-tc, err := bufarrowlib.New(md, memory.DefaultAllocator,
-    bufarrowlib.WithHyperType(ht),
-    bufarrowlib.WithDenormalizerPlan(
-        pbpath.PlanPath("id",           pbpath.Alias("request_id")),
-        pbpath.PlanPath("imp[*].id",    pbpath.Alias("imp_id")),
-        pbpath.PlanPath("device.geo.country", pbpath.Alias("country")),
-    ),
-)
-
-// 3. Feed raw protobuf bytes (e.g. from Kafka).
-for _, raw := range messages {
-    tc.AppendDenormRaw(raw)
-}
-
-// 4. Flush to Arrow.
-rec := tc.NewDenormalizerRecordBatch()
-defer rec.Release()
-```
-
-### Quick start — Parquet round-trip
-
-```go
-// Write
 var buf bytes.Buffer
 tc.Append(msg)
 tc.WriteParquet(&buf)
 
-// Read
-rec, err := tc.ReadParquet(ctx, bytes.NewReader(buf.Bytes()), nil)
+rec, _ := tc.ReadParquet(ctx, bytes.NewReader(buf.Bytes()), nil /* all cols */)
 ```
 
-### Quick start — .proto file at runtime
+At > 100 k msg/s, Parquet I/O becomes the bottleneck. Buffer ≥ 1,000 rows before writing.
+
+### Arrow → Protobuf back-decode
 
 ```go
-tc, err := bufarrowlib.NewFromFile(
-    "path/to/schema.proto", "MyMessage",
-    []string{"path/to/imports"},
-    memory.DefaultAllocator,
-)
+msgs := tc.Proto(rec, nil)         // all rows
+msgs := tc.Proto(rec, []int{0, 2}) // rows 0 and 2 only
 ```
 
-### Quick start — declarative YAML config
+### Protobuf Editions & runtime compilation
 
-When building a service or pipeline you can drive the entire `Transcoder` from a single YAML file instead of writing Go code for the denormalizer plan:
-
-```yaml
-# denorm.yaml
-proto:
-  file: path/to/schema.proto
-  message: BidRequestEvent
-  import_paths: [proto]
-
-denormalizer:
-  columns:
-    - name: auction_id
-      path: auction_id
-
-    - name: imp_id
-      path: imp[*].id          # fan-out: one row per impression
-
-    - name: floor_price
-      path: imp[*].bidfloor
-      strict: true             # error on out-of-bounds index
-
-    - name: has_video
-      expr:
-        func: has
-        args:
-          - path: imp[*].video.id
-
-    - name: imp_type
-      expr:
-        func: cond
-        args:
-          - expr: { func: has, args: [{path: imp[*].video.id}] }
-          - literal: "video"
-          - literal: "display"
-
-    - name: floor_micros
-      expr:
-        func: mul
-        args:
-          - path: imp[*].bidfloor
-          - literal: 1000.0
-
-    - name: geo_region
-      expr:
-        func: default
-        args:
-          - path: user.geo.region
-        literal: "unknown"
-```
-
-Load and use it in one call:
+Works at the `protoreflect` level — compatible with proto2, proto3, and Edition 2023+.
 
 ```go
-tc, err := bufarrowlib.NewTranscoderFromConfigFile("denorm.yaml", memory.DefaultAllocator)
-if err != nil {
-    log.Fatal(err)
-}
-defer tc.Release()
+// No protoc required:
+tc, _ := ba.NewFromFile("schema/event.proto", "EventMessage", []string{"./schema"}, mem)
 
-for msg := range stream {
-    tc.AppendDenorm(msg)
-}
-rec := tc.NewDenormalizerRecordBatch()
+// Or compile the descriptor yourself:
+fd, _ := ba.CompileProtoToFileDescriptor("event.proto", []string{"./schema"})
+md, _ := ba.GetMessageDescriptorByName(fd, "EventMessage")
 ```
 
-Or parse from any `io.Reader` for embedding in services:
+---
 
-```go
-cfg, err := bufarrowlib.ParseDenormConfig(reader)
-tc, err := bufarrowlib.NewTranscoderFromConfig(cfg, mem)
-```
+## Performance
 
-**Supported `expr.func` values:**
+Benchmarks use a 506-message realistic BidRequest corpus (75% 2-imp messages, all fields populated). Raw data: [`docs/`](docs/). Reproduce: `make bench`.
 
-| Category | Values |
+### Single-threaded (i7-13700H, realistic corpus)
+
+| Method | msg/s | ns/msg | allocs/msg |
+|---|---|---|---|
+| Hand-written Arrow getters | 180 k | 5,544 | 131 |
+| `AppendDenorm` (proto.Message) | 73 k | 13,662 | 230 |
+| `AppendRaw` (HyperType) | 151 k | 6,606 | 98 |
+| `AppendDenormRaw` (HyperType, realistic) | **296 k** | **3,376** | **57** |
+| `AppendDenormRaw` (no HyperType) | 47 k | 21,094 | 275 |
+| `AppendRawMerged` (HyperType) | 106 k | 9,418 | 30 |
+| `AppendDenormRawMerged` (HyperType) | 204 k | 4,899 | 66 |
+
+**`AppendDenormRaw` with a HyperType beats hand-written code by 39% and uses 57% fewer allocations.**
+
+### Concurrent scaling (AppendRaw, i7-13700H, GOMAXPROCS=20)
+
+| Workers | msg/s |
 |---|---|
-| Aggregation | `coalesce`, `default` |
-| Control flow | `cond` |
-| Predicates | `has`, `eq`, `ne`, `lt`, `le`, `gt`, `ge` |
-| Arithmetic | `add`, `sub`, `mul`, `div`, `mod`, `abs`, `ceil`, `floor`, `round`, `min`, `max` |
-| String | `concat`, `upper`, `lower`, `trim`, `trim_prefix`, `trim_suffix`, `len` |
-| Cast | `cast_int`, `cast_float`, `cast_string` |
-| Timestamp | `age`, `strptime`, `try_strptime`, `extract_year`, `extract_month`, `extract_day`, `extract_hour`, `extract_minute`, `extract_second`, `epoch_to_date`, `date_part` |
-| ETL | `hash`, `bucket`, `mask`, `coerce`, `enum_name`, `sum`, `distinct`, `list_concat` |
-| Logic | `and`, `or`, `not` |
+| 1 | 79 k |
+| 4 | 227 k |
+| 8 | 296 k |
+| 16 | 406 k |
+| **80** | **463 k** |
 
-Auxiliary YAML fields: `sep` (separator / format / part name / mask char), `literal` / `literal2` (scalar fallback or coerce values), `param` (integer parameter for `bucket` and `mask`). See [testdata/example_denorm.yaml](testdata/example_denorm.yaml) for a fully annotated reference config.
+`AppendDenormRaw` peaks at workers=16 → **481 k msg/s**.
 
-### Quick start — computed columns with expressions
+### Batch size impact (AppendRaw, BidRequest, single worker)
 
-```go
-tc, err := bufarrowlib.New(md, memory.DefaultAllocator,
-    bufarrowlib.WithDenormalizerPlan(
-        pbpath.PlanPath("id", pbpath.Alias("request_id")),
-
-        // Coalesce: first non-empty ID
-        pbpath.PlanPath("device_id",
-            pbpath.WithExpr(pbpath.FuncCoalesce(
-                pbpath.PathRef("user.id"),
-                pbpath.PathRef("device.ifa"),
-            )),
-            pbpath.Alias("device_id"),
-        ),
-
-        // Conditional: banner width or video width
-        pbpath.PlanPath("width",
-            pbpath.WithExpr(pbpath.FuncCoalesce(
-                pbpath.PathRef("imp[0].banner.w"),
-                pbpath.PathRef("imp[0].video.w"),
-            )),
-            pbpath.Alias("width"),
-        ),
-
-        // Fan-out across deals
-        pbpath.PlanPath("imp[0].pmp.deals[*].id", pbpath.Alias("deal_id")),
-    ),
-)
-```
-
-## 📊 Benchmarks
-
-Benchmarks use a realistic 506-message corpus shaped to match sampled production ad-tech traffic (OpenRTB BidRequest): 75% have 2 imp objects, 61% have 1 deal object per impression, banner and video mutually exclusive dimensions, all top-level fields populated.
-
-### BidRequest denormalization — method comparison
-
-| Method | ns/msg | msg/s | B/msg | allocs/msg | Description |
-|---|---|---|---|---|---|
-| **Custom** (hand-written getters) | 5,544 | 180K | 5,562 | 131.2 | Manual Arrow builders with typed getters |
-| **AppendDenorm** (proto.Message) | 8,921 | 112K | 7,022 | 184.6 | Plan-based denorm from deserialized proto |
-| **AppendDenormRaw** (random data) | 4,939 | 202K | 3,951 | 62.4 | hyperpb + Shared arena, random corpus |
-| **AppendDenormRaw** (realistic data) | **3,376** | **296K** | **2,476** | **56.9** | hyperpb + Shared arena, production-shaped corpus |
-| **AppendDenormRaw + PGO** | 7,046 | 142K | 2,508 | 66.7 | With profile-guided recompilation |
-
-> **AppendDenormRaw with realistic data is 39% faster than hand-written code** — with 57% fewer allocations per message — while being fully declarative (no manual Arrow builders to maintain).
-
-### Other benchmarks
-
-| Benchmark | Time | Note |
+| Batch | msg/s | allocs/msg |
 |---|---|---|
-| `New/BidRequest` | ~220 µs | Schema construction from descriptor |
-| `NewFromFile/BidRequest` | ~5.5 ms | Compile .proto + construct schema |
-| `Append/BidRequest` (100 msgs) | ~2.8 ms | Full-fidelity proto → Arrow |
-| `Clone/BidRequest_with_denorm` | ~110 µs | Clone transcoder + denorm plan |
-| `WriteParquet/BidRequest` (100 rows) | ~1.5 ms | Arrow → Parquet |
-| `ReadParquet/BidRequest` (100 rows) | ~760 µs | Parquet → Arrow |
-| `AppendDenorm/2x2` (100 msgs) | ~1.5 ms | Denorm with 2 items × 2 tags |
-| `AppendDenorm/10x10` (100 msgs) | ~16 ms | Denorm with 10 items × 10 tags |
+| 1 | 6,774 | 2,446 |
+| 100 | 102,577 | 47 |
+| **1,000** | **121,315** | **26** |
+| 122,880 | 129,689 | 24 |
 
-### Running benchmarks
+**Use batch size ≥ 100. Align to 122,880 (DuckDB row group size) for direct Parquet ingest.**
+
+### Clone vs New
+
+`Clone` is ~2× cheaper than `New`. Never create a `Transcoder` inside a message loop.
+
+| Schema | `New()` | `Clone()` |
+|---|---|---|
+| ScalarTypes | 57 µs | 34 µs |
+| BidRequest + denorm | 497 µs | 272 µs |
+
+Full benchmark tables and Python numbers: [`docs/benchmark-results.md`](docs/benchmark-results.md).
+
+---
+
+## Python Bindings
+
+[**pybufarrow**](python/) — zero-copy Go→Python via the Arrow C Data Interface.
 
 ```sh
-# Run all benchmarks
-go test -bench=. -benchmem -count=3
-
-# Run only the BidRequest comparison benchmarks
-go test -bench='BenchmarkAppendBidRequest' -benchmem -count=3
-
-# Run with longer duration for more stable results
-go test -bench='BenchmarkAppendBidRequest' -benchmem -benchtime=5s -count=5
-
-# Run a specific sub-benchmark
-go test -bench='BenchmarkAppendBidRequest_HyperpbRaw/Realistic' -benchmem
-
-# Profile CPU
-go test -bench='BenchmarkAppendBidRequest_HyperpbRaw/Realistic' -cpuprofile=cpu.prof
-go tool pprof cpu.prof
-
-# Profile memory allocations
-go test -bench='BenchmarkAppendBidRequest_HyperpbRaw/Realistic' -memprofile=mem.prof
-go tool pprof -alloc_objects mem.prof
+pip install pybufarrow
 ```
 
-**Flags reference:**
+```python
+from pybufarrow import HyperType, Transcoder
+
+ht = HyperType("events.proto", "UserEvent")
+
+with Transcoder.from_proto_file("events.proto", "UserEvent", hyper_type=ht) as tc:
+    for raw in kafka_consumer:
+        tc.append(raw)
+    batch = tc.flush()
+
+df = batch.to_pandas()
+```
+
+Denorm, streaming helpers, `Pool` for multi-worker throughput — see [python/README.md](python/README.md).
+
+> **Use `Pool`, not `ThreadPoolExecutor`**. At 4 workers, `Pool` is 16× faster due to GIL behaviour.
+
+---
+
+## pbpath
+
+[`proto/pbpath`](proto/pbpath) — standalone protobuf field-path engine, usable independently.
+
+- Dot-path parsing with wildcards, Python-style slices, ranges, negative indices
+- Trie-based `Plan` API: shared-prefix traversal for extracting many fields from the same message
+- Full expression engine (30+ functions)
+
+### pbpath-playground
+
+Interactive web UI for testing paths and YAML denorm configs against real data before deployment:
+
+```sh
+go run ./cmd/pbpath-playground --proto path/to/schema.proto
+```
+
+Opens at `localhost:4195`. Two modes: **Pipeline** (live path evaluation against proto messages) and **Denorm** (live YAML config → Arrow table preview).
 
 | Flag | Default | Description |
 |---|---|---|
-| `-bench=<regex>` | (none) | Run benchmarks matching the regex |
-| `-benchmem` | off | Report allocations (B/op, allocs/op) |
-| `-benchtime=<d>` | `1s` | Target wall-clock time per benchmark; Go auto-adjusts `b.N` |
-| `-count=<n>` | `1` | Repeat each benchmark `n` times for statistical comparison |
-| `-cpuprofile=<file>` | (none) | Write CPU profile to file |
-| `-memprofile=<file>` | (none) | Write memory profile to file |
+| `--proto` | required | `.proto` file(s), repeatable |
+| `--import-path` | — | proto import directories, repeatable |
+| `--corpus` | — | length-prefixed binary file for real-data testing |
+| `--port` | `4195` | HTTP port |
+| `--seed` | random | protorand seed for reproducible test messages |
 
-## Choosing the right ingestion method
+---
 
-| Scenario | Method | Why |
+## Well-known type mapping
+
+| Protobuf | Arrow |
+|---|---|
+| `bool` | `Boolean` |
+| `int32 / sint32 / sfixed32 / enum` | `Int32` |
+| `uint32 / fixed32` | `Uint32` |
+| `int64 / sint64 / sfixed64` | `Int64` |
+| `uint64 / fixed64` | `Uint64` |
+| `float` | `Float32` |
+| `double` | `Float64` |
+| `string` | `Utf8` |
+| `bytes` | `Binary` |
+| `google.protobuf.Timestamp` | `Timestamp(ms, UTC)` |
+| `google.protobuf.Duration` | `Duration(ms)` |
+| `google.protobuf.FieldMask` | `Utf8` |
+| `google.protobuf.*Value` wrappers | unwrapped scalar |
+| `google.type.Date` | `Date32` |
+| `google.type.TimeOfDay` | `Time64(µs)` |
+| `google.type.Money / LatLng / Color / PostalAddress / Interval` | `Utf8` (protojson) |
+| OpenTelemetry `AnyValue` | `Binary` (proto-marshalled) |
+| repeated field | `List<T>` |
+| map field | `Map<K,V>` |
+| embedded message | `Struct{...}` |
+
+---
+
+## Development
+
+### Make targets
+
+| Target | Description |
+|---|---|
+| `make test` | Run Go + Python tests |
+| `make test-go` | Go tests only (`go test -timeout 180s ./...`) |
+| `make test-python` | Python tests (uv-managed venv, pytest) |
+| `make bench` | Run Go + Python benchmarks |
+| `make bench-go` | Go benchmarks; filter with `BENCH_FILTER=BenchmarkFoo` |
+| `make bench-python` | Python benchmarks (pytest-benchmark, outputs JSON) |
+| `make bench-throughput` | Concurrent max-throughput benchmarks only |
+| `make bench-compare` | Rotate previous results → `.old`, run, diff with `benchstat` |
+| `make libbufarrow` | Build C shared library (`cbinding/libbufarrow.so`) |
+| `make python` | Build `pybufarrow` wheel (requires `libbufarrow`) |
+| `make python-dev` | Editable Python install for development |
+| `make venv-sync` | Create/update uv-managed venv in `python/` |
+
+**Benchmark variables:**
+
+```sh
+make bench-go BENCH_FILTER=BenchmarkAppendRaw BENCH_TIME=10s BENCH_COUNT=3
+make bench-go BENCH_FILTER=BenchmarkMaxThroughput_ConcurrentAppendDenormRaw
+```
+
+| Variable | Default | Description |
 |---|---|---|
-| You have `proto.Message` objects (from generated code or gRPC) | `Append` / `AppendDenorm` | No marshal/unmarshal overhead — pass the message directly |
-| You have raw `[]byte` from Kafka, a file, or a network stream | `AppendRaw` / `AppendDenormRaw` | Avoids double-unmarshal; hyperpb parser is faster than `proto.Unmarshal` |
-| You need the full protobuf structure as nested Arrow | `Append` / `AppendRaw` | Produces a hierarchical Arrow record matching the proto schema |
-| You need a flat analytics table with selected columns | `AppendDenorm` / `AppendDenormRaw` | Declarative path selection, automatic fan-out, computed columns via Exprs |
-| Multi-goroutine pipeline | `Clone` with shared `HyperType` | Each goroutine gets independent builders; profiling data is aggregated |
-| Evolving traffic shape | `WithAutoRecompile` | PGO adapts the parser as field-presence patterns change |
+| `BENCH_FILTER` | `.` (all) | `-bench` regex filter |
+| `BENCH_TIME` | `3s` | `-benchtime` per benchmark |
+| `BENCH_COUNT` | `1` | `-count` repetitions |
+| `BENCH_OUT` | `docs/<cpu>-benchmark-results.txt` | Go output file |
+| `BENCH_OUT_PYTHON` | `docs/<cpu>-benchmark-results-python.json` | Python output file |
 
-## 💫 Show your support
+`bench-compare` automatically detects the CPU model and writes per-machine result files. Run it twice to get a `benchstat` delta.
 
-Give a ⭐️ if this project helped you!
-Feedback and PRs welcome.
+### Reference
+
+- Full API: [pkg.go.dev/github.com/loicalleyne/bufarrowlib](https://pkg.go.dev/github.com/loicalleyne/bufarrowlib)
+- pbpath reference: [proto/pbpath/README.md](proto/pbpath/README.md)
+- Architecture guide: [proto/pbpath/ARCHITECTURE.md](proto/pbpath/ARCHITECTURE.md)
+- Performance guide: [docs/benchmark-results.md](docs/benchmark-results.md)
+- LLM-optimized reference: [llms.txt](llms.txt)
+- Example YAML config: [testdata/example_denorm.yaml](testdata/example_denorm.yaml)
+
+---
 
 ## Licence
 
 bufarrowLib is released under the Apache 2.0 license. See [LICENCE.txt](LICENCE.txt)
+

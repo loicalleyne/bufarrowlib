@@ -202,7 +202,10 @@ func Example_denormToParquet() {
 
 	// Append an order with 2 items × 2 tags → 4 denormalized rows.
 	msg := newOrder(orderMD, itemMD, "order-1",
-		[]struct{ id string; price float64 }{{"A", 1.50}, {"B", 2.75}},
+		[]struct {
+			id    string
+			price float64
+		}{{"A", 1.50}, {"B", 2.75}},
 		[]string{"rush", "fragile"}, 1,
 	)
 	if err := tc.AppendDenorm(msg); err != nil {

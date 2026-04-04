@@ -1,0 +1,15 @@
+# bufarrowlib denormalizer config for test_denorm.py
+proto:
+  file: order.proto
+  message: Order
+
+denormalizer:
+  columns:
+    - name: order_name
+      path: name
+    - name: item_id
+      path: items[*].id
+    - name: item_price
+      path: items[*].price
+    - name: order_seq
+      path: seq

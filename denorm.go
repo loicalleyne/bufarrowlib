@@ -85,7 +85,10 @@ func fanoutSignature(p pbpath.Path) string {
 // construction, and leaf/FD validation — all of which are already captured in
 // the shared Plan.
 func (s *Transcoder) cloneDenorm(src *Transcoder, mem memory.Allocator) error {
-	s.denormPlan = src.denormPlan
+	// Clone the Plan so each Transcoder clone gets its own scratch buffer —
+	// Plan.EvalLeaves reuses scratch and is NOT safe for concurrent use.
+	// Plan.Clone() shares the immutable trie but resets the scratch pointer.
+	s.denormPlan = src.denormPlan.Clone()
 	s.denormSchema = src.denormSchema
 	s.denormBuilder = array.NewRecordBuilder(mem, s.denormSchema)
 
@@ -130,7 +133,15 @@ func (s *Transcoder) cloneDenorm(src *Transcoder, mem memory.Allocator) error {
 //
 // Called from New() and Clone().
 func (s *Transcoder) compileDenormPlan(mem memory.Allocator) error {
-	plan, err := pbpath.NewPlan(s.msgDesc, nil, s.opts.denormPaths...)
+	// When a HyperType is provided, its message descriptor comes from a
+	// separate proto compilation. The denorm plan must be compiled against the
+	// HyperType's descriptor so that FieldDescriptor pointers in the plan
+	// match the hyperpb.Message instances created during AppendDenormRaw.
+	planDesc := s.msgDesc
+	if s.hyperType != nil {
+		planDesc = s.hyperType.Type().Descriptor()
+	}
+	plan, err := pbpath.NewPlan(planDesc, nil, s.opts.denormPaths...)
 	if err != nil {
 		return fmt.Errorf("bufarrow: denormalizer plan: %w", err)
 	}
@@ -195,8 +206,8 @@ func (s *Transcoder) compileDenormPlan(mem memory.Allocator) error {
 	// --- Compute fan-out groups ---
 	// Expr-only entries (no Path) are placed in their own singleton group.
 	// Their fan-out is determined at eval time by their leaf entries.
-	sigToGroup := make(map[string]int)      // signature → group index
-	s.denormGroups = s.denormGroups[:0]      // reset for Clone()
+	sigToGroup := make(map[string]int)  // signature → group index
+	s.denormGroups = s.denormGroups[:0] // reset for Clone()
 	s.denormCols = make([]denormColumn, nCols)
 
 	for i, e := range entries {

@@ -31,12 +31,17 @@ type Transcoder struct {
 	msgType       *hyperpb.MessageType
 	stencil       proto.Message
 	stencilCustom proto.Message
-	denormBuilder *array.RecordBuilder
-	denormPlan    *pbpath.Plan
-	denormSchema  *arrow.Schema
-	denormGroups  []fanoutGroup
-	denormCols    []denormColumn
-	opts          *Opt
+	// customFieldRemap maps original custom field numbers to their renumbered
+	// positions in the merged descriptor. Built once in New() and shared
+	// (read-only) across clones. Used by AppendRawMerged/AppendDenormRawMerged
+	// to rewrite customBytes wire tags before concatenation with baseBytes.
+	customFieldRemap map[int32]int32
+	denormBuilder    *array.RecordBuilder
+	denormPlan       *pbpath.Plan
+	denormSchema     *arrow.Schema
+	denormGroups     []fanoutGroup
+	denormCols       []denormColumn
+	opts             *Opt
 
 	// hyperType is the shared HyperType coordinator for PGO-enabled raw-bytes
 	// ingestion. When non-nil, AppendRaw/AppendDenormRaw use it to load the
@@ -47,6 +52,16 @@ type Transcoder struct {
 	// hyperShared is per-Transcoder hyperpb memory reuse state. It is created
 	// fresh for each Transcoder/clone and must not be shared.
 	hyperShared *hyperpb.Shared
+
+	// unmarshalScratch is a fixed-size option array reused across AppendRaw /
+	// AppendDenormRaw / AppendRawMerged / AppendDenormRawMerged calls when PGO
+	// profiling is active. Eliminates the per-call append allocation.
+	unmarshalScratch [1]hyperpb.UnmarshalOption
+
+	// mergeScratch is a reusable byte buffer for AppendRawMerged and
+	// AppendDenormRawMerged. Accumulates baseBytes || remapped(customBytes) in
+	// a single allocation that grows to capacity once and is reused thereafter.
+	mergeScratch []byte
 
 	// Scratch slices reused across AppendDenorm calls to avoid per-call allocations.
 	denormGroupCounts []int
@@ -220,6 +235,25 @@ func New(msgDesc protoreflect.MessageDescriptor, mem memory.Allocator, opts ...O
 	if mergedMsgDesc != nil {
 		// Build stencilCustom from the merged descriptor for use by AppendWithCustom
 		tc.stencilCustom = dynamicpb.NewMessage(mergedMsgDesc)
+
+		// Build customFieldRemap: originalFieldNumber → mergedFieldNumber.
+		// MergeMessageDescriptors renumbers custom fields to start above the
+		// base message's max field number. AppendRawMerged needs to rewrite
+		// customBytes (encoded with original numbers) before concatenation.
+		if o.customMsgDesc != nil {
+			remap := make(map[int32]int32, o.customMsgDesc.Fields().Len())
+			for i := 0; i < o.customMsgDesc.Fields().Len(); i++ {
+				orig := o.customMsgDesc.Fields().Get(i)
+				merged := mergedMsgDesc.Fields().ByName(orig.Name())
+				if merged != nil && merged.Number() != orig.Number() {
+					remap[int32(orig.Number())] = int32(merged.Number())
+				}
+			}
+			if len(remap) > 0 {
+				tc.customFieldRemap = remap
+			}
+		}
+
 		b = build(a.ProtoReflect())
 		b.build(mem)
 	} else {
@@ -267,6 +301,7 @@ func (s *Transcoder) Clone(mem memory.Allocator) (tc *Transcoder, err error) {
 	}
 	if s.stencilCustom != nil {
 		tc.stencilCustom = dynamicpb.NewMessage(s.stencilCustom.ProtoReflect().Descriptor())
+		tc.customFieldRemap = s.customFieldRemap // immutable map, safe to share across clones
 	}
 	if s.denormPlan != nil {
 		if err := tc.cloneDenorm(s, mem); err != nil {

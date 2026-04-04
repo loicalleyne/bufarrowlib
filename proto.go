@@ -106,13 +106,30 @@ func MergeMessageDescriptors(a, b protoreflect.MessageDescriptor, newName string
 
 	dpA.Name = proto.String(newName)
 
-	// Wrap in a synthetic FileDescriptorProto
-	// Declare the original files as dependencies so the resolver can resolve
-	// field type references to nested types, enums, or external types.
-	deps := []string{string(a.ParentFile().Path())}
-	if b.ParentFile().Path() != a.ParentFile().Path() {
-		deps = append(deps, string(b.ParentFile().Path()))
+	// Collect all direct and transitive dependency file paths for both parent
+	// files. The merged synthetic file inherits all field type references from
+	// both parents, so it must explicitly declare every file containing a
+	// referenced type — not just the top-level parent files.
+	depSet := make(map[string]bool)
+	var deps []string
+
+	var addFileDeps func(fd protoreflect.FileDescriptor)
+	addFileDeps = func(fd protoreflect.FileDescriptor) {
+		p := string(fd.Path())
+		if depSet[p] {
+			return
+		}
+		depSet[p] = true
+		deps = append(deps, p)
+		for i := 0; i < fd.Imports().Len(); i++ {
+			addFileDeps(fd.Imports().Get(i))
+		}
 	}
+	addFileDeps(a.ParentFile())
+	if b.ParentFile().Path() != a.ParentFile().Path() {
+		addFileDeps(b.ParentFile())
+	}
+
 	fdp := &descriptorpb.FileDescriptorProto{
 		Name:        proto.String(newName + ".proto"),
 		Syntax:      proto.String("proto3"),
@@ -120,14 +137,15 @@ func MergeMessageDescriptors(a, b protoreflect.MessageDescriptor, newName string
 		MessageType: []*descriptorpb.DescriptorProto{dpA},
 	}
 
-	// Build resolver from the already-known parent files
+	// Build resolver from the already-known parent files, including all
+	// transitive imports so that well-known types (e.g. google.protobuf.Timestamp)
+	// and any other indirect dependencies resolve successfully.
 	resolver := &protoregistry.Files{}
-	if err := resolver.RegisterFile(a.ParentFile()); err != nil {
+	if err := registerFileTransitively(resolver, a.ParentFile()); err != nil {
 		return nil, fmt.Errorf("failed to register parent file of a: %w", err)
 	}
-	// Only register b's parent if it's a different file
 	if b.ParentFile().Path() != a.ParentFile().Path() {
-		if err := resolver.RegisterFile(b.ParentFile()); err != nil {
+		if err := registerFileTransitively(resolver, b.ParentFile()); err != nil {
 			return nil, fmt.Errorf("failed to register parent file of b: %w", err)
 		}
 	}
@@ -138,4 +156,25 @@ func MergeMessageDescriptors(a, b protoreflect.MessageDescriptor, newName string
 	}
 
 	return fd.Messages().Get(0), nil
+}
+
+// registerFileTransitively registers fd and all of its transitive imports into r.
+// Already-registered files are skipped so repeated calls are safe.
+func registerFileTransitively(r *protoregistry.Files, fd protoreflect.FileDescriptor) error {
+	// Depth-first: register imports before the file that depends on them.
+	for i := 0; i < fd.Imports().Len(); i++ {
+		imp := fd.Imports().Get(i)
+		if _, err := r.FindFileByPath(string(imp.Path())); err == nil {
+			continue // already registered
+		}
+		if err := registerFileTransitively(r, imp); err != nil {
+			return err
+		}
+	}
+	if _, err := r.FindFileByPath(string(fd.Path())); err != nil {
+		if err := r.RegisterFile(fd); err != nil {
+			return err
+		}
+	}
+	return nil
 }

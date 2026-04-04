@@ -206,8 +206,8 @@ func TestNewWithRepeatedScalars(t *testing.T) {
 	defer schema.Release()
 
 	msg := &samples.ScalarTypesRepeated{
-		Double: []float64{1.0, 2.0, 3.0},
-		Int32:  []int32{1, 2, 3},
+		Double:  []float64{1.0, 2.0, 3.0},
+		Int32:   []int32{1, 2, 3},
 		String_: []string{"a", "b", "c"},
 	}
 	schema.Append(msg)

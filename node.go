@@ -699,7 +699,7 @@ func (n *node) baseType(field protoreflect.FieldDescriptor) (t arrow.DataType) {
 		n.setup = func(b array.Builder) valueFn {
 			a := b.(*array.BinaryBuilder)
 			return func(v protoreflect.Value, set bool) error {
-				if !v.IsValid() {
+				if !v.IsValid() || !set {
 					a.AppendNull()
 					return nil
 				}

@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>pbpq – protobuf pipeline playground</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; font-family: monospace; background: #1e1e1e; color: #d4d4d4; }
+
+#toolbar {
+  position: absolute; top: 0; left: 0; right: 0; height: 40px;
+  background: #2d2d2d; border-bottom: 1px solid #444;
+  display: flex; align-items: center; padding: 0 12px; gap: 10px; z-index: 10;
+}
+#toolbar select, #toolbar button {
+  background: #3c3c3c; color: #d4d4d4; border: 1px solid #555;
+  padding: 4px 10px; border-radius: 3px; font-family: monospace; font-size: 13px; cursor: pointer;
+}
+#toolbar button:hover { background: #505050; }
+#toolbar .spacer { flex: 1; }
+#toolbar label { font-size: 13px; color: #999; }
+#corpus-nav { display: flex; align-items: center; gap: 6px; }
+#corpus-nav span { font-size: 13px; color: #aaa; min-width: 80px; text-align: center; }
+
+.tab { border-radius: 3px 3px 0 0; }
+.tab.active { background: #1e1e1e; color: #fff; border-bottom-color: #1e1e1e; }
+
+.panel-header {
+  height: 24px; background: #2d2d2d; border-bottom: 1px solid #444;
+  display: flex; align-items: center; padding: 0 8px; font-size: 11px; color: #888;
+}
+.panel-header .title { flex: 1; }
+.panel-header button {
+  background: none; border: 1px solid #555; color: #aaa; padding: 1px 6px;
+  border-radius: 2px; font-size: 10px; cursor: pointer; margin-left: 4px;
+}
+.panel-header button.active { background: #555; color: #fff; }
+
+/* Layout: toolbar 40px top, then split */
+#input-panel {
+  position: absolute; top: 40px; left: 0; right: 50%; bottom: 50%;
+  border-right: 1px solid #444; border-bottom: 1px solid #444;
+  display: flex; flex-direction: column;
+}
+#output-panel {
+  position: absolute; top: 40px; left: 50%; right: 0; bottom: 50%;
+  border-bottom: 1px solid #444;
+  display: flex; flex-direction: column;
+}
+#denorm-output-panel {
+  position: absolute; top: 40px; left: 50%; right: 0; bottom: 50%;
+  border-bottom: 1px solid #444;
+  display: flex; flex-direction: column;
+}
+#pipeline-panel {
+  position: absolute; top: 50%; left: 0; right: 35%; bottom: 0;
+  border-right: 1px solid #444;
+  display: flex; flex-direction: column;
+}
+#denorm-config-panel {
+  position: absolute; top: 50%; left: 0; right: 35%; bottom: 0;
+  border-right: 1px solid #444;
+  display: flex; flex-direction: column;
+}
+#pipeline-ref-panel, #denorm-ref-panel {
+  position: absolute; top: 50%; left: 65%; right: 0; bottom: 0;
+  overflow-y: auto; padding: 8px; font-size: 12px; color: #999;
+  background: #252525;
+}
+
+.editor-container { flex: 1; position: relative; }
+#ace-input, #ace-pipeline, #ace-denorm { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
+
+#output {
+  flex: 1; overflow: auto; padding: 8px; font-size: 13px;
+  white-space: pre-wrap; word-break: break-word; background: #1e1e1e;
+}
+#output.error { color: #f48771; }
+#output.success { color: #d4d4d4; }
+
+#denorm-output-content {
+  flex: 1; overflow: auto; background: #1e1e1e; font-size: 13px;
+}
+#denorm-output-content table { border-collapse: collapse; width: 100%; }
+#denorm-output-content th {
+  background: #2d2d2d; color: #d4d4d4; padding: 4px 8px;
+  border: 1px solid #444; position: sticky; top: 0; text-align: left; font-size: 11px;
+}
+#denorm-output-content td {
+  padding: 4px 8px; border: 1px solid #333; color: #ccc; font-size: 12px;
+}
+#denorm-output-content tr:nth-child(even) td { background: #252525; }
+#denorm-output-content .row-count { padding: 4px 8px; font-size: 11px; color: #666; }
+#denorm-output-content .denorm-error { padding: 8px; color: #f48771; white-space: pre-wrap; }
+
+.hidden { display: none !important; }
+.border-error { border-color: #f48771 !important; }
+
+/* Quick reference styling */
+.ref-section { margin-bottom: 12px; }
+.ref-section summary {
+  cursor: pointer; color: #aaa; font-size: 12px; font-weight: bold;
+  padding: 2px 0; user-select: none;
+}
+.ref-section summary:hover { color: #d4d4d4; }
+.ref-section .ref-body { padding: 4px 0 4px 8px; font-size: 11px; line-height: 1.6; }
+.ref-section code { color: #ce9178; font-size: 11px; }
+.ref-section .ref-row { display: flex; gap: 8px; }
+.ref-section .ref-label { color: #569cd6; min-width: 110px; flex-shrink: 0; }
+.ref-section .ref-desc { color: #888; }
+</style>
+</head>
+<body>
+
+<div id="toolbar">
+  <button id="tab-pipeline" class="tab active" onclick="switchTab('pipeline')">Pipeline</button>
+  <button id="tab-denorm" class="tab" onclick="switchTab('denorm')">Denorm</button>
+  <span style="color:#444;">|</span>
+
+  <label for="msg-select">Message:</label>
+  <select id="msg-select">
+    {{range .MessageNames}}<option value="{{.}}">{{.}}</option>{{end}}
+  </select>
+  <button id="btn-generate" onclick="generate()">Generate Random</button>
+  <button id="btn-skeleton" class="denorm-mode hidden" onclick="loadSkeleton()">Reset Skeleton</button>
+
+  <div id="corpus-nav" style="{{if not .HasCorpus}}display:none{{end}}">
+    <button onclick="corpusNav(-1)">&larr;</button>
+    <span id="corpus-pos">0 / {{.CorpusTotal}}</span>
+    <button onclick="corpusNav(1)">&rarr;</button>
+  </div>
+
+  <div class="spacer"></div>
+  <label style="color:#666; font-size:11px;">pbpq</label>
+</div>
+
+<!-- Input Panel (top-left) — shared -->
+<div id="input-panel">
+  <div class="panel-header">
+    <span class="title">Input</span>
+    <button id="btn-json" class="active" onclick="setFormat('json')">JSON</button>
+    <button id="btn-textpb" onclick="setFormat('textpb')">Proto Text</button>
+  </div>
+  <div class="editor-container"><div id="ace-input"></div></div>
+</div>
+
+<!-- Pipeline: Output Panel (top-right) -->
+<div id="output-panel" class="pipeline-mode">
+  <div class="panel-header">
+    <span class="title">Output</span>
+    <button id="btn-out-json" class="active" onclick="setOutputFormat('json')">JSON</button>
+    <button id="btn-out-textpb" onclick="setOutputFormat('textpb')">Proto Text</button>
+  </div>
+  <div id="output" class="success"></div>
+</div>
+
+<!-- Denorm: Output Table (top-right) -->
+<div id="denorm-output-panel" class="denorm-mode hidden">
+  <div class="panel-header">
+    <span class="title">Denorm Output</span>
+  </div>
+  <div id="denorm-output-content"></div>
+</div>
+
+<!-- Pipeline: Editor (bottom-left) -->
+<div id="pipeline-panel" class="pipeline-mode">
+  <div class="panel-header"><span class="title">Pipeline</span></div>
+  <div class="editor-container"><div id="ace-pipeline"></div></div>
+</div>
+
+<!-- Denorm: YAML Config Editor (bottom-left) -->
+<div id="denorm-config-panel" class="denorm-mode hidden">
+  <div class="panel-header"><span class="title">Denorm Config (YAML)</span></div>
+  <div class="editor-container"><div id="ace-denorm"></div></div>
+</div>
+
+<!-- Pipeline: Quick Reference (bottom-right) -->
+<div id="pipeline-ref-panel" class="pipeline-mode">
+  <details class="ref-section" open>
+    <summary>Basics</summary>
+    <div class="ref-body">
+      <div class="ref-row"><span class="ref-label"><code>.</code></span><span class="ref-desc">identity (passthrough)</span></div>
+      <div class="ref-row"><span class="ref-label"><code>.field</code></span><span class="ref-desc">select field</span></div>
+      <div class="ref-row"><span class="ref-label"><code>.field.sub</code></span><span class="ref-desc">nested field</span></div>
+      <div class="ref-row"><span class="ref-label"><code>.[*]</code></span><span class="ref-desc">iterate repeated</span></div>
+      <div class="ref-row"><span class="ref-label"><code>.[0]</code></span><span class="ref-desc">index array</span></div>
+      <div class="ref-row"><span class="ref-label"><code>.[0:3]</code></span><span class="ref-desc">slice range</span></div>
+      <div class="ref-row"><span class="ref-label"><code>|</code></span><span class="ref-desc">pipe (chain)</span></div>
+    </div>
+  </details>
+  <details class="ref-section" open>
+    <summary>Operators</summary>
+    <div class="ref-body">
+      <div class="ref-row"><span class="ref-label"><code>select(cond)</code></span><span class="ref-desc">filter items</span></div>
+      <div class="ref-row"><span class="ref-label"><code>map(expr)</code></span><span class="ref-desc">transform items</span></div>
+      <div class="ref-row"><span class="ref-label"><code>sort_by(key)</code></span><span class="ref-desc">sort items</span></div>
+      <div class="ref-row"><span class="ref-label"><code>group_by(key)</code></span><span class="ref-desc">group items</span></div>
+      <div class="ref-row"><span class="ref-label"><code>reduce</code></span><span class="ref-desc">accumulate values</span></div>
+      <div class="ref-row"><span class="ref-label"><code>flatten</code></span><span class="ref-desc">flatten arrays</span></div>
+      <div class="ref-row"><span class="ref-label"><code>length</code></span><span class="ref-desc">count items</span></div>
+      <div class="ref-row"><span class="ref-label"><code>keys</code></span><span class="ref-desc">object keys</span></div>
+      <div class="ref-row"><span class="ref-label"><code>values</code></span><span class="ref-desc">object values</span></div>
+    </div>
+  </details>
+  <details class="ref-section">
+    <summary>Control Flow</summary>
+    <div class="ref-body">
+      <div class="ref-row"><span class="ref-label"><code>if C then T else E end</code></span></div>
+      <div class="ref-row"><span class="ref-label"><code>// alt</code></span><span class="ref-desc">alternative operator</span></div>
+      <div class="ref-row"><span class="ref-label"><code>try-catch</code></span><span class="ref-desc">error handling</span></div>
+    </div>
+  </details>
+  <details class="ref-section">
+    <summary>Format</summary>
+    <div class="ref-body">
+      <div class="ref-row"><span class="ref-label"><code>@json</code></span><span class="ref-desc">format as JSON string</span></div>
+      <div class="ref-row"><span class="ref-label"><code>@text</code></span><span class="ref-desc">format as text</span></div>
+      <div class="ref-row"><span class="ref-label"><code>@csv</code></span><span class="ref-desc">format as CSV</span></div>
+    </div>
+  </details>
+  <details class="ref-section">
+    <summary>Examples</summary>
+    <div class="ref-body" style="white-space:pre; font-size:10px; color:#888;">
+.imp[*].id
+.imp | map(.bidfloor) | sort_by(.)
+.imp[*] | select(.bidfloor > 1.0)
+{id: .id, count: (.imp | length)}</div>
+  </details>
+</div>
+
+<!-- Denorm: Quick Reference (bottom-right) -->
+<div id="denorm-ref-panel" class="denorm-mode hidden">
+  <details class="ref-section" open>
+    <summary>Column Syntax</summary>
+    <div class="ref-body" style="white-space:pre; font-size:10px; color:#888;">
+# Simple path column
+- name: auction_id
+  path: auction_id
+
+# Repeated field (fan-out)
+- name: imp_id
+  path: imp[*].id
+
+# Strict mode
+- name: price
+  path: imp[*].bidfloor
+  strict: true
+
+# Expression column
+- name: has_video
+  expr:
+    func: has
+    args:
+      - path: imp[*].video</div>
+  </details>
+  <details class="ref-section" open>
+    <summary>Path Syntax</summary>
+    <div class="ref-body">
+      <div class="ref-row"><span class="ref-label"><code>field</code></span><span class="ref-desc">scalar field</span></div>
+      <div class="ref-row"><span class="ref-label"><code>field.sub</code></span><span class="ref-desc">nested access</span></div>
+      <div class="ref-row"><span class="ref-label"><code>field[*]</code></span><span class="ref-desc">repeated (all)</span></div>
+      <div class="ref-row"><span class="ref-label"><code>field[0]</code></span><span class="ref-desc">repeated (first)</span></div>
+      <div class="ref-row"><span class="ref-label"><code>field[*].sub</code></span><span class="ref-desc">nested in repeated</span></div>
+    </div>
+  </details>
+  <details class="ref-section">
+    <summary>Expression Functions</summary>
+    <div class="ref-body">
+      <div class="ref-row"><span class="ref-label">Aggregation</span><span class="ref-desc"><code>coalesce</code> <code>default</code></span></div>
+      <div class="ref-row"><span class="ref-label">Control</span><span class="ref-desc"><code>cond</code></span></div>
+      <div class="ref-row"><span class="ref-label">Predicates</span><span class="ref-desc"><code>has</code> <code>eq</code> <code>ne</code> <code>lt</code> <code>le</code> <code>gt</code> <code>ge</code></span></div>
+      <div class="ref-row"><span class="ref-label">Arithmetic</span><span class="ref-desc"><code>add</code> <code>sub</code> <code>mul</code> <code>div</code> <code>mod</code> <code>abs</code> <code>ceil</code> <code>floor</code> <code>round</code> <code>min</code> <code>max</code></span></div>
+      <div class="ref-row"><span class="ref-label">String</span><span class="ref-desc"><code>concat</code> <code>upper</code> <code>lower</code> <code>trim</code> <code>trim_prefix</code> <code>trim_suffix</code> <code>len</code></span></div>
+      <div class="ref-row"><span class="ref-label">Cast</span><span class="ref-desc"><code>cast_int</code> <code>cast_float</code> <code>cast_string</code></span></div>
+      <div class="ref-row"><span class="ref-label">Timestamp</span><span class="ref-desc"><code>age</code> <code>strptime</code> <code>try_strptime</code> <code>extract_*</code> <code>epoch_to_date</code> <code>date_part</code></span></div>
+      <div class="ref-row"><span class="ref-label">ETL</span><span class="ref-desc"><code>hash</code> <code>bucket</code> <code>mask</code> <code>enum_name</code> <code>sum</code> <code>distinct</code> <code>list_concat</code> <code>coerce</code></span></div>
+      <div class="ref-row"><span class="ref-label">Logic</span><span class="ref-desc"><code>and</code> <code>or</code> <code>not</code></span></div>
+    </div>
+  </details>
+  <details class="ref-section">
+    <summary>Expr Fields</summary>
+    <div class="ref-body">
+      <div class="ref-row"><span class="ref-label"><code>func</code></span><span class="ref-desc">function name (required)</span></div>
+      <div class="ref-row"><span class="ref-label"><code>args</code></span><span class="ref-desc">list of {path:, literal:, or expr:}</span></div>
+      <div class="ref-row"><span class="ref-label"><code>sep</code></span><span class="ref-desc">separator / format string</span></div>
+      <div class="ref-row"><span class="ref-label"><code>literal</code></span><span class="ref-desc">default value / coerce ifTrue</span></div>
+      <div class="ref-row"><span class="ref-label"><code>literal2</code></span><span class="ref-desc">coerce ifFalse</span></div>
+      <div class="ref-row"><span class="ref-label"><code>param</code></span><span class="ref-desc">int param (bucket size, mask keepFirst)</span></div>
+    </div>
+  </details>
+  <details class="ref-section">
+    <summary>Expr Examples</summary>
+    <div class="ref-body" style="white-space:pre; font-size:10px; color:#888;">
+# Default fallback
+- name: region
+  expr:
+    func: default
+    args:
+      - path: user.geo.region
+    literal: "unknown"
+
+# Concatenation
+- name: full_id
+  expr:
+    func: concat
+    sep: "-"
+    args:
+      - path: imp[*].id
+      - path: imp[*].banner.id
+
+# Conditional
+- name: price_tier
+  expr:
+    func: cond
+    args:
+      - expr:
+          func: gt
+          args:
+            - path: imp[*].bidfloor
+            - literal: 5.0
+      - literal: "premium"
+      - literal: "standard"</div>
+  </details>
+</div>
+
+<!-- Ace Editor from CDN -->
+<script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.5/src-min-noconflict/ace.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.5/src-min-noconflict/theme-monokai.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.5/src-min-noconflict/mode-json.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.5/src-min-noconflict/mode-text.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.5/src-min-noconflict/mode-coffee.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ace-builds@1.36.5/src-min-noconflict/mode-yaml.js"></script>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────
+let activeTab = 'pipeline';
+let currentFormat = 'json';
+let outputFormat = 'json';
+let cachedFormats = { json: '', textpb: '' };
+let corpusIndex = 0;
+const hasCorpus = {{if .HasCorpus}}true{{else}}false{{end}};
+const corpusTotal = {{.CorpusTotal}};
+
+// ── Ace Editors ────────────────────────────────────────────────────
+const inputEditor = ace.edit('ace-input');
+inputEditor.setTheme('ace/theme/monokai');
+inputEditor.session.setMode('ace/mode/json');
+inputEditor.setOptions({ tabSize: 2, useSoftTabs: true, showPrintMargin: false });
+
+const pipeEditor = ace.edit('ace-pipeline');
+pipeEditor.setTheme('ace/theme/monokai');
+pipeEditor.session.setMode('ace/mode/coffee');
+pipeEditor.setOptions({ tabSize: 2, useSoftTabs: true, showPrintMargin: false });
+pipeEditor.setValue('{{.InitialPipeline}}', -1);
+
+const denormEditor = ace.edit('ace-denorm');
+denormEditor.setTheme('ace/theme/monokai');
+denormEditor.session.setMode('ace/mode/yaml');
+denormEditor.setOptions({ tabSize: 2, useSoftTabs: true, showPrintMargin: false });
+
+// ── Tab switching ──────────────────────────────────────────────────
+function switchTab(tab) {
+  activeTab = tab;
+  const isPipeline = tab === 'pipeline';
+
+  document.getElementById('tab-pipeline').classList.toggle('active', isPipeline);
+  document.getElementById('tab-denorm').classList.toggle('active', !isPipeline);
+
+  document.querySelectorAll('.pipeline-mode').forEach(el => el.classList.toggle('hidden', !isPipeline));
+  document.querySelectorAll('.denorm-mode').forEach(el => el.classList.toggle('hidden', isPipeline));
+
+  // Resize editors after visibility change.
+  setTimeout(() => {
+    inputEditor.resize();
+    if (isPipeline) {
+      pipeEditor.resize();
+    } else {
+      denormEditor.resize();
+    }
+  }, 0);
+
+  // Load skeleton if denorm editor is empty.
+  if (!isPipeline && !denormEditor.getValue().trim()) {
+    loadSkeleton();
+  }
+}
+
+// ── Debounced execute on every change ──────────────────────────────
+let executeTimer = null;
+function debouncedExecute() {
+  clearTimeout(executeTimer);
+  executeTimer = setTimeout(() => {
+    if (activeTab === 'pipeline') {
+      execute();
+    } else {
+      executeDenorm();
+    }
+  }, 300);
+}
+inputEditor.on('change', debouncedExecute);
+pipeEditor.on('change', () => { if (activeTab === 'pipeline') debouncedExecute(); });
+denormEditor.on('change', () => { if (activeTab === 'denorm') debouncedExecute(); });
+
+// ── Format toggle ──────────────────────────────────────────────────
+function setFormat(fmt) {
+  cachedFormats[currentFormat] = inputEditor.getValue();
+  currentFormat = fmt;
+
+  document.getElementById('btn-json').classList.toggle('active', fmt === 'json');
+  document.getElementById('btn-textpb').classList.toggle('active', fmt === 'textpb');
+  inputEditor.session.setMode(fmt === 'json' ? 'ace/mode/json' : 'ace/mode/text');
+
+  if (cachedFormats[fmt]) {
+    inputEditor.setValue(cachedFormats[fmt], -1);
+  }
+  debouncedExecute();
+}
+
+// ── Output format toggle ───────────────────────────────────────────
+function setOutputFormat(fmt) {
+  outputFormat = fmt;
+  document.getElementById('btn-out-json').classList.toggle('active', fmt === 'json');
+  document.getElementById('btn-out-textpb').classList.toggle('active', fmt === 'textpb');
+  debouncedExecute();
+}
+
+// ── Generate random message ────────────────────────────────────────
+async function generate() {
+  const msg = document.getElementById('msg-select').value;
+  try {
+    const resp = await fetch('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg })
+    });
+    const data = await resp.json();
+    if (data.error) {
+      showOutput(data.error, true);
+      return;
+    }
+    cachedFormats.json = data.json || '';
+    cachedFormats.textpb = data.textpb || '';
+    inputEditor.setValue(cachedFormats[currentFormat], -1);
+    if (activeTab === 'pipeline') {
+      execute();
+    } else {
+      executeDenorm();
+    }
+  } catch (e) {
+    showOutput('generate error: ' + e.message, true);
+  }
+}
+
+// ── Execute pipeline ───────────────────────────────────────────────
+async function execute() {
+  const msg = document.getElementById('msg-select').value;
+  const input = inputEditor.getValue();
+  const pipeline = pipeEditor.getValue();
+
+  if (!input.trim()) return;
+
+  try {
+    const resp = await fetch('/api/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg, input: input, format: currentFormat, output_format: outputFormat, pipeline: pipeline })
+    });
+    const data = await resp.json();
+
+    document.getElementById('input-panel').classList.remove('border-error');
+    document.getElementById('pipeline-panel').classList.remove('border-error');
+
+    if (data.parse_error) {
+      document.getElementById('pipeline-panel').classList.add('border-error');
+      showOutput(data.parse_error, true);
+    } else if (data.exec_error) {
+      document.getElementById('input-panel').classList.add('border-error');
+      showOutput(data.exec_error, true);
+    } else {
+      showOutput(data.result, false);
+    }
+  } catch (e) {
+    showOutput('request error: ' + e.message, true);
+  }
+}
+
+// ── Execute denorm ─────────────────────────────────────────────────
+async function executeDenorm() {
+  const msg = document.getElementById('msg-select').value;
+  const input = inputEditor.getValue();
+  const config = denormEditor.getValue();
+
+  if (!input.trim() || !config.trim()) return;
+
+  try {
+    const resp = await fetch('/api/denorm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg, input: input, format: currentFormat, config: config })
+    });
+    const data = await resp.json();
+
+    document.getElementById('input-panel').classList.remove('border-error');
+    document.getElementById('denorm-config-panel').classList.remove('border-error');
+
+    if (data.config_error) {
+      document.getElementById('denorm-config-panel').classList.add('border-error');
+      showDenormOutput(data.config_error, true);
+    } else if (data.exec_error) {
+      document.getElementById('input-panel').classList.add('border-error');
+      showDenormOutput(data.exec_error, true);
+    } else {
+      renderTable(data.columns, data.rows, data.num_rows);
+    }
+  } catch (e) {
+    showDenormOutput('request error: ' + e.message, true);
+  }
+}
+
+// ── Load skeleton config ───────────────────────────────────────────
+async function loadSkeleton() {
+  const msg = document.getElementById('msg-select').value;
+  try {
+    const resp = await fetch('/api/denorm/skeleton?message=' + encodeURIComponent(msg));
+    const data = await resp.json();
+    if (data.error) {
+      showDenormOutput(data.error, true);
+      return;
+    }
+    denormEditor.setValue(data.config, -1);
+  } catch (e) {
+    showDenormOutput('skeleton error: ' + e.message, true);
+  }
+}
+
+// ── Render denorm table ────────────────────────────────────────────
+function renderTable(columns, rows, numRows) {
+  const panel = document.getElementById('denorm-output-content');
+  if (!columns || columns.length === 0) {
+    panel.innerHTML = '<div style="padding:8px;color:#888;">No columns defined</div>';
+    return;
+  }
+
+  let html = '<table><thead><tr>';
+  for (const col of columns) {
+    html += '<th>' + escapeHtml(col) + '</th>';
+  }
+  html += '</tr></thead><tbody>';
+  if (rows) {
+    for (const row of rows) {
+      html += '<tr>';
+      for (const cell of row) {
+        html += '<td>' + escapeHtml(cell) + '</td>';
+      }
+      html += '</tr>';
+    }
+  }
+  html += '</tbody></table>';
+  html += '<div class="row-count">' + numRows + ' row(s)</div>';
+  panel.innerHTML = html;
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function showDenormOutput(text, isError) {
+  const el = document.getElementById('denorm-output-content');
+  el.innerHTML = '<div class="denorm-error">' + escapeHtml(text) + '</div>';
+}
+
+// ── Corpus navigation ──────────────────────────────────────────────
+async function corpusNav(delta) {
+  corpusIndex = Math.max(0, Math.min(corpusTotal - 1, corpusIndex + delta));
+  await loadCorpusMessage(corpusIndex);
+}
+
+async function loadCorpusMessage(idx) {
+  try {
+    const resp = await fetch('/api/corpus/' + idx);
+    const data = await resp.json();
+    if (data.error) {
+      showOutput(data.error, true);
+      return;
+    }
+    cachedFormats.json = data.json || '';
+    cachedFormats.textpb = data.textpb || '';
+    inputEditor.setValue(cachedFormats[currentFormat], -1);
+    corpusIndex = data.index;
+    document.getElementById('corpus-pos').textContent = (data.index + 1) + ' / ' + data.total;
+    if (activeTab === 'pipeline') {
+      execute();
+    } else {
+      executeDenorm();
+    }
+  } catch (e) {
+    showOutput('corpus error: ' + e.message, true);
+  }
+}
+
+// ── Output display ─────────────────────────────────────────────────
+function showOutput(text, isError) {
+  const el = document.getElementById('output');
+  el.textContent = text;
+  el.className = isError ? 'error' : 'success';
+}
+
+// ── Message dropdown change ────────────────────────────────────────
+document.getElementById('msg-select').addEventListener('change', () => {
+  generate();
+  // Refresh denorm skeleton if on denorm tab.
+  if (activeTab === 'denorm') {
+    loadSkeleton();
+  }
+});
+
+// ── Init ───────────────────────────────────────────────────────────
+(function init() {
+  if (hasCorpus) {
+    loadCorpusMessage(0);
+  } else {
+    generate();
+  }
+})();
+</script>
+</body>
+</html>

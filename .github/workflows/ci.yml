@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main, perf]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Go ${{ matrix.go }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        go: ["1.26.x"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+
+      - name: Install buf CLI
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate proto bindings
+        run: buf generate
+
+      - name: Build
+        run: go build ./...
+        env:
+          CGO_ENABLED: "1"
+
+      - name: Test
+        run: go test -count=1 -timeout 180s ./...
+        env:
+          CGO_ENABLED: "1"

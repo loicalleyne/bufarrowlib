@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+// Custom fields for merge testing.
+message CustomExtra {
+  int64  event_ts  = 1;
+  string source_id = 2;
+}

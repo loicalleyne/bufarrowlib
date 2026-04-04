@@ -70,7 +70,10 @@ func buildDenormTestSchema(t *testing.T) (orderMD, itemMD protoreflect.MessageDe
 	return
 }
 
-func makeOrder(t *testing.T, orderMD, itemMD protoreflect.MessageDescriptor, name string, items []struct{ id string; price float64 }, tags []string, seq int64) proto.Message {
+func makeOrder(t *testing.T, orderMD, itemMD protoreflect.MessageDescriptor, name string, items []struct {
+	id    string
+	price float64
+}, tags []string, seq int64) proto.Message {
 	t.Helper()
 	msg := dynamicpb.NewMessage(orderMD)
 	msg.Set(orderMD.Fields().ByName("name"), protoreflect.ValueOfString(name))
@@ -144,7 +147,10 @@ func TestDenormWildcardFanout(t *testing.T) {
 	}
 	defer tc.Release()
 
-	items := []struct{ id string; price float64 }{
+	items := []struct {
+		id    string
+		price float64
+	}{
 		{"A", 1.0},
 		{"B", 2.0},
 		{"C", 3.0},
@@ -179,7 +185,10 @@ func TestDenormCrossJoin(t *testing.T) {
 	}
 	defer tc.Release()
 
-	items := []struct{ id string; price float64 }{
+	items := []struct {
+		id    string
+		price float64
+	}{
 		{"A", 1.0},
 		{"B", 2.0},
 	}
@@ -285,7 +294,10 @@ func TestDenormListIndexBroadcast(t *testing.T) {
 	}
 	defer tc.Release()
 
-	items := []struct{ id string; price float64 }{
+	items := []struct {
+		id    string
+		price float64
+	}{
 		{"A", 1.0},
 		{"B", 2.0},
 	}
@@ -316,7 +328,10 @@ func TestDenormRangeSlice(t *testing.T) {
 	}
 	defer tc.Release()
 
-	items := []struct{ id string; price float64 }{
+	items := []struct {
+		id    string
+		price float64
+	}{
 		{"A", 1.0}, {"B", 2.0}, {"C", 3.0},
 	}
 	msg := makeOrder(t, orderMD, itemMD, "order1", items, nil, 1)
@@ -345,7 +360,10 @@ func TestDenormNegativeIndex(t *testing.T) {
 	}
 	defer tc.Release()
 
-	items := []struct{ id string; price float64 }{
+	items := []struct {
+		id    string
+		price float64
+	}{
 		{"A", 1.0}, {"B", 2.0}, {"C", 3.0},
 	}
 	msg := makeOrder(t, orderMD, itemMD, "order1", items, nil, 1)
@@ -408,7 +426,10 @@ func TestDenormStrictPath(t *testing.T) {
 	defer tc.Release()
 
 	// Only 2 items but range asks for 0:10 → should error with strict
-	items := []struct{ id string; price float64 }{
+	items := []struct {
+		id    string
+		price float64
+	}{
 		{"A", 1.0}, {"B", 2.0},
 	}
 	msg := makeOrder(t, orderMD, itemMD, "order1", items, nil, 1)
@@ -445,7 +466,10 @@ func TestDenormClone(t *testing.T) {
 	}
 
 	// Append to cloned and verify
-	items := []struct{ id string; price float64 }{{"X", 9.0}}
+	items := []struct {
+		id    string
+		price float64
+	}{{"X", 9.0}}
 	msg := makeOrder(t, orderMD, itemMD, "clone_test", items, nil, 1)
 	if err := tc2.AppendDenorm(msg); err != nil {
 		t.Fatalf("AppendDenorm on clone: %v", err)
@@ -471,14 +495,20 @@ func TestDenormMultipleMessages(t *testing.T) {
 	defer tc.Release()
 
 	// First message: 2 items
-	items1 := []struct{ id string; price float64 }{{"A", 1.0}, {"B", 2.0}}
+	items1 := []struct {
+		id    string
+		price float64
+	}{{"A", 1.0}, {"B", 2.0}}
 	msg1 := makeOrder(t, orderMD, itemMD, "order1", items1, nil, 1)
 	if err := tc.AppendDenorm(msg1); err != nil {
 		t.Fatalf("AppendDenorm msg1: %v", err)
 	}
 
 	// Second message: 1 item
-	items2 := []struct{ id string; price float64 }{{"C", 3.0}}
+	items2 := []struct {
+		id    string
+		price float64
+	}{{"C", 3.0}}
 	msg2 := makeOrder(t, orderMD, itemMD, "order2", items2, nil, 2)
 	if err := tc.AppendDenorm(msg2); err != nil {
 		t.Fatalf("AppendDenorm msg2: %v", err)
@@ -587,5 +617,140 @@ func TestDenormSchemaFieldTypes(t *testing.T) {
 		if !f.Nullable {
 			t.Errorf("field %d (%s): expected nullable", tt.idx, tt.name)
 		}
+	}
+}
+
+// TestAppendDenormRaw_WithHyperType_SeparateCompilations reproduces a bug where
+// AppendDenormRaw produces 0 rows when the HyperType is created from a separate
+// proto compilation than the Transcoder. The denorm plan is compiled against the
+// Transcoder's message descriptor, but AppendDenormRaw unmarshals using the
+// HyperType's message descriptor. If these are different descriptor instances
+// (from separate CompileProtoToFileDescriptor calls), EvalLeaves silently
+// returns empty results because protobuf field descriptor identity doesn't match.
+func TestAppendDenormRaw_WithHyperType_SeparateCompilations(t *testing.T) {
+	protoDir := testProtoDir(t)
+
+	// Step 1: Compile proto SEPARATELY for HyperType (simulates BufarrowNewHyperType)
+	htFD, err := CompileProtoToFileDescriptor("samples.proto", []string{protoDir})
+	if err != nil {
+		t.Fatalf("compile for HyperType: %v", err)
+	}
+	htMD, err := GetMessageDescriptorByName(htFD, "Nested")
+	if err != nil {
+		t.Fatalf("get message for HyperType: %v", err)
+	}
+	ht := NewHyperType(htMD)
+
+	// Step 2: Create Transcoder via NewFromFile (compiles proto AGAIN, simulates BufarrowNewFromFileWithHyperType)
+	tc, err := NewFromFile("samples.proto", "Nested", []string{protoDir}, memory.DefaultAllocator,
+		WithHyperType(ht),
+		WithDenormalizerPlan(
+			pbpath.PlanPath("nested_scalar.string", pbpath.Alias("scalar_string")),
+			pbpath.PlanPath("nested_repeated_scalar[*].int32", pbpath.Alias("rep_int32")),
+		),
+	)
+	if err != nil {
+		t.Fatalf("NewFromFile: %v", err)
+	}
+	defer tc.Release()
+
+	// Step 3: Build a Nested message and serialize it
+	nestedMD := htMD // use the HyperType's descriptor to build the message
+	msg := dynamicpb.NewMessage(nestedMD)
+	scalarMD := nestedMD.Fields().ByName("nested_scalar").Message()
+	scalar := dynamicpb.NewMessage(scalarMD)
+	scalar.Set(scalarMD.Fields().ByName("string"), protoreflect.ValueOfString("hello"))
+	msg.Set(nestedMD.Fields().ByName("nested_scalar"), protoreflect.ValueOfMessage(scalar))
+
+	repField := nestedMD.Fields().ByName("nested_repeated_scalar")
+	repList := msg.Mutable(repField).List()
+	for _, v := range []int32{10, 20, 30} {
+		item := dynamicpb.NewMessage(repField.Message())
+		item.Set(repField.Message().Fields().ByName("int32"), protoreflect.ValueOfInt32(v))
+		repList.Append(protoreflect.ValueOfMessage(item))
+	}
+
+	data, err := proto.Marshal(msg)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	// Step 4: AppendDenormRaw — this should produce 3 rows (fan-out on nested_repeated_scalar)
+	if err := tc.AppendDenormRaw(data); err != nil {
+		t.Fatalf("AppendDenormRaw: %v", err)
+	}
+
+	rb := tc.NewDenormalizerRecordBatch()
+	if rb == nil {
+		t.Fatal("NewDenormalizerRecordBatch returned nil")
+	}
+	defer rb.Release()
+
+	// Fixed: denorm plan now compiles against HyperType's descriptor
+	if rb.NumRows() != 3 {
+		t.Errorf("expected 3 denorm rows, got %d", rb.NumRows())
+	}
+}
+
+// TestAppendDenormRaw_WithoutHyperType verifies the dynamicpb fallback path
+// for AppendDenormRaw when no HyperType is configured.
+func TestAppendDenormRaw_WithoutHyperType(t *testing.T) {
+	protoDir := testProtoDir(t)
+
+	tc, err := NewFromFile("samples.proto", "Nested", []string{protoDir}, memory.DefaultAllocator,
+		WithDenormalizerPlan(
+			pbpath.PlanPath("nested_scalar.string", pbpath.Alias("scalar_string")),
+			pbpath.PlanPath("nested_repeated_scalar[*].int32", pbpath.Alias("rep_int32")),
+		),
+	)
+	if err != nil {
+		t.Fatalf("NewFromFile: %v", err)
+	}
+	defer tc.Release()
+
+	// Build message using the transcoder's own descriptor
+	nestedFD, err := CompileProtoToFileDescriptor("samples.proto", []string{protoDir})
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	nestedMD, err := GetMessageDescriptorByName(nestedFD, "Nested")
+	if err != nil {
+		t.Fatalf("get message: %v", err)
+	}
+
+	msg := dynamicpb.NewMessage(nestedMD)
+	scalarMD := nestedMD.Fields().ByName("nested_scalar").Message()
+	scalar := dynamicpb.NewMessage(scalarMD)
+	scalar.Set(scalarMD.Fields().ByName("string"), protoreflect.ValueOfString("world"))
+	msg.Set(nestedMD.Fields().ByName("nested_scalar"), protoreflect.ValueOfMessage(scalar))
+
+	repField := nestedMD.Fields().ByName("nested_repeated_scalar")
+	repList := msg.Mutable(repField).List()
+	for _, v := range []int32{100, 200} {
+		item := dynamicpb.NewMessage(repField.Message())
+		item.Set(repField.Message().Fields().ByName("int32"), protoreflect.ValueOfInt32(v))
+		repList.Append(protoreflect.ValueOfMessage(item))
+	}
+
+	data, err := proto.Marshal(msg)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	if err := tc.AppendDenormRaw(data); err != nil {
+		t.Fatalf("AppendDenormRaw: %v", err)
+	}
+
+	rb := tc.NewDenormalizerRecordBatch()
+	if rb == nil {
+		t.Fatal("NewDenormalizerRecordBatch returned nil")
+	}
+	defer rb.Release()
+
+	if rb.NumRows() != 2 {
+		t.Errorf("expected 2 denorm rows, got %d", rb.NumRows())
+	}
+	if rb.NumCols() != 2 {
+		t.Errorf("expected 2 columns, got %d", rb.NumCols())
 	}
 }
