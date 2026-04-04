@@ -28,7 +28,7 @@ endif
 
 LIB      = cbinding/libbufarrow.$(EXT)
 
-.PHONY: libbufarrow libbufarrow-all python python-dev venv-sync test-go test-python test \
+.PHONY: libbufarrow libbufarrow-all python python-dev venv-sync test-go test-go-race test-python test \
         bench bench-go bench-python bench-throughput bench-throughput-go \
         bench-throughput-python bench-compare clean
 
@@ -61,6 +61,9 @@ python-dev: libbufarrow venv-sync
 
 test-go:
 	$(GO) test -count=1 -timeout 180s ./...
+
+test-go-race:
+	$(GO) test -count=1 -race -timeout 300s -run '^Test' ./...
 
 test-python: venv-sync
 	cp $(LIB) python/pybufarrow/

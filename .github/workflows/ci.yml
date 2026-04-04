@@ -44,3 +44,8 @@ jobs:
         run: go test -count=1 -timeout 180s ./...
         env:
           CGO_ENABLED: "1"
+
+      - name: Test (race detector)
+        run: go test -count=1 -race -timeout 300s -run '^Test' ./...
+        env:
+          CGO_ENABLED: "1"

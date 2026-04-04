@@ -31,6 +31,7 @@ bufarrowlib/
 
 ```sh
 make test-go           # go test -count=1 -timeout 180s ./...
+make test-go-race      # go test -count=1 -race -timeout 300s -run '^Test' ./...  (HyperType + cbinding concurrency)
 make test-python       # pytest via uv (requires libbufarrow built first)
 make test              # both of the above
 ```
