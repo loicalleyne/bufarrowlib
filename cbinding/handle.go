@@ -11,6 +11,7 @@ package main
 import "C"
 
 import (
+	"fmt"
 	"runtime/cgo"
 	"sync"
 	"unsafe"
@@ -110,4 +111,52 @@ func getGlobalErr() string {
 	globalLastError = ""
 	globalMu.Unlock()
 	return e
+}
+
+// recoverGlobal stores a recovered panic in the global error slot.
+// Use in constructor CGO exports where no per-handle error channel exists yet.
+func recoverGlobal(r any) {
+	if r != nil {
+		setGlobalErr(fmt.Errorf("bufarrow: internal panic: %v", r))
+	}
+}
+
+// recoverTranscoder routes a recovered panic to ct.setError when ct is
+// non-nil, or to the global error store otherwise.
+//
+// Usage pattern:
+//
+//	var ct *cTranscoder
+//	defer func() { recoverTranscoder(recover(), ct) }()
+//	ct = getFromHandle[cTranscoder](handle)
+func recoverTranscoder(r any, ct *cTranscoder) {
+	if r == nil {
+		return
+	}
+	panicErr := fmt.Errorf("bufarrow: internal panic: %v", r)
+	if ct != nil {
+		ct.setError(panicErr)
+	} else {
+		setGlobalErr(panicErr)
+	}
+}
+
+// recoverPool routes a recovered panic to p.setError when p is non-nil,
+// or to the global error store otherwise.
+//
+// Usage pattern:
+//
+//	var p *cPool
+//	defer func() { recoverPool(recover(), p) }()
+//	p = getFromHandle[cPool](handle)
+func recoverPool(r any, p *cPool) {
+	if r == nil {
+		return
+	}
+	panicErr := fmt.Errorf("bufarrow: internal panic: %v", r)
+	if p != nil {
+		p.setError(panicErr)
+	} else {
+		setGlobalErr(panicErr)
+	}
 }

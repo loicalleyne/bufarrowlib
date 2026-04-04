@@ -361,7 +361,7 @@ func (p *parser) intlit(t *token) error {
 		// We're parsing the end bound in  [start:end  — a ':' or ']' may follow.
 		end, err := strconv.ParseInt(t.Text, 0, 64)
 		if err != nil {
-			return fmt.Errorf("%sinvalid range end %q: %v", p.showState(t.Pos), t.Text, err)
+			return fmt.Errorf("%sinvalid range end %q: %w", p.showState(t.Pos), t.Text, err)
 		}
 		p.rangeEnd = int(end)
 		p.rangeEndOmitted = false
@@ -372,7 +372,7 @@ func (p *parser) intlit(t *token) error {
 		// We're parsing the step in  [start:end:step  — only ']' may follow.
 		step, err := strconv.ParseInt(t.Text, 0, 64)
 		if err != nil {
-			return fmt.Errorf("%sinvalid step %q: %v", p.showState(t.Pos), t.Text, err)
+			return fmt.Errorf("%sinvalid step %q: %w", p.showState(t.Pos), t.Text, err)
 		}
 		if err := p.emitSlice(t.Pos, int(step)); err != nil {
 			return err
@@ -555,7 +555,7 @@ func (p *parser) questionToken(t *token) error {
 	// It then expects "]" which it also consumes.
 	pred, err := parsePredicate(p.s, cursorMD)
 	if err != nil {
-		return fmt.Errorf("path %q filter predicate parse failure: %v", string(p.s.buf), err)
+		return fmt.Errorf("path %q filter predicate parse failure: %w", string(p.s.buf), err)
 	}
 	// The filter step doesn't advance the schema cursor — it merely filters branches.
 	// However, for list fields, we want to operate on elements, so we need a ListWildcard

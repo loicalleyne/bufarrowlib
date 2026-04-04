@@ -34,7 +34,7 @@ func BufarrowNewFromFile(
 	optsJSON *C.char,
 	outHandle *unsafe.Pointer,
 ) C.int {
-	defer func() { recover() }()
+	defer func() { recoverGlobal(recover()) }()
 
 	pp := C.GoString(protoPath)
 	mn := C.GoString(msgName)
@@ -73,7 +73,7 @@ func BufarrowNewFromConfig(
 	configPath *C.char,
 	outHandle *unsafe.Pointer,
 ) C.int {
-	defer func() { recover() }()
+	defer func() { recoverGlobal(recover()) }()
 
 	alloc := mallocator.NewMallocator()
 	tc, err := bufarrowlib.NewTranscoderFromConfigFile(C.GoString(configPath), alloc)
@@ -93,7 +93,7 @@ func BufarrowNewFromConfigString(
 	configLen C.int,
 	outHandle *unsafe.Pointer,
 ) C.int {
-	defer func() { recover() }()
+	defer func() { recoverGlobal(recover()) }()
 
 	yamlStr := C.GoStringN(configYAML, configLen)
 	cfg, err := bufarrowlib.ParseDenormConfig(strings.NewReader(yamlStr))
@@ -120,9 +120,9 @@ func BufarrowClone(
 	handle unsafe.Pointer,
 	outHandle *unsafe.Pointer,
 ) C.int {
-	defer func() { recover() }()
-
-	ct := getFromHandle[cTranscoder](handle)
+	var ct *cTranscoder
+	defer func() { recoverTranscoder(recover(), ct) }()
+	ct = getFromHandle[cTranscoder](handle)
 	alloc := mallocator.NewMallocator()
 	tc, err := ct.tc.Clone(alloc)
 	if err != nil {
@@ -155,9 +155,9 @@ func BufarrowAppendRaw(
 	data unsafe.Pointer,
 	dataLen C.int,
 ) C.int {
-	defer func() { recover() }()
-
-	ct := getFromHandle[cTranscoder](handle)
+	var ct *cTranscoder
+	defer func() { recoverTranscoder(recover(), ct) }()
+	ct = getFromHandle[cTranscoder](handle)
 	buf := C.GoBytes(data, dataLen)
 	if err := ct.tc.AppendRaw(buf); err != nil {
 		ct.setError(err)
@@ -172,9 +172,9 @@ func BufarrowAppendDenormRaw(
 	data unsafe.Pointer,
 	dataLen C.int,
 ) C.int {
-	defer func() { recover() }()
-
-	ct := getFromHandle[cTranscoder](handle)
+	var ct *cTranscoder
+	defer func() { recoverTranscoder(recover(), ct) }()
+	ct = getFromHandle[cTranscoder](handle)
 	buf := C.GoBytes(data, dataLen)
 	if err := ct.tc.AppendDenormRaw(buf); err != nil {
 		ct.setError(err)
@@ -191,9 +191,9 @@ func BufarrowAppendRawMerged(
 	customData unsafe.Pointer,
 	customLen C.int,
 ) C.int {
-	defer func() { recover() }()
-
-	ct := getFromHandle[cTranscoder](handle)
+	var ct *cTranscoder
+	defer func() { recoverTranscoder(recover(), ct) }()
+	ct = getFromHandle[cTranscoder](handle)
 	baseBuf := C.GoBytes(baseData, baseLen)
 	customBuf := C.GoBytes(customData, customLen)
 	if err := ct.tc.AppendRawMerged(baseBuf, customBuf); err != nil {
@@ -211,9 +211,9 @@ func BufarrowAppendDenormRawMerged(
 	customData unsafe.Pointer,
 	customLen C.int,
 ) C.int {
-	defer func() { recover() }()
-
-	ct := getFromHandle[cTranscoder](handle)
+	var ct *cTranscoder
+	defer func() { recoverTranscoder(recover(), ct) }()
+	ct = getFromHandle[cTranscoder](handle)
 	baseBuf := C.GoBytes(baseData, baseLen)
 	customBuf := C.GoBytes(customData, customLen)
 	if err := ct.tc.AppendDenormRawMerged(baseBuf, customBuf); err != nil {
@@ -231,9 +231,9 @@ func BufarrowFlush(
 	outArray unsafe.Pointer,
 	outSchema unsafe.Pointer,
 ) C.int {
-	defer func() { recover() }()
-
-	ct := getFromHandle[cTranscoder](handle)
+	var ct *cTranscoder
+	defer func() { recoverTranscoder(recover(), ct) }()
+	ct = getFromHandle[cTranscoder](handle)
 	rb := ct.tc.NewRecordBatch()
 	if rb == nil {
 		ct.setError(fmt.Errorf("bufarrow: flush returned nil record batch"))
@@ -251,9 +251,9 @@ func BufarrowFlushDenorm(
 	outArray unsafe.Pointer,
 	outSchema unsafe.Pointer,
 ) C.int {
-	defer func() { recover() }()
-
-	ct := getFromHandle[cTranscoder](handle)
+	var ct *cTranscoder
+	defer func() { recoverTranscoder(recover(), ct) }()
+	ct = getFromHandle[cTranscoder](handle)
 	rb := ct.tc.NewDenormalizerRecordBatch()
 	if rb == nil {
 		ct.setError(fmt.Errorf("bufarrow: flush denorm returned nil record batch"))
@@ -272,9 +272,9 @@ func BufarrowGetSchema(
 	handle unsafe.Pointer,
 	outSchema unsafe.Pointer,
 ) C.int {
-	defer func() { recover() }()
-
-	ct := getFromHandle[cTranscoder](handle)
+	var ct *cTranscoder
+	defer func() { recoverTranscoder(recover(), ct) }()
+	ct = getFromHandle[cTranscoder](handle)
 	sc := ct.tc.Schema()
 	if sc == nil {
 		ct.setError(fmt.Errorf("bufarrow: schema is nil"))
@@ -290,9 +290,9 @@ func BufarrowGetDenormSchema(
 	handle unsafe.Pointer,
 	outSchema unsafe.Pointer,
 ) C.int {
-	defer func() { recover() }()
-
-	ct := getFromHandle[cTranscoder](handle)
+	var ct *cTranscoder
+	defer func() { recoverTranscoder(recover(), ct) }()
+	ct = getFromHandle[cTranscoder](handle)
 	sc := ct.tc.DenormalizerSchema()
 	if sc == nil {
 		ct.setError(fmt.Errorf("bufarrow: denorm schema is nil; denormalizer not configured"))
@@ -310,9 +310,9 @@ func BufarrowWriteParquet(
 	handle unsafe.Pointer,
 	filePath *C.char,
 ) C.int {
-	defer func() { recover() }()
-
-	ct := getFromHandle[cTranscoder](handle)
+	var ct *cTranscoder
+	defer func() { recoverTranscoder(recover(), ct) }()
+	ct = getFromHandle[cTranscoder](handle)
 	fp := C.GoString(filePath)
 
 	f, err := os.Create(fp)
@@ -334,9 +334,9 @@ func BufarrowWriteParquetDenorm(
 	handle unsafe.Pointer,
 	filePath *C.char,
 ) C.int {
-	defer func() { recover() }()
-
-	ct := getFromHandle[cTranscoder](handle)
+	var ct *cTranscoder
+	defer func() { recoverTranscoder(recover(), ct) }()
+	ct = getFromHandle[cTranscoder](handle)
 	fp := C.GoString(filePath)
 
 	rb := ct.tc.NewDenormalizerRecordBatch()
@@ -368,9 +368,9 @@ func BufarrowReadParquet(
 	outArray unsafe.Pointer,
 	outSchema unsafe.Pointer,
 ) C.int {
-	defer func() { recover() }()
-
-	ct := getFromHandle[cTranscoder](handle)
+	var ct *cTranscoder
+	defer func() { recoverTranscoder(recover(), ct) }()
+	ct = getFromHandle[cTranscoder](handle)
 	fp := C.GoString(filePath)
 
 	f, err := os.Open(fp)
@@ -406,9 +406,9 @@ func BufarrowReadParquet(
 
 //export BufarrowFieldNames
 func BufarrowFieldNames(handle unsafe.Pointer) *C.char {
-	defer func() { recover() }()
-
-	ct := getFromHandle[cTranscoder](handle)
+	var ct *cTranscoder
+	defer func() { recoverTranscoder(recover(), ct) }()
+	ct = getFromHandle[cTranscoder](handle)
 	names := ct.tc.FieldNames()
 	b, _ := json.Marshal(names)
 	return cString(string(b))
@@ -416,7 +416,7 @@ func BufarrowFieldNames(handle unsafe.Pointer) *C.char {
 
 //export BufarrowLastError
 func BufarrowLastError(handle unsafe.Pointer) *C.char {
-	defer func() { recover() }()
+	defer func() { recoverGlobal(recover()) }()
 
 	ct := getFromHandle[cTranscoder](handle)
 	return cString(ct.getError())
@@ -451,7 +451,7 @@ func BufarrowNewHyperType(
 	rate C.double,
 	outHandle *unsafe.Pointer,
 ) C.int {
-	defer func() { recover() }()
+	defer func() { recoverGlobal(recover()) }()
 
 	pp := C.GoString(protoPath)
 	mn := C.GoString(msgName)
@@ -504,7 +504,7 @@ func BufarrowNewFromFileWithHyperType(
 	hyperHandle unsafe.Pointer,
 	outHandle *unsafe.Pointer,
 ) C.int {
-	defer func() { recover() }()
+	defer func() { recoverGlobal(recover()) }()
 
 	pp := C.GoString(protoPath)
 	mn := C.GoString(msgName)

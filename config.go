@@ -153,12 +153,12 @@ type ColumnDef struct {
 //   - mask: number of leading characters to keep unmasked (keepFirst); the number
 //     of trailing characters to keep is always 0 (use a cond+mask tree for both).
 type ExprDef struct {
-	Func     string      `yaml:"func"`
-	Args     []ArgDef    `yaml:"args,omitempty"`
-	Sep      string      `yaml:"sep,omitempty"`
-	Literal  interface{} `yaml:"literal,omitempty"`
-	Literal2 interface{} `yaml:"literal2,omitempty"`
-	Param    int         `yaml:"param,omitempty"`
+	Func     string   `yaml:"func"`
+	Args     []ArgDef `yaml:"args,omitempty"`
+	Sep      string   `yaml:"sep,omitempty"`
+	Literal  any      `yaml:"literal,omitempty"`
+	Literal2 any      `yaml:"literal2,omitempty"`
+	Param    int      `yaml:"param,omitempty"`
 }
 
 // ArgDef is one argument in an [ExprDef]. Exactly one field should be set:
@@ -166,9 +166,9 @@ type ExprDef struct {
 //   - Literal: a scalar constant (string, int, float64, or bool).
 //   - Expr: a nested expression sub-tree.
 type ArgDef struct {
-	Path    string      `yaml:"path,omitempty"`
-	Literal interface{} `yaml:"literal,omitempty"`
-	Expr    *ExprDef    `yaml:"expr,omitempty"`
+	Path    string   `yaml:"path,omitempty"`
+	Literal any      `yaml:"literal,omitempty"`
+	Expr    *ExprDef `yaml:"expr,omitempty"`
 }
 
 // ParseDenormConfig decodes a YAML [DenormConfig] from r.
@@ -537,14 +537,14 @@ func buildArg(arg ArgDef) (pbpath.Expr, error) {
 
 // literalToValue converts a raw YAML-decoded value to a [pbpath.Value] for
 // use with [pbpath.FuncDefault] and [pbpath.FuncCoerce].
-func literalToValue(v interface{}) (pbpath.Value, error) {
+func literalToValue(v any) (pbpath.Value, error) {
 	val, _, err := literalToValueKind(v)
 	return val, err
 }
 
 // literalToValueKind converts a raw YAML-decoded value to a [pbpath.Value]
 // and its [protoreflect.Kind], so callers can create a typed [pbpath.Literal].
-func literalToValueKind(v interface{}) (pbpath.Value, protoreflect.Kind, error) {
+func literalToValueKind(v any) (pbpath.Value, protoreflect.Kind, error) {
 	if v == nil {
 		return pbpath.Null(), 0, nil
 	}

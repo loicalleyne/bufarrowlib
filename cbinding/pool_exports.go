@@ -31,7 +31,7 @@ func BufarrowPoolNew(
 	capacity C.int,
 	outHandle *unsafe.Pointer,
 ) C.int {
-	defer func() { recover() }()
+	defer func() { recoverGlobal(recover()) }()
 
 	pp := C.GoString(protoPath)
 	mn := C.GoString(msgName)
@@ -100,7 +100,7 @@ func BufarrowPoolNewWithHyperType(
 	capacity C.int,
 	outHandle *unsafe.Pointer,
 ) C.int {
-	defer func() { recover() }()
+	defer func() { recoverGlobal(recover()) }()
 
 	pp := C.GoString(protoPath)
 	mn := C.GoString(msgName)
@@ -165,9 +165,9 @@ func BufarrowPoolSubmit(
 	data unsafe.Pointer,
 	dataLen C.int,
 ) C.int {
-	defer func() { recover() }()
-
-	p := getFromHandle[cPool](handle)
+	var p *cPool
+	defer func() { recoverPool(recover(), p) }()
+	p = getFromHandle[cPool](handle)
 	buf := C.GoBytes(data, dataLen)
 	if err := p.submit(buf, nil); err != nil {
 		p.setError(err)
@@ -184,9 +184,9 @@ func BufarrowPoolSubmitMerged(
 	customData unsafe.Pointer,
 	customLen C.int,
 ) C.int {
-	defer func() { recover() }()
-
-	p := getFromHandle[cPool](handle)
+	var p *cPool
+	defer func() { recoverPool(recover(), p) }()
+	p = getFromHandle[cPool](handle)
 	base := C.GoBytes(baseData, baseLen)
 	custom := C.GoBytes(customData, customLen)
 	if err := p.submit(base, custom); err != nil {
@@ -204,9 +204,9 @@ func BufarrowPoolFlush(
 	outArray unsafe.Pointer,
 	outSchema unsafe.Pointer,
 ) C.int {
-	defer func() { recover() }()
-
-	p := getFromHandle[cPool](handle)
+	var p *cPool
+	defer func() { recoverPool(recover(), p) }()
+	p = getFromHandle[cPool](handle)
 	rb, err := p.flush()
 	if err != nil {
 		p.setError(err)
@@ -221,14 +221,15 @@ func BufarrowPoolFlush(
 
 //export BufarrowPoolPending
 func BufarrowPoolPending(handle unsafe.Pointer) C.int {
-	defer func() { recover() }()
-	p := getFromHandle[cPool](handle)
+	var p *cPool
+	defer func() { recoverPool(recover(), p) }()
+	p = getFromHandle[cPool](handle)
 	return C.int(p.pending.Load())
 }
 
 //export BufarrowPoolLastError
 func BufarrowPoolLastError(handle unsafe.Pointer) *C.char {
-	defer func() { recover() }()
+	defer func() { recoverGlobal(recover()) }()
 	p := getFromHandle[cPool](handle)
 	return cString(p.getError())
 }

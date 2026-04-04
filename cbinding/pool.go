@@ -96,9 +96,9 @@ func (p *cPool) startWorkers() {
 	for w := range p.workers {
 		p.done[w] = make(chan struct{})
 	}
-	p.wg.Add(p.workers)
 	for w := range p.workers {
-		go p.workerLoop(p.clones[w], p.done[w])
+		w := w
+		p.wg.Go(func() { p.workerLoop(p.clones[w], p.done[w]) })
 	}
 	p.running = true
 }
@@ -111,7 +111,6 @@ func (p *cPool) startWorkers() {
 //   - isDenorm is true  → use Denorm append + NewDenormalizerRecordBatch
 //   - j.custom != nil   → use the Merged append variant
 func (p *cPool) workerLoop(tc *bufarrowlib.Transcoder, done <-chan struct{}) {
-	defer p.wg.Done()
 	isDenorm := p.mode == poolModeDenorm || p.mode == poolModeDenormMerged
 
 	processJob := func(j poolJob) {
