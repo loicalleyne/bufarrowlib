@@ -1,0 +1,39 @@
+goos: linux
+goarch: amd64
+pkg: github.com/loicalleyne/bufarrowlib
+cpu: 13th Gen Intel(R) Core(TM) i7-13700H
+BenchmarkVsPMR_SingleMessage_ScalarTypes/bufarrowlib/Append-20         	    4772	    724241 ns/op	     11712 B/msg	       112.0 allocs/msg	    138076 msg/s	      7242 ns/msg	 1171211 B/op	   11200 allocs/op
+BenchmarkVsPMR_SingleMessage_ScalarTypes/bufarrowlib/AppendRaw-20      	    4482	    763610 ns/op	     12359 B/msg	       134.1 allocs/msg	    130957 msg/s	      7636 ns/msg	 1235877 B/op	   13413 allocs/op
+BenchmarkVsPMR_Batch_ScalarTypes/bufarrowlib/Append/batch-1-20         	  490838	      6955 ns/op	     11712 B/msg	       112.0 allocs/msg	    143776 msg/s	      6955 ns/msg	   11712 B/op	     112 allocs/op
+BenchmarkVsPMR_Batch_ScalarTypes/bufarrowlib/AppendRaw/batch-1-20      	  476518	      7371 ns/op	     12341 B/msg	       134.1 allocs/msg	    135669 msg/s	      7371 ns/msg	   12340 B/op	     134 allocs/op
+BenchmarkVsPMR_Batch_ScalarTypes/bufarrowlib/Append/batch-100-20       	   66532	     53645 ns/op	       348.8 B/msg	         1.520 allocs/msg	   1864105 msg/s	       536.5 ns/msg	   34880 B/op	     152 allocs/op
+BenchmarkVsPMR_Batch_ScalarTypes/bufarrowlib/AppendRaw/batch-100-20    	   28303	    122432 ns/op	       748.1 B/msg	        23.62 allocs/msg	    816779 msg/s	      1224 ns/msg	   74810 B/op	    2362 allocs/op
+BenchmarkVsPMR_Batch_ScalarTypes/bufarrowlib/Append/batch-1000-20      	    7333	    471596 ns/op	       274.5 B/msg	         0.2180 allocs/msg	   2120460 msg/s	       471.6 ns/msg	  274497 B/op	     218 allocs/op
+BenchmarkVsPMR_Batch_ScalarTypes/bufarrowlib/AppendRaw/batch-1000-20   	    3008	   1150823 ns/op	       672.2 B/msg	        22.32 allocs/msg	    868943 msg/s	      1151 ns/msg	  672226 B/op	   22318 allocs/op
+BenchmarkVsPMR_Batch_BidRequest/bufarrowlib/Append/batch-1-20          	   23733	    151345 ns/op	   1.45 MB/s	    201826 B/msg	      2477 allocs/msg	      6607 msg/s	    151345 ns/msg	  201826 B/op	    2477 allocs/op
+BenchmarkVsPMR_Batch_BidRequest/bufarrowlib/AppendRaw/batch-1-20       	   26566	    132360 ns/op	   1.66 MB/s	    203276 B/msg	      2446 allocs/msg	      7555 msg/s	    132360 ns/msg	  203275 B/op	    2445 allocs/op
+BenchmarkVsPMR_Batch_BidRequest/bufarrowlib/Append/batch-506-20        	     643	   5086289 ns/op	  29.70 MB/s	      5498 B/msg	        71.13 allocs/msg	     99483 msg/s	     10052 ns/msg	 2781896 B/op	   35990 allocs/op
+BenchmarkVsPMR_Batch_BidRequest/bufarrowlib/AppendRaw/batch-506-20     	     939	   3822010 ns/op	  39.52 MB/s	      2864 B/msg	        27.85 allocs/msg	    132391 msg/s	      7553 ns/msg	 1449071 B/op	   14090 allocs/op
+BenchmarkVsPMR_SchemaConstruction/ScalarTypes/PMR-20                   	  199858	     17841 ns/op	   15928 B/op	     104 allocs/op
+BenchmarkVsPMR_SchemaConstruction/ScalarTypes/bufarrowlib-20           	   63156	     57995 ns/op	   66785 B/op	     694 allocs/op
+BenchmarkVsPMR_SchemaConstruction/BidRequestEvent/PMR-20               	   28275	    126697 ns/op	   84168 B/op	     653 allocs/op
+BenchmarkVsPMR_SchemaConstruction/BidRequestEvent/bufarrowlib-20       	    7147	    495349 ns/op	  509699 B/op	    5913 allocs/op
+BenchmarkVsPMR_Known/PMR/batch-1-20                                    	   63999	     50238 ns/op	     39352 B/msg	       427.0 allocs/msg	     19905 msg/s	     50238 ns/msg	   39352 B/op	     427 allocs/op
+BenchmarkVsPMR_Known/bufarrowlib/Append/batch-1-20                     	  293980	     12165 ns/op	     16552 B/msg	       223.0 allocs/msg	     82204 msg/s	     12165 ns/msg	   16552 B/op	     223 allocs/op
+BenchmarkVsPMR_Known/bufarrowlib/AppendRaw/batch-1-20                  	  285559	     12445 ns/op	     16923 B/msg	       225.1 allocs/msg	     80355 msg/s	     12445 ns/msg	   16923 B/op	     225 allocs/op
+BenchmarkVsPMR_Known/PMR/batch-100-20                                  	     744	   4830923 ns/op	     39352 B/msg	       427.0 allocs/msg	     20700 msg/s	     48309 ns/msg	 3935181 B/op	   42700 allocs/op
+BenchmarkVsPMR_Known/bufarrowlib/Append/batch-100-20                   	   60883	     57819 ns/op	       331.0 B/msg	         4.330 allocs/msg	   1729539 msg/s	       578.2 ns/msg	   33096 B/op	     433 allocs/op
+BenchmarkVsPMR_Known/bufarrowlib/AppendRaw/batch-100-20                	   49326	     73290 ns/op	       314.3 B/msg	         6.341 allocs/msg	   1364450 msg/s	       732.9 ns/msg	   31434 B/op	     634 allocs/op
+BenchmarkVsPMR_Known/PMR/batch-1000-20                                 	      73	  48537094 ns/op	     39352 B/msg	       427.0 allocs/msg	     20603 msg/s	     48537 ns/msg	39351987 B/op	  427005 allocs/op
+BenchmarkVsPMR_Known/bufarrowlib/Append/batch-1000-20                  	    7300	    463458 ns/op	       188.0 B/msg	         2.261 allocs/msg	   2157693 msg/s	       463.5 ns/msg	  187977 B/op	    2261 allocs/op
+BenchmarkVsPMR_Known/bufarrowlib/AppendRaw/batch-1000-20               	    5173	    675349 ns/op	       206.5 B/msg	         8.758 allocs/msg	   1480716 msg/s	       675.3 ns/msg	  206528 B/op	    8757 allocs/op
+PASS
+ok  	github.com/loicalleyne/bufarrowlib	87.654s
+PASS
+ok  	github.com/loicalleyne/bufarrowlib/cbinding	0.014s
+?   	github.com/loicalleyne/bufarrowlib/cmd/pbpath-playground	[no test files]
+?   	github.com/loicalleyne/bufarrowlib/gen/go/samples	[no test files]
+?   	github.com/loicalleyne/bufarrowlib/gen/go/samples/custom	[no test files]
+PASS
+ok  	github.com/loicalleyne/bufarrowlib/proto/pbpath	0.011s
+?   	github.com/loicalleyne/bufarrowlib/test	[no test files]

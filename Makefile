@@ -20,6 +20,7 @@ CPU_SLUG  := $(shell echo '$(CPU_MODEL)' \
                | sed 's/^_*//;s/_*$$//')
 BENCH_OUT        ?= docs/$(CPU_SLUG)-benchmark-results.txt
 BENCH_OUT_PYTHON ?= docs/$(CPU_SLUG)-benchmark-results-python.json
+BENCH_OUT_PMR    ?= docs/$(CPU_SLUG)-pmr-comparison-results.txt
 
 EXT      = so
 ifeq ($(shell uname -s),Darwin)
@@ -30,7 +31,7 @@ LIB      = cbinding/libbufarrow.$(EXT)
 
 .PHONY: libbufarrow libbufarrow-all python python-dev venv-sync test-go test-go-race test-python test \
         bench bench-go bench-python bench-throughput bench-throughput-go \
-        bench-throughput-python bench-compare clean
+        bench-throughput-python bench-compare bench-compare-pmr clean
 
 # ── Shared library ──────────────────────────────────────────────────────
 
@@ -123,7 +124,9 @@ bench-throughput-python:
 # bench-compare — rotate BENCH_OUT → BENCH_OUT.old, run, then diff with benchstat.
 #   First run: no .old file yet; benchstat will note that and skip the diff.
 #   Subsequent runs: benchstat old.txt new.txt shows delta automatically.
-bench-compare:
+# bench-compare-pmr — same rotation + diff, but only for BenchmarkVsPMR_* into
+#   BENCH_OUT_PMR; called automatically by bench-compare and usable standalone.
+bench-compare: bench-compare-pmr
 	@if [ -f $(BENCH_OUT) ]; then \
 	    cp $(BENCH_OUT) $(BENCH_OUT).old; \
 	    echo "Rotated previous Go results to $(BENCH_OUT).old"; \
@@ -157,6 +160,25 @@ bench-compare:
 	        ../$(BENCH_OUT_PYTHON).old ../$(BENCH_OUT_PYTHON); \
 	else \
 	    echo "Python results saved to $(BENCH_OUT_PYTHON) — run again to compare."; \
+	fi
+
+bench-compare-pmr:
+	@if [ -f $(BENCH_OUT_PMR) ]; then \
+	    cp $(BENCH_OUT_PMR) $(BENCH_OUT_PMR).old; \
+	    echo "Rotated previous PMR comparison results to $(BENCH_OUT_PMR).old"; \
+	fi
+	$(GO) test -run='^$$' \
+	    -bench='BenchmarkVsPMR' \
+	    -benchtime=$(BENCH_TIME) \
+	    -count=$(BENCH_COUNT) \
+	    -timeout=60m \
+	    ./... | tee $(BENCH_OUT_PMR)
+	@if [ -f $(BENCH_OUT_PMR).old ]; then \
+	    echo ""; \
+	    echo "=== benchstat delta (PMR comparison) ==="; \
+	    benchstat $(BENCH_OUT_PMR).old $(BENCH_OUT_PMR); \
+	else \
+	    echo "PMR comparison results saved to $(BENCH_OUT_PMR) — run again to compare."; \
 	fi
 
 # ── Clean ───────────────────────────────────────────────────────────────
