@@ -21,6 +21,7 @@ CPU_SLUG  := $(shell echo '$(CPU_MODEL)' \
 BENCH_OUT        ?= docs/$(CPU_SLUG)-benchmark-results.txt
 BENCH_OUT_PYTHON ?= docs/$(CPU_SLUG)-benchmark-results-python.json
 BENCH_OUT_PMR    ?= docs/$(CPU_SLUG)-pmr-comparison-results.txt
+BENCH_OUT_E2E    ?= docs/$(CPU_SLUG)-e2e-pipeline-results.txt
 
 EXT      = so
 ifeq ($(shell uname -s),Darwin)
@@ -31,7 +32,8 @@ LIB      = cbinding/libbufarrow.$(EXT)
 
 .PHONY: libbufarrow libbufarrow-all python python-dev venv-sync test-go test-go-race test-python test \
         bench bench-go bench-python bench-throughput bench-throughput-go \
-        bench-throughput-python bench-compare bench-compare-pmr clean
+        bench-throughput-python bench-compare bench-compare-pmr \
+        bench-e2e bench-compare-e2e clean
 
 # ── Shared library ──────────────────────────────────────────────────────
 
@@ -179,6 +181,38 @@ bench-compare-pmr:
 	    benchstat $(BENCH_OUT_PMR).old $(BENCH_OUT_PMR); \
 	else \
 	    echo "PMR comparison results saved to $(BENCH_OUT_PMR) — run again to compare."; \
+	fi
+
+# ── E2E pipeline benchmarks (proto → channel → transcode → DuckDB) ────
+#
+# Requires DuckDB driver installed via `dbc install duckdb`.
+# If unavailable, benchmarks are skipped (not failed).
+
+bench-e2e:
+	$(GO) test -run='^$$' \
+	    -bench='BenchmarkE2EPipeline_Concurrent' \
+	    -benchtime=$(BENCH_TIME) \
+	    -count=$(BENCH_COUNT) \
+	    -timeout=60m \
+	    ./...
+
+bench-compare-e2e:
+	@if [ -f $(BENCH_OUT_E2E) ]; then \
+	    cp $(BENCH_OUT_E2E) $(BENCH_OUT_E2E).old; \
+	    echo "Rotated previous E2E pipeline results to $(BENCH_OUT_E2E).old"; \
+	fi
+	$(GO) test -run='^$$' \
+	    -bench='BenchmarkE2EPipeline_Concurrent' \
+	    -benchtime=$(BENCH_TIME) \
+	    -count=$(BENCH_COUNT) \
+	    -timeout=60m \
+	    ./... | tee $(BENCH_OUT_E2E)
+	@if [ -f $(BENCH_OUT_E2E).old ]; then \
+	    echo ""; \
+	    echo "=== benchstat delta (E2E pipeline) ==="; \
+	    benchstat $(BENCH_OUT_E2E).old $(BENCH_OUT_E2E); \
+	else \
+	    echo "E2E pipeline results saved to $(BENCH_OUT_E2E) — run again to compare."; \
 	fi
 
 # ── Clean ───────────────────────────────────────────────────────────────

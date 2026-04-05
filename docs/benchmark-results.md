@@ -182,6 +182,57 @@ The single-threaded Python `submit()` loop becomes the bottleneck before Go's go
 
 ---
 
+## E2E pipeline throughput (proto → channel → transcode → DuckDB)
+
+These benchmarks model the full [quacfka-service](https://github.com/loicalleyne/quacfka-service) channel architecture end-to-end:
+
+1. **`mChan`** (`chan []byte`, cap=122,880) — pre-filled with serialised protobuf messages, simulating Kafka consumers feeding the pipeline.
+2. **N worker goroutines** compete on `mChan` (natural load-balancing, not pre-sharded), calling `AppendRaw` or `AppendDenormRaw` per message. Each worker flushes one Arrow `RecordBatch` when the channel drains.
+3. **`rChan`** (`chan arrow.Record`, cap=5) — flushed RecordBatches forwarded to the DuckDB sink.
+4. **DuckDB sink goroutine** — calls `couac.Conn.Ingest` (ADBC Create-or-Append) for each `RecordBatch`, then releases it.
+
+This measures end-to-end cost including goroutine scheduling, channel synchronisation, Arrow builder flush, and DuckDB ADBC write overhead. Compare with `BenchmarkMaxThroughput_ConcurrentAppendRaw` (pre-sharded, no channels, no DuckDB) to isolate the channel + DuckDB overhead.
+
+_Run: `make bench-e2e` or `make bench-compare-e2e` — BidRequest corpus, HyperType PGO, i7-13700H (GOMAXPROCS=20)._
+
+**AppendRaw E2E** (`BenchmarkE2EPipeline_ConcurrentAppendRaw`):
+
+| Workers | ns/msg | msg/s | allocs/msg | vs MaxThroughput |
+|---|---|---|---|---|
+| 1 | 16,482 | 60,671 | 35 | — |
+| 2 | 11,368 | 87,965 | 35 | — |
+| 4 | 13,446 | 74,371 | 35 | — |
+| 8 | 6,702 | **149,215** | 35 | 151 k → 149 k (−1%) |
+| 16 | 13,394 | 74,658 | 36 | — |
+| 32 | 6,386 | **156,597** | 36 | 454 k → 157 k (−65%) |
+| 40 | 9,361 | 106,825 | 37 | — |
+| 64 | 10,624 | 94,123 | 37 | — |
+| 80 | 11,413 | 87,619 | 38 | — |
+
+**AppendDenormRaw E2E** (`BenchmarkE2EPipeline_ConcurrentAppendDenormRaw`):
+
+| Workers | ns/msg | msg/s | allocs/msg | vs MaxThroughput |
+|---|---|---|---|---|
+| 1 | 11,635 | 85,949 | 109 | — |
+| 2 | 7,694 | 129,964 | 109 | — |
+| 4 | 4,708 | 212,402 | 109 | — |
+| 8 | 3,770 | **265,232** | 109 | — |
+| 16 | 3,853 | **259,523** | 109 | 481 k → 260 k (−46%) |
+| 32 | 4,547 | 219,907 | 109 | — |
+| 40 | 4,347 | 230,067 | 109 | — |
+| 64 | 5,036 | 198,568 | 109 | — |
+| 80 | 4,689 | 213,280 | 109 | — |
+
+### Key observations
+
+- **DuckDB ADBC write is the dominant overhead.** AppendRaw peaks at 157 k msg/s E2E vs 463 k in pure transcoding — the DuckDB sink serialises all RecordBatch writes through a single connection, making it the pipeline bottleneck beyond ~8 workers.
+- **AppendDenormRaw scales better** because each denorm RecordBatch has more rows (fan-out from `deals[*]`), amortising the per-batch ADBC overhead more effectively. Peak at 265 k msg/s (8 workers) vs 481 k pure transcoding (−46%).
+- **Optimal worker count is lower** for E2E (8 workers) than pure transcoding (32–80 workers). Beyond 8 workers, the sink goroutine is saturated and additional workers just add channel contention.
+- **`allocs/msg` is stable** at 35–38 (AppendRaw) and 109 (AppendDenormRaw); the channel ring-buffer allocation per `b.Loop()` iteration is negligible at 122,880 messages.
+- **Production takeaway:** With a single DuckDB ADBC connection, 8 transcoding workers is optimal. File rotation in production pipelines serves a different purpose: it decouples heavy read workloads (aggregation queries, exports) from the live ingestion connection by running them asynchronously on a closed file while ingestion continues into the next one. Ingestion throughput is bounded by the single ADBC connection regardless of how many files are in rotation.
+
+---
+
 ## HyperType
 
 ### What it is

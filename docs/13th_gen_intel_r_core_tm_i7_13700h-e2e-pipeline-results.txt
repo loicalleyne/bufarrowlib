@@ -1,0 +1,44 @@
+goos: linux
+goarch: amd64
+pkg: github.com/loicalleyne/bufarrowlib
+cpu: 13th Gen Intel(R) Core(TM) i7-13700H
+BenchmarkE2EPipeline_ConcurrentAppendRaw
+BenchmarkE2EPipeline_ConcurrentAppendRaw/workers-01
+BenchmarkE2EPipeline_ConcurrentAppendRaw/workers-01-20         	       2	2025333508 ns/op	  18.20 MB/s	      2459 B/msg	        34.89 allocs/msg	        20.00 cpu	     60671 msg/s	     16482 ns/msg	302206836 B/op	 4286817 allocs/op
+BenchmarkE2EPipeline_ConcurrentAppendRaw/workers-02
+BenchmarkE2EPipeline_ConcurrentAppendRaw/workers-02-20         	       3	1396926385 ns/op	  26.39 MB/s	      2481 B/msg	        34.94 allocs/msg	        20.00 cpu	     87965 msg/s	     11368 ns/msg	304849730 B/op	 4292920 allocs/op
+BenchmarkE2EPipeline_ConcurrentAppendRaw/workers-04
+BenchmarkE2EPipeline_ConcurrentAppendRaw/workers-04-20         	       2	1652259236 ns/op	  22.31 MB/s	      2524 B/msg	        35.03 allocs/msg	        20.00 cpu	     74371 msg/s	     13446 ns/msg	310090432 B/op	 4304173 allocs/op
+BenchmarkE2EPipeline_ConcurrentAppendRaw/workers-08
+BenchmarkE2EPipeline_ConcurrentAppendRaw/workers-08-20         	       4	 823508172 ns/op	  44.77 MB/s	      2629 B/msg	        35.21 allocs/msg	        20.00 cpu	    149215 msg/s	      6702 ns/msg	323062620 B/op	 4326013 allocs/op
+BenchmarkE2EPipeline_ConcurrentAppendRaw/workers-16
+BenchmarkE2EPipeline_ConcurrentAppendRaw/workers-16-20         	       3	1645912115 ns/op	  22.40 MB/s	      2709 B/msg	        35.55 allocs/msg	        20.00 cpu	     74658 msg/s	     13394 ns/msg	332822216 B/op	 4368051 allocs/op
+BenchmarkE2EPipeline_ConcurrentAppendRaw/workers-32
+BenchmarkE2EPipeline_ConcurrentAppendRaw/workers-32-20         	       4	 784688629 ns/op	  46.99 MB/s	      3002 B/msg	        36.22 allocs/msg	        20.00 cpu	    156597 msg/s	      6386 ns/msg	368900840 B/op	 4450152 allocs/op
+BenchmarkE2EPipeline_ConcurrentAppendRaw/workers-40
+BenchmarkE2EPipeline_ConcurrentAppendRaw/workers-40-20         	       3	1150296646 ns/op	  32.05 MB/s	      3010 B/msg	        36.54 allocs/msg	        20.00 cpu	    106825 msg/s	      9361 ns/msg	369895370 B/op	 4489929 allocs/op
+BenchmarkE2EPipeline_ConcurrentAppendRaw/workers-64
+BenchmarkE2EPipeline_ConcurrentAppendRaw/workers-64-20         	       3	1305528972 ns/op	  28.24 MB/s	      3113 B/msg	        37.49 allocs/msg	        20.00 cpu	     94123 msg/s	     10624 ns/msg	382479722 B/op	 4606979 allocs/op
+BenchmarkE2EPipeline_ConcurrentAppendRaw/workers-80
+BenchmarkE2EPipeline_ConcurrentAppendRaw/workers-80-20         	       3	1402435448 ns/op	  26.29 MB/s	      3136 B/msg	        38.10 allocs/msg	        20.00 cpu	     87619 msg/s	     11413 ns/msg	385406461 B/op	 4681873 allocs/op
+BenchmarkE2EPipeline_ConcurrentAppendDenormRaw
+BenchmarkE2EPipeline_ConcurrentAppendDenormRaw/workers-01
+BenchmarkE2EPipeline_ConcurrentAppendDenormRaw/workers-01-20   	       3	1429681688 ns/op	  25.79 MB/s	      6121 B/msg	       109.1 allocs/msg	        20.00 cpu	     85949 msg/s	     11635 ns/msg	752114082 B/op	13400906 allocs/op
+BenchmarkE2EPipeline_ConcurrentAppendDenormRaw/workers-02
+BenchmarkE2EPipeline_ConcurrentAppendDenormRaw/workers-02-20   	       4	 945489881 ns/op	  39.00 MB/s	      6125 B/msg	       109.1 allocs/msg	        20.00 cpu	    129964 msg/s	      7694 ns/msg	752699626 B/op	13401491 allocs/op
+BenchmarkE2EPipeline_ConcurrentAppendDenormRaw/workers-04
+BenchmarkE2EPipeline_ConcurrentAppendDenormRaw/workers-04-20   	       6	 578526546 ns/op	  63.73 MB/s	      6138 B/msg	       109.1 allocs/msg	        20.00 cpu	    212402 msg/s	      4708 ns/msg	754216142 B/op	13402528 allocs/op
+BenchmarkE2EPipeline_ConcurrentAppendDenormRaw/workers-08
+BenchmarkE2EPipeline_ConcurrentAppendDenormRaw/workers-08-20   	       7	 463292045 ns/op	  79.58 MB/s	      6160 B/msg	       109.1 allocs/msg	        20.00 cpu	    265232 msg/s	      3770 ns/msg	756914346 B/op	13404556 allocs/op
+BenchmarkE2EPipeline_ConcurrentAppendDenormRaw/workers-16
+BenchmarkE2EPipeline_ConcurrentAppendDenormRaw/workers-16-20   	       8	 473484687 ns/op	  77.87 MB/s	      6185 B/msg	       109.1 allocs/msg	        20.00 cpu	    259523 msg/s	      3853 ns/msg	760020926 B/op	13408360 allocs/op
+BenchmarkE2EPipeline_ConcurrentAppendDenormRaw/workers-32
+BenchmarkE2EPipeline_ConcurrentAppendDenormRaw/workers-32-20   	       6	 558780575 ns/op	  65.98 MB/s	      6191 B/msg	       109.2 allocs/msg	        20.00 cpu	    219907 msg/s	      4547 ns/msg	760740961 B/op	13414862 allocs/op
+BenchmarkE2EPipeline_ConcurrentAppendDenormRaw/workers-40
+BenchmarkE2EPipeline_ConcurrentAppendDenormRaw/workers-40-20   	       7	 534105834 ns/op	  69.03 MB/s	      6217 B/msg	       109.2 allocs/msg	        20.00 cpu	    230067 msg/s	      4347 ns/msg	763963987 B/op	13418050 allocs/op
+BenchmarkE2EPipeline_ConcurrentAppendDenormRaw/workers-64
+BenchmarkE2EPipeline_ConcurrentAppendDenormRaw/workers-64-20   	       6	 618831010 ns/op	  59.58 MB/s	      6221 B/msg	       109.3 allocs/msg	        20.00 cpu	    198568 msg/s	      5036 ns/msg	764378984 B/op	13426900 allocs/op
+BenchmarkE2EPipeline_ConcurrentAppendDenormRaw/workers-80
+BenchmarkE2EPipeline_ConcurrentAppendDenormRaw/workers-80-20   	       6	 576144304 ns/op	  63.99 MB/s	      6226 B/msg	       109.3 allocs/msg	        20.00 cpu	    213280 msg/s	      4689 ns/msg	765075294 B/op	13432764 allocs/op
+PASS
+ok  	github.com/loicalleyne/bufarrowlib	72.219s
