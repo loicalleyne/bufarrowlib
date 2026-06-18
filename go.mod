@@ -1,6 +1,6 @@
 module github.com/loicalleyne/bufarrowlib
 
-go 1.26.1
+go 1.26.4
 
 require (
 	buf.build/go/hyperpb v0.1.3
