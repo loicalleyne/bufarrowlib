@@ -12,6 +12,24 @@ repeated group field_id=-1 schema {
             }
           }
           required int32 field_id=2 dropped_attributes_count (Int(bitWidth=32, isSigned=false));
+          optional group field_id=3 entity_refs (List) {
+            repeated group field_id=-1 list {
+              optional group field_id=-1 element {
+                required byte_array field_id=1 schema_url (String);
+                required byte_array field_id=2 type (String);
+                required group field_id=3 id_keys (List) {
+                  repeated group field_id=-1 list {
+                    optional byte_array field_id=-1 element (String);
+                  }
+                }
+                required group field_id=4 description_keys (List) {
+                  repeated group field_id=-1 list {
+                    optional byte_array field_id=-1 element (String);
+                  }
+                }
+              }
+            }
+          }
         }
         optional group field_id=2 scope_spans (List) {
           repeated group field_id=-1 list {

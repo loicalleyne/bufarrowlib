@@ -493,3 +493,190 @@ func searchSubstring(s, substr string) bool {
 	}
 	return false
 }
+
+// compilePruneProto compiles prune_test.proto from the samples directory and
+// returns both the FileDescriptor and a lookup helper for message descriptors.
+func compilePruneProto(t *testing.T) (lookup func(name string) protoreflect.MessageDescriptor) {
+	t.Helper()
+	protoDir := testProtoDir(t)
+	fd, err := CompileProtoToFileDescriptor("prune_test.proto", []string{protoDir})
+	if err != nil {
+		t.Fatalf("setup: CompileProtoToFileDescriptor(prune_test.proto) error = %v", err)
+	}
+	return func(name string) protoreflect.MessageDescriptor {
+		md, err := GetMessageDescriptorByName(fd, name)
+		if err != nil {
+			t.Fatalf("setup: GetMessageDescriptorByName(%q) error = %v", name, err)
+		}
+		return md
+	}
+}
+
+func TestPruneEmptyMessages(t *testing.T) {
+	get := compilePruneProto(t)
+
+	t.Run("scalar_only_unchanged", func(t *testing.T) {
+		// ScalarOnly has no message-type fields; PruneEmptyMessages should return
+		// an equivalent descriptor with the same fields.
+		md := get("ScalarOnly")
+		pruned, err := PruneEmptyMessages(md)
+		if err != nil {
+			t.Fatalf("PruneEmptyMessages() error = %v", err)
+		}
+		if pruned.Fields().Len() != md.Fields().Len() {
+			t.Errorf("expected %d fields, got %d", md.Fields().Len(), pruned.Fields().Len())
+		}
+		for i := 0; i < md.Fields().Len(); i++ {
+			want := string(md.Fields().Get(i).Name())
+			if pruned.Fields().ByName(protoreflect.Name(want)) == nil {
+				t.Errorf("expected field %q to survive pruning", want)
+			}
+		}
+	})
+
+	t.Run("empty_field_removed", func(t *testing.T) {
+		// HasEmptyField has empty_msg(1) of type EmptyMsg and name(2) string.
+		// After pruning, only name should remain.
+		md := get("HasEmptyField")
+		pruned, err := PruneEmptyMessages(md)
+		if err != nil {
+			t.Fatalf("PruneEmptyMessages() error = %v", err)
+		}
+		if pruned.Fields().Len() != 1 {
+			t.Errorf("expected 1 field, got %d", pruned.Fields().Len())
+		}
+		if pruned.Fields().ByName("name") == nil {
+			t.Error("expected field 'name' to survive pruning")
+		}
+		if pruned.Fields().ByName("empty_msg") != nil {
+			t.Error("expected field 'empty_msg' to be pruned")
+		}
+	})
+
+	t.Run("field_numbers_unchanged", func(t *testing.T) {
+		// Field numbers of surviving fields must not change.
+		md := get("HasEmptyField")
+		pruned, err := PruneEmptyMessages(md)
+		if err != nil {
+			t.Fatalf("PruneEmptyMessages() error = %v", err)
+		}
+		nameField := pruned.Fields().ByName("name")
+		if nameField == nil {
+			t.Fatal("expected field 'name'")
+		}
+		if nameField.Number() != 2 {
+			t.Errorf("expected 'name' to retain field number 2, got %d", nameField.Number())
+		}
+	})
+
+	t.Run("all_empty_fields_returns_error", func(t *testing.T) {
+		// AllEmptyFields has only fields of type EmptyMsg; pruning should error.
+		md := get("AllEmptyFields")
+		_, err := PruneEmptyMessages(md)
+		if err == nil {
+			t.Fatal("expected error when all fields are pruned, got nil")
+		}
+	})
+
+	t.Run("cascade_prune", func(t *testing.T) {
+		// CascadePrune has inner_empty(1) of type InnerEmpty and name(2) string.
+		// InnerEmpty itself has only an EmptyMsg field; after that field is pruned,
+		// InnerEmpty becomes effectively empty, so inner_empty is also removed.
+		// Only name should survive.
+		md := get("CascadePrune")
+		pruned, err := PruneEmptyMessages(md)
+		if err != nil {
+			t.Fatalf("PruneEmptyMessages() error = %v", err)
+		}
+		if pruned.Fields().Len() != 1 {
+			t.Errorf("expected 1 field after cascade prune, got %d", pruned.Fields().Len())
+		}
+		if pruned.Fields().ByName("name") == nil {
+			t.Error("expected field 'name' to survive cascade prune")
+		}
+		if pruned.Fields().ByName("inner_empty") != nil {
+			t.Error("expected field 'inner_empty' to be cascade-pruned")
+		}
+	})
+
+	t.Run("oneof_mixed_variants", func(t *testing.T) {
+		// OneofMixed has oneof value { string s = 1; EmptyMsg e = 2; }.
+		// After pruning, the scalar variant s should survive and the oneof
+		// declaration should still exist.
+		md := get("OneofMixed")
+		pruned, err := PruneEmptyMessages(md)
+		if err != nil {
+			t.Fatalf("PruneEmptyMessages() error = %v", err)
+		}
+		if pruned.Fields().Len() != 1 {
+			t.Errorf("expected 1 surviving field, got %d", pruned.Fields().Len())
+		}
+		sField := pruned.Fields().ByName("s")
+		if sField == nil {
+			t.Fatal("expected field 's' to survive")
+		}
+		if sField.ContainingOneof() == nil {
+			t.Error("expected 's' to still belong to a oneof after pruning")
+		}
+	})
+
+	t.Run("oneof_all_empty_decl_removed", func(t *testing.T) {
+		// OneofAllEmpty has name(1) and oneof ghost { EmptyMsg e = 2; }.
+		// After pruning, the ghost oneof should be gone entirely; name survives.
+		md := get("OneofAllEmpty")
+		pruned, err := PruneEmptyMessages(md)
+		if err != nil {
+			t.Fatalf("PruneEmptyMessages() error = %v", err)
+		}
+		if pruned.Fields().Len() != 1 {
+			t.Errorf("expected 1 surviving field, got %d", pruned.Fields().Len())
+		}
+		if pruned.Fields().ByName("name") == nil {
+			t.Error("expected field 'name' to survive")
+		}
+		if pruned.Oneofs().Len() != 0 {
+			t.Errorf("expected 0 oneof declarations after removing orphaned oneof, got %d", pruned.Oneofs().Len())
+		}
+	})
+
+	t.Run("map_field_preserved", func(t *testing.T) {
+		// MapPreserved has map<string, ScalarOnly> items = 1.
+		// Map fields must never be pruned regardless of value type.
+		md := get("MapPreserved")
+		pruned, err := PruneEmptyMessages(md)
+		if err != nil {
+			t.Fatalf("PruneEmptyMessages() error = %v", err)
+		}
+		if pruned.Fields().Len() != 1 {
+			t.Errorf("expected 1 map field to survive, got %d", pruned.Fields().Len())
+		}
+		itemsField := pruned.Fields().ByName("items")
+		if itemsField == nil {
+			t.Error("expected map field 'items' to survive")
+		}
+		if !itemsField.IsMap() {
+			t.Error("expected 'items' to still be a map field after pruning")
+		}
+	})
+
+	t.Run("pruned_descriptor_is_usable", func(t *testing.T) {
+		// Sanity: the pruned descriptor can be used to look up surviving fields
+			// and the parent file preserves the source package and has the expected
+			// synthetic path.
+		md := get("HasEmptyField")
+		pruned, err := PruneEmptyMessages(md)
+		if err != nil {
+			t.Fatalf("PruneEmptyMessages() error = %v", err)
+		}
+			if pruned.ParentFile().Package() != md.ParentFile().Package() {
+				t.Errorf("expected package %q, got %q", md.ParentFile().Package(), pruned.ParentFile().Package())
+			}
+		parentPath := string(pruned.ParentFile().Path())
+		if parentPath != "HasEmptyField_pruned.proto" {
+			t.Errorf("expected synthetic parent path HasEmptyField_pruned.proto, got %s", parentPath)
+		}
+		if pruned.ParentFile().Syntax() != protoreflect.Proto3 {
+			t.Error("expected proto3 syntax on pruned descriptor")
+		}
+	})
+}

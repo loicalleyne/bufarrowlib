@@ -1,0 +1,64 @@
+syntax = "proto3";
+package samples;
+
+// EmptyMsg has no fields — the base case for pruning.
+message EmptyMsg {}
+
+// HasEmptyField has one field of type EmptyMsg and one scalar field.
+// PruneEmptyMessages should remove empty_msg and keep name.
+message HasEmptyField {
+  EmptyMsg empty_msg = 1;
+  string   name      = 2;
+}
+
+// AllEmptyFields has only empty-message fields; PruneEmptyMessages should
+// return an error.
+message AllEmptyFields {
+  EmptyMsg a = 1;
+  EmptyMsg b = 2;
+}
+
+// InnerEmpty holds only a field of type EmptyMsg. After removing that field,
+// InnerEmpty itself becomes effectively empty.
+message InnerEmpty {
+  EmptyMsg empty = 1;
+}
+
+// CascadePrune exercises recursive bottom-up pruning: the InnerEmpty field
+// becomes unreachable (InnerEmpty is effectively empty) and should be removed,
+// leaving only the scalar name field.
+message CascadePrune {
+  InnerEmpty inner_empty = 1;
+  string     name        = 2;
+}
+
+// OneofMixed has a oneof whose one variant is an EmptyMsg. After pruning the
+// empty variant, the oneof should survive (with its scalar variant).
+message OneofMixed {
+  oneof value {
+    string   s = 1;
+    EmptyMsg e = 2;
+  }
+}
+
+// OneofAllEmpty has a scalar field and a oneof whose sole variant is EmptyMsg.
+// The entire oneof declaration should be removed; name should survive.
+message OneofAllEmpty {
+  string   name = 1;
+  oneof ghost {
+    EmptyMsg e = 2;
+  }
+}
+
+// ScalarOnly has no message-type fields and should be returned unchanged.
+message ScalarOnly {
+  string  label = 1;
+  int32   count = 2;
+  bool    active = 3;
+}
+
+// MapWithEmptyValue has a map field whose value type is a non-empty message
+// (use ScalarOnly). Maps are never pruned.
+message MapPreserved {
+  map<string, ScalarOnly> items = 1;
+}
