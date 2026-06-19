@@ -155,7 +155,7 @@ func unmarshal(msgType *hyperpb.MessageType, n *node, r arrow.RecordBatch, rows 
 // build constructs the full Arrow schema tree and Parquet schema from a
 // protobuf message. It recursively creates nodes for every field and returns
 // a message struct ready for builder initialisation via message.build.
-func build(msg protoreflect.Message) *message {
+func build(msg protoreflect.Message) (*message, error) {
 	root := &node{
 		desc:  msg.Descriptor(),
 		field: arrow.Field{},
@@ -176,7 +176,7 @@ func build(msg protoreflect.Message) *message {
 	// string columns.
 	bs, err := pqarrow.ToParquet(as, parquet.NewWriterProperties(), pqarrow.DefaultWriterProps())
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	var props []parquet.WriterProperty
 
@@ -201,7 +201,7 @@ func build(msg protoreflect.Message) *message {
 		schema:  as,
 		parquet: ps,
 		props:   props,
-	}
+	}, nil
 }
 
 // message bundles the node tree, Arrow schema, Parquet schema, and record
@@ -337,8 +337,10 @@ func createNode(parent *node, field protoreflect.FieldDescriptor, depth int) *no
 			valueFD := msg.Fields().ByName("value")
 
 			// Key node – always a scalar type in protobuf maps.
-			keyNode := &node{parent: n, desc: keyFD, depth: depth + 1, hash: make(map[string]*node),
-				field: arrow.Field{Name: "key"}}
+			keyNode := &node{
+				parent: n, desc: keyFD, depth: depth + 1, hash: make(map[string]*node),
+				field: arrow.Field{Name: "key"},
+			}
 			keyType := keyNode.baseType(keyFD)
 			if keyType == nil {
 				panic(fmt.Sprintf("bufarrow: unsupported map key type %v", keyFD.Kind()))

@@ -105,6 +105,7 @@ Python tests are **not** in CI (require a pre-built shared library and platform-
 - **Do not share a `Transcoder` between goroutines.** Use `Clone` to get independent builder state per goroutine.
 - **Do not drop `HyperType`** on raw-bytes paths. Without it, `AppendRaw` falls back to `dynamicpb` which is 3–5× slower.
 - **Do not use `proto.Unmarshal` then `Append`** when raw bytes are available. Use `AppendRaw` / `AppendDenormRaw` instead.
+- **Do not write protobuf schemas with empty message fields directly to Parquet.** Parquet rejects Struct nodes with no children. Use `WithPruneEmptyMessages()` at `New`/`NewFromFile` time, or call `PruneEmptyMessages(md)` on the descriptor before construction. Pruning is recursive: a message that only held empty-message fields also gets pruned. Field numbers of surviving fields are unchanged.
 
 ## References
 

@@ -16,35 +16,50 @@ import (
 
 func TestMessage_ScalarMap(t *testing.T) {
 	m := &samples.ScalarMap{}
-	msg := build(m.ProtoReflect())
+	msg, err := build(m.ProtoReflect())
+	if err != nil {
+		t.Fatalf("failed to build message: %v", err)
+	}
 	schema := msg.schema.String()
 	match(t, "testdata/scalar_map.txt", schema)
 }
 
 func TestMessage_MapVariety(t *testing.T) {
 	m := &samples.MapVariety{}
-	msg := build(m.ProtoReflect())
+	msg, err := build(m.ProtoReflect())
+	if err != nil {
+		t.Fatalf("failed to build message: %v", err)
+	}
 	schema := msg.schema.String()
 	match(t, "testdata/map_variety.txt", schema, struct{}{})
 }
 
 func TestMessage_MapWithNested(t *testing.T) {
 	m := &samples.MapWithNested{}
-	msg := build(m.ProtoReflect())
+	msg, err := build(m.ProtoReflect())
+	if err != nil {
+		t.Fatalf("failed to build message: %v", err)
+	}
 	schema := msg.schema.String()
 	match(t, "testdata/map_nested.txt", schema, struct{}{})
 }
 
 func TestMessage_MapWithTimestamp(t *testing.T) {
 	m := &samples.MapWithTimestamp{}
-	msg := build(m.ProtoReflect())
+	msg, err := build(m.ProtoReflect())
+	if err != nil {
+		t.Fatalf("failed to build message: %v", err)
+	}
 	schema := msg.schema.String()
 	match(t, "testdata/map_timestamp.txt", schema, struct{}{})
 }
 
 func TestMessage_NestedWithMap(t *testing.T) {
 	m := &samples.NestedWithMap{}
-	msg := build(m.ProtoReflect())
+	msg, err := build(m.ProtoReflect())
+	if err != nil {
+		t.Fatalf("failed to build message: %v", err)
+	}
 	schema := msg.schema.String()
 	match(t, "testdata/nested_with_map.txt", schema, struct{}{})
 }
@@ -53,7 +68,10 @@ func TestMessage_NestedWithMap(t *testing.T) {
 
 func TestAppendMessage_ScalarMap(t *testing.T) {
 	msg := &samples.ScalarMap{}
-	b := build(msg.ProtoReflect())
+	b, err := build(msg.ProtoReflect())
+	if err != nil {
+		t.Fatalf("failed to build message: %v", err)
+	}
 	b.build(memory.DefaultAllocator)
 
 	// Row 0: empty map (zero value)
@@ -73,7 +91,10 @@ func TestAppendMessage_ScalarMap(t *testing.T) {
 
 func TestAppendMessage_MapVariety(t *testing.T) {
 	msg := &samples.MapVariety{}
-	b := build(msg.ProtoReflect())
+	b, err := build(msg.ProtoReflect())
+	if err != nil {
+		t.Fatalf("failed to build message: %v", err)
+	}
 	b.build(memory.DefaultAllocator)
 
 	// Row 0: empty maps
@@ -98,7 +119,10 @@ func TestAppendMessage_MapVariety(t *testing.T) {
 
 func TestAppendMessage_MapWithNested(t *testing.T) {
 	msg := &samples.MapWithNested{}
-	b := build(msg.ProtoReflect())
+	b, err := build(msg.ProtoReflect())
+	if err != nil {
+		t.Fatalf("failed to build message: %v", err)
+	}
 	b.build(memory.DefaultAllocator)
 
 	// Row 0: empty
@@ -120,7 +144,10 @@ func TestAppendMessage_MapWithNested(t *testing.T) {
 
 func TestAppendMessage_MapWithTimestamp(t *testing.T) {
 	msg := &samples.MapWithTimestamp{}
-	b := build(msg.ProtoReflect())
+	b, err := build(msg.ProtoReflect())
+	if err != nil {
+		t.Fatalf("failed to build message: %v", err)
+	}
 	b.build(memory.DefaultAllocator)
 
 	// Row 0: empty
@@ -143,7 +170,10 @@ func TestAppendMessage_MapWithTimestamp(t *testing.T) {
 
 func TestAppendMessage_NestedWithMap(t *testing.T) {
 	msg := &samples.NestedWithMap{}
-	b := build(msg.ProtoReflect())
+	b, err := build(msg.ProtoReflect())
+	if err != nil {
+		t.Fatalf("failed to build message: %v", err)
+	}
 	b.build(memory.DefaultAllocator)
 
 	// Row 0: empty
@@ -442,7 +472,10 @@ func TestMapVarietySchemaTypes(t *testing.T) {
 
 func TestMapParquetSchema(t *testing.T) {
 	m := &samples.ScalarMap{}
-	msg := build(m.ProtoReflect())
+	msg, err := build(m.ProtoReflect())
+	if err != nil {
+		t.Fatalf("failed to build message: %v", err)
+	}
 	pqSchema := msg.Parquet()
 	if pqSchema == nil {
 		t.Fatal("Parquet() returned nil")

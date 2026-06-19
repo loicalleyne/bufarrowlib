@@ -98,6 +98,12 @@ bufarrowlib.WithDenormalizerPlan(paths ...pbpath.PlanPathSpec) Option
 // Attach a shared HyperType for hyperpb fast parsing.
 // Required for AppendRaw / AppendRawMerged; optional for AppendDenormRaw (falls back to proto.Unmarshal).
 bufarrowlib.WithHyperType(ht *HyperType) Option
+
+// Strip fields whose message type has zero fields, recursively bottom-up.
+// Required when writing to Parquet: Parquet does not allow a Struct node with no children.
+// Pruning is performed before schema construction; field numbers of surviving fields are unchanged.
+// New() and NewFromFile() return an error at construction time if the root message itself becomes empty after pruning.
+bufarrowlib.WithPruneEmptyMessages() Option
 ```
 
 ```go
@@ -207,6 +213,12 @@ func GetMessageDescriptorByName(fd protoreflect.FileDescriptor, messageName stri
 // Merge two MessageDescriptors. Fields from b are renumbered above a's max field number.
 // This makes their wire bytes safe to concatenate for AppendRawMerged.
 func MergeMessageDescriptors(a, b protoreflect.MessageDescriptor, newName string) (protoreflect.MessageDescriptor, error)
+
+// Remove fields whose message type has zero fields, recursively bottom-up (fixed-point).
+// Map entry messages are never considered empty. Field numbers of survivors are unchanged.
+// Orphaned oneof declarations are cleaned up with index adjustment.
+// Returns an error if the root message has no fields after pruning.
+func PruneEmptyMessages(md protoreflect.MessageDescriptor) (protoreflect.MessageDescriptor, error)
 ```
 
 ## YAML Config Functions

@@ -3,6 +3,7 @@ package bufarrowlib
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/bufbuild/protocompile"
 	"google.golang.org/protobuf/proto"
@@ -113,21 +114,23 @@ func MergeMessageDescriptors(a, b protoreflect.MessageDescriptor, newName string
 	depSet := make(map[string]bool)
 	var deps []string
 
-	var addFileDeps func(fd protoreflect.FileDescriptor)
-	addFileDeps = func(fd protoreflect.FileDescriptor) {
-		p := string(fd.Path())
-		if depSet[p] {
-			return
+	var addFileDeps func(fd protoreflect.FileDescriptor, includeSelf bool)
+	addFileDeps = func(fd protoreflect.FileDescriptor, includeSelf bool) {
+		if includeSelf {
+			p := string(fd.Path())
+			if depSet[p] {
+				return
+			}
+			depSet[p] = true
+			deps = append(deps, p)
 		}
-		depSet[p] = true
-		deps = append(deps, p)
 		for i := 0; i < fd.Imports().Len(); i++ {
-			addFileDeps(fd.Imports().Get(i))
+			addFileDeps(fd.Imports().Get(i), true)
 		}
 	}
-	addFileDeps(a.ParentFile())
+	addFileDeps(a.ParentFile(), !strings.HasSuffix(string(a.ParentFile().Path()), "_pruned.proto"))
 	if b.ParentFile().Path() != a.ParentFile().Path() {
-		addFileDeps(b.ParentFile())
+		addFileDeps(b.ParentFile(), !strings.HasSuffix(string(b.ParentFile().Path()), "_pruned.proto"))
 	}
 
 	fdp := &descriptorpb.FileDescriptorProto{
@@ -142,11 +145,27 @@ func MergeMessageDescriptors(a, b protoreflect.MessageDescriptor, newName string
 	// and any other indirect dependencies resolve successfully.
 	resolver := &protoregistry.Files{}
 	if err := registerFileTransitively(resolver, a.ParentFile()); err != nil {
-		return nil, fmt.Errorf("failed to register parent file of a: %w", err)
+		// Pruned synthetic descriptors may import their original source file while
+		// redefining the same top-level symbol, which triggers a name conflict when
+		// registering the synthetic file into a shared resolver. In that case, the
+		// merged descriptor only needs transitive imports from the parent file.
+		if strings.Contains(err.Error(), "name conflict") {
+			if impErr := registerImportsTransitively(resolver, a.ParentFile()); impErr != nil {
+				return nil, fmt.Errorf("failed to register imports of parent file of a after conflict: %w", impErr)
+			}
+		} else {
+			return nil, fmt.Errorf("failed to register parent file of a: %w", err)
+		}
 	}
 	if b.ParentFile().Path() != a.ParentFile().Path() {
 		if err := registerFileTransitively(resolver, b.ParentFile()); err != nil {
-			return nil, fmt.Errorf("failed to register parent file of b: %w", err)
+			if strings.Contains(err.Error(), "name conflict") {
+				if impErr := registerImportsTransitively(resolver, b.ParentFile()); impErr != nil {
+					return nil, fmt.Errorf("failed to register imports of parent file of b after conflict: %w", impErr)
+				}
+			} else {
+				return nil, fmt.Errorf("failed to register parent file of b: %w", err)
+			}
 		}
 	}
 	// Build a real FileDescriptor from it
@@ -394,6 +413,22 @@ func registerFileTransitively(r *protoregistry.Files, fd protoreflect.FileDescri
 	}
 	if _, err := r.FindFileByPath(string(fd.Path())); err != nil {
 		if err := r.RegisterFile(fd); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// registerImportsTransitively registers only fd's transitive imports, not fd
+// itself. This is used as a fallback for synthetic descriptors that would
+// conflict with symbols defined in imported source files.
+func registerImportsTransitively(r *protoregistry.Files, fd protoreflect.FileDescriptor) error {
+	for i := 0; i < fd.Imports().Len(); i++ {
+		imp := fd.Imports().Get(i)
+		if _, err := r.FindFileByPath(string(imp.Path())); err == nil {
+			continue
+		}
+		if err := registerFileTransitively(r, imp); err != nil {
 			return err
 		}
 	}

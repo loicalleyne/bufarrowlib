@@ -73,6 +73,14 @@ rec := tc.NewDenormalizerRecordBatch()
 defer rec.Release()
 ```
 
+## Proto Utility Functions
+
+- `CompileProtoToFileDescriptor(protoFilePath string, importPaths []string) (protoreflect.FileDescriptor, error)` — compile a .proto file at runtime
+- `GetMessageDescriptorByName(fd protoreflect.FileDescriptor, messageName string) (protoreflect.MessageDescriptor, error)` — look up a message by name
+- `MergeMessageDescriptors(a, b protoreflect.MessageDescriptor, newName string) (protoreflect.MessageDescriptor, error)` — merge two descriptors; renumbers b's fields above a's max
+- `PruneEmptyMessages(md protoreflect.MessageDescriptor) (protoreflect.MessageDescriptor, error)` — remove fields whose message type has zero fields, recursively; required for Parquet compatibility
+- `WithPruneEmptyMessages() Option` — enable pruning at `New` / `NewFromFile` construction time
+
 ## Subpackages
 
 | Package | Purpose |

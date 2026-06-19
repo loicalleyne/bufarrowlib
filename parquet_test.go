@@ -15,7 +15,10 @@ import (
 
 func TestRead(t *testing.T) {
 	msg := &metricsv1.MetricsData{}
-	b := build(msg.ProtoReflect())
+	b, err := build(msg.ProtoReflect())
+	if err != nil {
+		t.Fatalf("failed to build message: %v", err)
+	}
 	b.build(memory.DefaultAllocator)
 	b.append(msg.ProtoReflect())
 	msg.ResourceMetrics = []*metricsv1.ResourceMetrics{
@@ -48,7 +51,7 @@ func TestRead(t *testing.T) {
 	b.append(msg.ProtoReflect())
 
 	var o bytes.Buffer
-	err := b.WriteParquet(&o)
+	err = b.WriteParquet(&o)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +87,10 @@ func TestRead(t *testing.T) {
 
 func TestWriteMultiple(t *testing.T) {
 	msg := &metricsv1.MetricsData{}
-	b := build(msg.ProtoReflect())
+	b, err := build(msg.ProtoReflect())
+	if err != nil {
+		t.Fatalf("failed to build message: %v", err)
+	}
 	b.build(memory.DefaultAllocator)
 	b.append(msg.ProtoReflect())
 	msg.ResourceMetrics = []*metricsv1.ResourceMetrics{
@@ -115,7 +121,7 @@ func TestWriteMultiple(t *testing.T) {
 
 	var o bytes.Buffer
 	r := b.NewRecordBatch()
-	err := b.WriteParquetRecords(&o, r, r)
+	err = b.WriteParquetRecords(&o, r, r)
 	if err != nil {
 		t.Fatal(err)
 	}

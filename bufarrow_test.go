@@ -29,6 +29,77 @@ func TestNew(t *testing.T) {
 	match(t, "testdata/new.json", string(data))
 }
 
+func TestNewWithPruneEmptyMessages(t *testing.T) {
+	protoDir := testProtoDir(t)
+
+	fd, err := CompileProtoToFileDescriptor("prune_test.proto", []string{protoDir})
+	if err != nil {
+		t.Fatalf("setup: CompileProtoToFileDescriptor(prune_test.proto) error = %v", err)
+	}
+	get := func(name string) protoreflect.MessageDescriptor {
+		md, getErr := GetMessageDescriptorByName(fd, name)
+		if getErr != nil {
+			t.Fatalf("setup: GetMessageDescriptorByName(%q) error = %v", name, getErr)
+		}
+		return md
+	}
+
+	t.Run("new_prunes_empty_message_fields", func(t *testing.T) {
+		schema, newErr := New(get("HasEmptyField"), memory.DefaultAllocator, WithPruneEmptyMessages())
+		if newErr != nil {
+			t.Fatalf("New() with WithPruneEmptyMessages(true) error = %v", newErr)
+		}
+		defer schema.Release()
+
+		fieldNames := schema.FieldNames()
+		if len(fieldNames) != 1 || fieldNames[0] != "name" {
+			t.Fatalf("expected only [name] after pruning, got %v", fieldNames)
+		}
+		if schema.msgDesc.Fields().ByName("empty_msg") != nil {
+			t.Fatal("expected empty_msg to be pruned from transcoder msgDesc")
+		}
+	})
+
+	t.Run("new_from_file_prunes_empty_message_fields", func(t *testing.T) {
+		schema, newErr := NewFromFile("prune_test.proto", "HasEmptyField", []string{protoDir}, memory.DefaultAllocator, WithPruneEmptyMessages())
+		if newErr != nil {
+			t.Fatalf("NewFromFile() with WithPruneEmptyMessages(true) error = %v", newErr)
+		}
+		defer schema.Release()
+
+		fieldNames := schema.FieldNames()
+		if len(fieldNames) != 1 || fieldNames[0] != "name" {
+			t.Fatalf("expected only [name] after pruning, got %v", fieldNames)
+		}
+		if schema.msgDesc.Fields().ByName("empty_msg") != nil {
+			t.Fatal("expected empty_msg to be pruned from transcoder msgDesc")
+		}
+	})
+
+	t.Run("new_errors_when_all_fields_pruned", func(t *testing.T) {
+		_, newErr := New(get("AllEmptyFields"), memory.DefaultAllocator, WithPruneEmptyMessages())
+		if newErr == nil {
+			t.Fatal("expected error when all fields are pruned")
+		}
+		if !strings.Contains(newErr.Error(), "failed to prune empty messages") {
+			t.Fatalf("expected prune-wrapped error, got %v", newErr)
+		}
+	})
+
+	t.Run("default_disabled_preserves_empty_message_fields", func(t *testing.T) {
+		_, newErr := New(get("HasEmptyField"), memory.DefaultAllocator)
+		if newErr == nil {
+			t.Fatal("expected New() to fail without WithPruneEmptyMessages on schema containing empty messages")
+		}
+		if !strings.Contains(newErr.Error(), "failed to build message") {
+			t.Fatalf("expected build-wrapped error, got %v", newErr)
+		}
+		if !strings.Contains(newErr.Error(), "empty_msg") {
+			t.Fatalf("expected error to mention empty_msg, got %v", newErr)
+		}
+	})
+}
+
 // --- NewFromFile tests ---
 
 func TestNewFromFile(t *testing.T) {

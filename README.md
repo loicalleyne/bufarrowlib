@@ -239,6 +239,22 @@ tc, _ := ba.New(baseMD, mem, ba.WithCustomMessage(customMD))
 tc.AppendRawMerged(baseBytes, customBytes)
 ```
 
+### Parquet compatibility — pruning empty messages
+
+Parquet does not allow a `Struct` node with no children. Protobuf schemas sometimes contain message types with zero fields (e.g. `google.protobuf.Empty`, extension stubs, or marker types). Pass `WithPruneEmptyMessages()` to strip them before schema construction:
+
+```go
+tc, _ := ba.New(md, mem, ba.WithPruneEmptyMessages())
+```
+
+Pruning is **recursive and bottom-up**: if removing an empty-message field causes its parent message to also have zero fields, that parent's fields are pruned in turn. Field numbers of surviving fields are left unchanged (wire-format safe). An error is returned at construction time if the root message itself ends up empty after pruning.
+
+You can also call `PruneEmptyMessages` directly on a descriptor:
+
+```go
+prunedMD, err := ba.PruneEmptyMessages(md)
+```
+
 ### Parquet I/O
 
 ```go

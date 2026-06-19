@@ -79,6 +79,7 @@ type Opt struct {
 	customImportPaths []string
 	denormPaths       []pbpath.PlanPathSpec
 	hyperType         *HyperType
+	pruneEmpty        bool
 }
 
 // Option is a functional option applied to [New] and [NewFromFile] to
@@ -145,6 +146,16 @@ func WithHyperType(ht *HyperType) Option {
 	}
 }
 
+// WithPruneEmptyMessages configures the Transcoder to prune empty messages from the schema.
+// When enabled, any field that is of message type containing no scalar fields (i.e. empty messages) will be removed from the schema.
+// This is to maintain compatibility with parquet schema which does not support empty messages. By default, this option is disabled and empty messages are included in the schema.
+
+func WithPruneEmptyMessages() Option {
+	return func(cfg config) {
+		cfg.pruneEmpty = true
+	}
+}
+
 // NewFromFile returns a new [Transcoder] by compiling a .proto file at runtime.
 // protoFilePath is the path to the .proto file, messageName is the top-level
 // message to use, and importPaths are the directories to search for imports.
@@ -186,7 +197,12 @@ func New(msgDesc protoreflect.MessageDescriptor, mem memory.Allocator, opts ...O
 	for _, f := range opts {
 		f(o)
 	}
-
+	if o.pruneEmpty {
+		msgDesc, err = PruneEmptyMessages(msgDesc)
+		if err != nil {
+			return nil, fmt.Errorf("bufarrow: failed to prune empty messages: %w", err)
+		}
+	}
 	// Validate mutual exclusivity of custom message options
 	if o.customMsgDesc != nil && o.customProtoPath != "" {
 		return nil, fmt.Errorf("bufarrow: WithCustomMessage and WithCustomMessageFile are mutually exclusive")
@@ -254,10 +270,16 @@ func New(msgDesc protoreflect.MessageDescriptor, mem memory.Allocator, opts ...O
 			}
 		}
 
-		b = build(a.ProtoReflect())
+		b, err = build(a.ProtoReflect())
+		if err != nil {
+			return nil, fmt.Errorf("bufarrow: failed to build message: %w", err)
+		}
 		b.build(mem)
 	} else {
-		b = build(a.ProtoReflect())
+		b, err = build(a.ProtoReflect())
+		if err != nil {
+			return nil, fmt.Errorf("bufarrow: failed to build message: %w", err)
+		}
 		b.build(mem)
 	}
 
@@ -292,7 +314,8 @@ func (s *Transcoder) Clone(mem memory.Allocator) (tc *Transcoder, err error) {
 		}
 	}()
 	a := s.stencil
-	b := build(a.ProtoReflect())
+	b, _ := build(a.ProtoReflect())
+
 	b.build(mem)
 	tc = &Transcoder{msgDesc: s.msgDesc, msg: b, msgType: s.msgType, stencil: a, opts: s.opts}
 	if s.hyperType != nil {

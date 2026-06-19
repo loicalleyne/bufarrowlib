@@ -15,7 +15,10 @@ import (
 func TestGetPath(t *testing.T) {
 	// Build a node tree from a known message.
 	m := &samples.ScalarTypes{}
-	msg := build(m.ProtoReflect())
+	msg, err := build(m.ProtoReflect())
+	if err != nil {
+		t.Fatalf("failed to build message: %v", err)
+	}
 	root := msg.root
 
 	// Successful lookup of a top-level field (proto name "double").
@@ -42,7 +45,10 @@ func TestGetPath(t *testing.T) {
 
 func TestGetPathNested(t *testing.T) {
 	m := &samples.Nested{}
-	msg := build(m.ProtoReflect())
+	msg, err := build(m.ProtoReflect())
+	if err != nil {
+		t.Fatalf("failed to build message: %v", err)
+	}
 	root := msg.root
 
 	// Nested path: nested_scalar should be found in children.
@@ -57,7 +63,10 @@ func TestGetPathNested(t *testing.T) {
 
 func TestDotPath(t *testing.T) {
 	m := &samples.ScalarTypes{}
-	msg := build(m.ProtoReflect())
+	msg, err := build(m.ProtoReflect())
+	if err != nil {
+		t.Fatalf("failed to build message: %v", err)
+	}
 	root := msg.root
 
 	// The root's dotPath should be the fully-qualified message name.
