@@ -79,8 +79,22 @@ type Opt struct {
 	customImportPaths []string
 	denormPaths       []pbpath.PlanPathSpec
 	hyperType         *HyperType
+	hyperTypeMismatchPolicy HyperTypeMismatchPolicy
 	pruneEmpty        bool
 }
+
+// HyperTypeMismatchPolicy controls how New() handles a descriptor mismatch
+// between WithHyperType and the active descriptor (after pruning and optional
+// schema merge).
+type HyperTypeMismatchPolicy uint8
+
+const (
+	// HyperTypeMismatchStrict returns ErrHyperTypeDescriptorMismatch.
+	HyperTypeMismatchStrict HyperTypeMismatchPolicy = iota
+	// HyperTypeMismatchFallbackRecompile rebuilds an internal HyperType from
+	// the active descriptor and continues.
+	HyperTypeMismatchFallbackRecompile
+)
 
 // Option is a functional option applied to [New] and [NewFromFile] to
 // configure schema merging, denormalization, or other behaviours.
@@ -146,6 +160,16 @@ func WithHyperType(ht *HyperType) Option {
 	}
 }
 
+// WithHyperTypeMismatchPolicy sets how New() handles descriptor mismatch
+// between WithHyperType and the active descriptor.
+//
+// The default policy is HyperTypeMismatchStrict.
+func WithHyperTypeMismatchPolicy(policy HyperTypeMismatchPolicy) Option {
+	return func(cfg config) {
+		cfg.hyperTypeMismatchPolicy = policy
+	}
+}
+
 // WithPruneEmptyMessages configures the Transcoder to prune empty messages from the schema.
 // When enabled, any field that is of message type containing no scalar fields (i.e. empty messages) will be removed from the schema.
 // This is to maintain compatibility with parquet schema which does not support empty messages. By default, this option is disabled and empty messages are included in the schema.
@@ -197,15 +221,16 @@ func New(msgDesc protoreflect.MessageDescriptor, mem memory.Allocator, opts ...O
 	for _, f := range opts {
 		f(o)
 	}
+
 	if o.pruneEmpty {
 		msgDesc, err = PruneEmptyMessages(msgDesc)
 		if err != nil {
 			return nil, fmt.Errorf("bufarrow: failed to prune empty messages: %w", err)
 		}
 	}
-	// Validate mutual exclusivity of custom message options
+	
 	if o.customMsgDesc != nil && o.customProtoPath != "" {
-		return nil, fmt.Errorf("bufarrow: WithCustomMessage and WithCustomMessageFile are mutually exclusive")
+		return nil, ErrMutuallyExclusiveCustomMessageOptions
 	}
 
 	// Resolve custom message descriptor from .proto file if specified
@@ -233,17 +258,37 @@ func New(msgDesc protoreflect.MessageDescriptor, mem memory.Allocator, opts ...O
 	if mergedMsgDesc != nil {
 		activeMsgDesc = mergedMsgDesc
 	}
+	selectedHyperType := o.hyperType
+	if selectedHyperType != nil {
+		activeHash := descriptorFingerprint(activeMsgDesc)
+		if activeHash != "" && selectedHyperType.descHash != "" && activeHash != selectedHyperType.descHash {
+			switch o.hyperTypeMismatchPolicy {
+			case HyperTypeMismatchStrict:
+				return nil, &HyperTypeDescriptorMismatchError{
+					ActiveMessage: string(activeMsgDesc.FullName()),
+					HyperMessage:  selectedHyperType.msgFullName,
+					ActiveHash:    activeHash,
+					HyperHash:     selectedHyperType.descHash,
+				}
+			case HyperTypeMismatchFallbackRecompile:
+				selectedHyperType = NewHyperType(activeMsgDesc)
+				o.hyperType = selectedHyperType
+			default:
+				return nil, fmt.Errorf("bufarrow: invalid hyper type mismatch policy %d: %w", o.hyperTypeMismatchPolicy, ErrInvalidHyperTypeMismatchPolicy)
+			}
+		}
+	}
 
 	var msgType *hyperpb.MessageType
-	if o.hyperType != nil {
-		msgType = o.hyperType.Type()
+	if selectedHyperType != nil {
+		msgType = selectedHyperType.Type()
 	} else {
 		msgType = hyperpb.CompileMessageDescriptor(activeMsgDesc)
 	}
 	a := hyperpb.NewMessage(msgType)
 	tc = &Transcoder{msgDesc: msgDesc, msgType: msgType, stencil: a, opts: o}
-	if o.hyperType != nil {
-		tc.hyperType = o.hyperType
+	if selectedHyperType != nil {
+		tc.hyperType = selectedHyperType
 		tc.hyperShared = new(hyperpb.Shared)
 	}
 

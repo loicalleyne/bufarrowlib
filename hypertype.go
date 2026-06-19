@@ -1,10 +1,14 @@
 package bufarrowlib
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"sync/atomic"
 
 	"buf.build/go/hyperpb"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -21,6 +25,9 @@ type HyperType struct {
 	msgType atomic.Pointer[hyperpb.MessageType]
 	profile atomic.Pointer[hyperpb.Profile]
 	seen    atomic.Int64
+
+	msgFullName string
+	descHash    string
 
 	// Immutable after construction.
 	threshold int64   // auto-recompile after this many messages; 0 = manual only
@@ -63,10 +70,22 @@ func NewHyperType(md protoreflect.MessageDescriptor, opts ...HyperTypeOption) *H
 	ht := &HyperType{
 		threshold: cfg.threshold,
 		rate:      cfg.rate,
+		msgFullName: string(md.FullName()),
+		descHash:    descriptorFingerprint(md),
 	}
 	ht.msgType.Store(mt)
 	ht.profile.Store(mt.NewProfile())
 	return ht
+}
+
+func descriptorFingerprint(md protoreflect.MessageDescriptor) string {
+	dp := protodesc.ToDescriptorProto(md)
+	b, err := proto.Marshal(dp)
+	if err != nil {
+		return ""
+	}
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
 }
 
 // Type returns the current compiled [hyperpb.MessageType]. The returned

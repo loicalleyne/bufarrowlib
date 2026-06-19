@@ -1,6 +1,8 @@
 package bufarrowlib
 
 import (
+	"errors"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -342,8 +344,130 @@ func TestWithCustomMessage_MutualExclusivity(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected mutual exclusivity error")
 	}
+	if !errors.Is(err, ErrMutuallyExclusiveCustomMessageOptions) {
+		t.Fatalf("expected errors.Is(..., ErrMutuallyExclusiveCustomMessageOptions) = true, got err=%v", err)
+	}
 	if !strings.Contains(err.Error(), "mutually exclusive") {
 		t.Errorf("expected 'mutually exclusive' error, got: %v", err)
+	}
+}
+
+func TestNew_WithHyperTypeDescriptorMismatch(t *testing.T) {
+	protoDir := testProtoDir(t)
+	fd, err := CompileProtoToFileDescriptor("prune_test.proto", []string{protoDir})
+	if err != nil {
+		t.Fatalf("setup: CompileProtoToFileDescriptor(prune_test.proto) error = %v", err)
+	}
+	md, err := GetMessageDescriptorByName(fd, "HasEmptyField")
+	if err != nil {
+		t.Fatalf("setup: GetMessageDescriptorByName(HasEmptyField) error = %v", err)
+	}
+
+	// Build HyperType from unpruned descriptor, then request pruning in New().
+	// Active descriptor hash should differ and trigger typed mismatch error.
+	ht := NewHyperType(md)
+	_, err = New(md, memory.DefaultAllocator, WithPruneEmptyMessages(), WithHyperType(ht))
+	if err == nil {
+		t.Fatal("expected HyperType descriptor mismatch error")
+	}
+	if !errors.Is(err, ErrHyperTypeDescriptorMismatch) {
+		t.Fatalf("expected errors.Is(..., ErrHyperTypeDescriptorMismatch) = true, got err=%v", err)
+	}
+	var mismatchErr *HyperTypeDescriptorMismatchError
+	if !errors.As(err, &mismatchErr) {
+		t.Fatalf("expected HyperTypeDescriptorMismatchError, got err=%T %v", err, err)
+	}
+}
+
+func TestNew_WithHyperTypeDescriptorMatchAfterPrune(t *testing.T) {
+	protoDir := testProtoDir(t)
+	fd, err := CompileProtoToFileDescriptor("prune_test.proto", []string{protoDir})
+	if err != nil {
+		t.Fatalf("setup: CompileProtoToFileDescriptor(prune_test.proto) error = %v", err)
+	}
+	md, err := GetMessageDescriptorByName(fd, "HasEmptyField")
+	if err != nil {
+		t.Fatalf("setup: GetMessageDescriptorByName(HasEmptyField) error = %v", err)
+	}
+	pruned, err := PruneEmptyMessages(md)
+	if err != nil {
+		t.Fatalf("setup: PruneEmptyMessages(HasEmptyField) error = %v", err)
+	}
+
+	ht := NewHyperType(pruned)
+	schema, err := New(md, memory.DefaultAllocator, WithPruneEmptyMessages(), WithHyperType(ht))
+	if err != nil {
+		t.Fatalf("expected matching pruned HyperType to succeed, got error: %v", err)
+	}
+	defer schema.Release()
+}
+
+func TestNew_WithHyperTypeDescriptorMismatchFallback(t *testing.T) {
+	protoDir := testProtoDir(t)
+	fd, err := CompileProtoToFileDescriptor("prune_test.proto", []string{protoDir})
+	if err != nil {
+		t.Fatalf("setup: CompileProtoToFileDescriptor(prune_test.proto) error = %v", err)
+	}
+	md, err := GetMessageDescriptorByName(fd, "HasEmptyField")
+	if err != nil {
+		t.Fatalf("setup: GetMessageDescriptorByName(HasEmptyField) error = %v", err)
+	}
+
+	// Build HyperType from unpruned descriptor. With fallback enabled, New()
+	// must rebuild an internal HyperType from the active (pruned) descriptor.
+	provided := NewHyperType(md)
+	schema, err := New(
+		md,
+		memory.DefaultAllocator,
+		WithPruneEmptyMessages(),
+		WithHyperType(provided),
+		WithHyperTypeMismatchPolicy(HyperTypeMismatchFallbackRecompile),
+	)
+	if err != nil {
+		t.Fatalf("expected fallback mode to succeed on HyperType mismatch, got: %v", err)
+	}
+	defer schema.Release()
+
+	if schema.hyperType == nil {
+		t.Fatal("expected schema.hyperType to be configured")
+	}
+	if schema.hyperType == provided {
+		t.Fatal("expected fallback mode to replace mismatched provided HyperType")
+	}
+
+	fieldNames := schema.FieldNames()
+	if len(fieldNames) != 1 || fieldNames[0] != "name" {
+		t.Fatalf("expected pruned schema [name], got %v", fieldNames)
+	}
+}
+
+func TestNew_WithHyperTypeDescriptorMismatchInvalidPolicy(t *testing.T) {
+	protoDir := testProtoDir(t)
+	fd, err := CompileProtoToFileDescriptor("prune_test.proto", []string{protoDir})
+	if err != nil {
+		t.Fatalf("setup: CompileProtoToFileDescriptor(prune_test.proto) error = %v", err)
+	}
+	md, err := GetMessageDescriptorByName(fd, "HasEmptyField")
+	if err != nil {
+		t.Fatalf("setup: GetMessageDescriptorByName(HasEmptyField) error = %v", err)
+	}
+
+	provided := NewHyperType(md)
+	_, err = New(
+		md,
+		memory.DefaultAllocator,
+		WithPruneEmptyMessages(),
+		WithHyperType(provided),
+		WithHyperTypeMismatchPolicy(HyperTypeMismatchPolicy(99)),
+	)
+	if err == nil {
+		t.Fatal("expected invalid hyper type mismatch policy error")
+	}
+	if !errors.Is(err, ErrInvalidHyperTypeMismatchPolicy) {
+		t.Fatalf("expected errors.Is(..., ErrInvalidHyperTypeMismatchPolicy) = true, got err=%v", err)
+	}
+	if !strings.Contains(err.Error(), fmt.Sprintf("%d", HyperTypeMismatchPolicy(99))) {
+		t.Fatalf("expected error to include invalid policy value, got err=%v", err)
 	}
 }
 

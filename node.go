@@ -171,6 +171,7 @@ func build(msg protoreflect.Message) (*message, error) {
 		a[i] = root.children[i].field
 	}
 	as := arrow.NewSchema(a, nil)
+
 	// For Parquet, we need to apply compression and dictionary encoding on all fields to achieve good performance. Parquet's schema is derived from the Arrow schema, but we need to specify writer properties to ensure that all fields are compressed and that dictionary encoding is used for binary and string columns. Since bufarrow treats rows as sample IDs, we also set the max row group length to math.MaxInt to ensure that all rows are written in a single row group, which is important for maintaining the mapping between sample IDs and rows.
 	bs, err := pqarrow.ToParquet(as, parquet.NewWriterProperties(), pqarrow.DefaultWriterProps())
 	if err != nil {
