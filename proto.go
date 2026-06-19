@@ -197,49 +197,90 @@ func MergeMessageDescriptors(a, b protoreflect.MessageDescriptor, newName string
 func PruneEmptyMessages(md protoreflect.MessageDescriptor) (protoreflect.MessageDescriptor, error) {
 	emptySet := computeEmptyMessages(md)
 
-	dp := protodesc.ToDescriptorProto(md)
-	pruneDescriptorProto(dp, emptySet)
+	// Build a fully-pruned transitive file graph rooted at md.ParentFile().
+	fd, err := buildPrunedFileGraph(md.ParentFile(), emptySet)
+	if err != nil {
+		return nil, fmt.Errorf("PruneEmptyMessages: failed to build pruned file graph: %w", err)
+	}
 
-	if len(dp.GetField()) == 0 {
+	prunedMD, ok := findMessageByFullName(fd, md.FullName())
+	if !ok {
+		return nil, fmt.Errorf("PruneEmptyMessages: failed to resolve pruned message %s", md.FullName())
+	}
+	if prunedMD.Fields().Len() == 0 {
 		return nil, fmt.Errorf("PruneEmptyMessages: all fields removed from message %s", md.FullName())
 	}
 
-	// Collect transitive dependencies from the parent file.
-	depSet := make(map[string]bool)
-	var deps []string
-	var collectDeps func(f protoreflect.FileDescriptor)
-	collectDeps = func(f protoreflect.FileDescriptor) {
-		p := string(f.Path())
-		if depSet[p] {
+	return prunedMD, nil
+}
+
+// buildPrunedFileGraph prunes all reachable files in root's import closure and
+// recompiles them into a new in-memory registry. It returns the pruned root
+// file descriptor.
+func buildPrunedFileGraph(root protoreflect.FileDescriptor, emptySet map[protoreflect.FullName]bool) (protoreflect.FileDescriptor, error) {
+	order := make([]protoreflect.FileDescriptor, 0, 16)
+	seen := make(map[string]bool)
+	var dfs func(fd protoreflect.FileDescriptor)
+	dfs = func(fd protoreflect.FileDescriptor) {
+		path := string(fd.Path())
+		if seen[path] {
 			return
 		}
-		depSet[p] = true
-		deps = append(deps, p)
-		for i := 0; i < f.Imports().Len(); i++ {
-			collectDeps(f.Imports().Get(i))
+		seen[path] = true
+		for i := 0; i < fd.Imports().Len(); i++ {
+			dfs(fd.Imports().Get(i))
 		}
+		order = append(order, fd)
 	}
-	collectDeps(md.ParentFile())
-
-	fdp := &descriptorpb.FileDescriptorProto{
-		Name:        proto.String(string(md.Name()) + "_pruned.proto"),
-		Package:     proto.String(string(md.ParentFile().Package())),
-		Syntax:      proto.String("proto3"),
-		Dependency:  deps,
-		MessageType: []*descriptorpb.DescriptorProto{dp},
-	}
+	dfs(root)
 
 	resolver := &protoregistry.Files{}
-	if err := registerFileTransitively(resolver, md.ParentFile()); err != nil {
-		return nil, fmt.Errorf("PruneEmptyMessages: failed to register parent file: %w", err)
+	pathMap := make(map[string]string, len(order))
+
+	for _, fd := range order {
+		oldPath := string(fd.Path())
+		newPath := prunedFilePath(oldPath)
+		pathMap[oldPath] = newPath
+
+		fdp := protodesc.ToFileDescriptorProto(fd)
+		fdp.Name = proto.String(newPath)
+
+		for _, top := range fdp.GetMessageType() {
+			pruneDescriptorProto(top, emptySet)
+		}
+
+		for i, dep := range fdp.Dependency {
+			if mapped, ok := pathMap[dep]; ok {
+				fdp.Dependency[i] = mapped
+			}
+		}
+
+		built, err := protodesc.NewFile(fdp, resolver)
+		if err != nil {
+			return nil, fmt.Errorf("failed to compile pruned file %s: %w", oldPath, err)
+		}
+		if err := resolver.RegisterFile(built); err != nil {
+			return nil, fmt.Errorf("failed to register pruned file %s: %w", oldPath, err)
+		}
 	}
 
-	fd, err := protodesc.NewFile(fdp, resolver)
+	rootPrunedPath, ok := pathMap[string(root.Path())]
+	if !ok {
+		return nil, fmt.Errorf("internal: missing pruned path for root file %s", root.Path())
+	}
+	rootFD, err := resolver.FindFileByPath(rootPrunedPath)
 	if err != nil {
-		return nil, fmt.Errorf("PruneEmptyMessages: failed to create file descriptor: %w", err)
+		return nil, fmt.Errorf("failed to resolve pruned root file %s: %w", rootPrunedPath, err)
 	}
+	return rootFD, nil
+}
 
-	return fd.Messages().Get(0), nil
+// prunedFilePath returns a deterministic synthetic path for a pruned file.
+func prunedFilePath(path string) string {
+	if strings.HasSuffix(path, ".proto") {
+		return strings.TrimSuffix(path, ".proto") + "_pruned.proto"
+	}
+	return path + "_pruned"
 }
 
 // computeEmptyMessages returns the set of fully-qualified message names that
@@ -433,4 +474,23 @@ func registerImportsTransitively(r *protoregistry.Files, fd protoreflect.FileDes
 		}
 	}
 	return nil
+}
+
+// findMessageByFullName locates a message descriptor by fully-qualified name
+// in fd, searching top-level and nested messages.
+func findMessageByFullName(fd protoreflect.FileDescriptor, target protoreflect.FullName) (protoreflect.MessageDescriptor, bool) {
+	var walk func(msgs protoreflect.MessageDescriptors) (protoreflect.MessageDescriptor, bool)
+	walk = func(msgs protoreflect.MessageDescriptors) (protoreflect.MessageDescriptor, bool) {
+		for i := 0; i < msgs.Len(); i++ {
+			m := msgs.Get(i)
+			if m.FullName() == target {
+				return m, true
+			}
+			if nested, ok := walk(m.Messages()); ok {
+				return nested, true
+			}
+		}
+		return nil, false
+	}
+	return walk(fd.Messages())
 }

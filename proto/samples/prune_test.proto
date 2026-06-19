@@ -62,3 +62,16 @@ message ScalarOnly {
 message MapPreserved {
   map<string, ScalarOnly> items = 1;
 }
+
+// ParentTopLevel contains an empty-message field and one scalar field.
+message ParentTopLevel {
+  EmptyMsg empty = 1;
+  string kept = 2;
+}
+
+// RootTopLevelRef references ParentTopLevel as a top-level type.
+// Pruning RootTopLevelRef must also prune ParentTopLevel.empty.
+message RootTopLevelRef {
+  ParentTopLevel parent = 1;
+  string root_name = 2;
+}

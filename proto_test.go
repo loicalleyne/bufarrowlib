@@ -672,11 +672,37 @@ func TestPruneEmptyMessages(t *testing.T) {
 				t.Errorf("expected package %q, got %q", md.ParentFile().Package(), pruned.ParentFile().Package())
 			}
 		parentPath := string(pruned.ParentFile().Path())
-		if parentPath != "HasEmptyField_pruned.proto" {
-			t.Errorf("expected synthetic parent path HasEmptyField_pruned.proto, got %s", parentPath)
+		if parentPath != "prune_test_pruned.proto" {
+			t.Errorf("expected synthetic parent path prune_test_pruned.proto, got %s", parentPath)
 		}
 		if pruned.ParentFile().Syntax() != protoreflect.Proto3 {
 			t.Error("expected proto3 syntax on pruned descriptor")
 		}
 	})
+
+	t.Run("prunes_fields_inside_referenced_top_level_message", func(t *testing.T) {
+		// RootTopLevelRef -> ParentTopLevel. ParentTopLevel has an EmptyMsg field
+		// plus a scalar. Pruning must affect ParentTopLevel's definition too.
+		md := get("RootTopLevelRef")
+		pruned, err := PruneEmptyMessages(md)
+		if err != nil {
+			t.Fatalf("PruneEmptyMessages() error = %v", err)
+		}
+
+		parentField := pruned.Fields().ByName("parent")
+		if parentField == nil {
+			t.Fatal("expected field 'parent' to survive")
+		}
+		parentMD := parentField.Message()
+		if parentMD == nil {
+			t.Fatal("expected 'parent' to be a message field")
+		}
+		if parentMD.Fields().ByName("empty") != nil {
+			t.Error("expected ParentTopLevel.empty to be pruned")
+		}
+		if parentMD.Fields().ByName("kept") == nil {
+			t.Error("expected ParentTopLevel.kept to survive")
+		}
+	})
+
 }
