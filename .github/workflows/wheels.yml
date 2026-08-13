@@ -30,6 +30,9 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install protoc-gen-go
+        run: go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
+
       - name: Generate proto bindings
         run: buf generate
 
@@ -77,6 +80,10 @@ jobs:
         uses: bufbuild/buf-setup-action@v1
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install protoc-gen-go
+        if: startsWith(matrix.os, 'macos')
+        run: go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11
 
       - name: Generate proto bindings
         if: startsWith(matrix.os, 'macos')
