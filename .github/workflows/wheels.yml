@@ -38,28 +38,53 @@ jobs:
         with:
           platforms: arm64
 
-      # Build inside the same manylinux2014 image auditwheel will repair
-      # against, so libbufarrow only links the old glibc symbol versions
-      # manylinux2014 allows. A gcc build on the ubuntu-latest host (or a
-      # cross toolchain targeting the host's glibc) links too-new versioned
-      # symbols and auditwheel refuses to repair the wheel.
+      # GOMODCACHE (module zips) is arch-independent; GOCACHE (compiled
+      # artifacts) is per-arch, so amd64 and arm64 get separate build dirs.
+      - name: Cache Go modules & build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            .gocache/mod
+            .gocache/build-amd64
+            .gocache/build-arm64
+          key: manylinux-go-${{ hashFiles('go.sum') }}
+          restore-keys: manylinux-go-
+
       - name: Cross-compile libbufarrow (manylinux2014_x86_64)
         run: |
-          docker run --rm -v "$PWD":/src -w /src \
+          mkdir -p .gocache/mod .gocache/build-amd64
+          docker run --rm \
+            -v "$PWD":/src -w /src \
+            -v "$PWD/.gocache/mod":/gocache/mod \
+            -v "$PWD/.gocache/build-amd64":/gocache/build \
+            -e GOMODCACHE=/gocache/mod -e GOCACHE=/gocache/build \
             quay.io/pypa/manylinux2014_x86_64:2024.10.07-1 \
             bash -c 'set -euo pipefail
               curl -fsSL https://go.dev/dl/go1.26.5.linux-amd64.tar.gz | tar -C /usr/local -xz
               export PATH=/usr/local/go/bin:$PATH
+              git config --global --add safe.directory /src
               make -C cbinding build-linux-amd64'
 
       - name: Cross-compile libbufarrow (manylinux2014_aarch64)
         run: |
-          docker run --rm --platform linux/arm64 -v "$PWD":/src -w /src \
+          mkdir -p .gocache/mod .gocache/build-arm64
+          docker run --rm --platform linux/arm64 \
+            -v "$PWD":/src -w /src \
+            -v "$PWD/.gocache/mod":/gocache/mod \
+            -v "$PWD/.gocache/build-arm64":/gocache/build \
+            -e GOMODCACHE=/gocache/mod -e GOCACHE=/gocache/build \
             quay.io/pypa/manylinux2014_aarch64:2024.10.07-1 \
             bash -c 'set -euo pipefail
               curl -fsSL https://go.dev/dl/go1.26.5.linux-arm64.tar.gz | tar -C /usr/local -xz
               export PATH=/usr/local/go/bin:$PATH
+              git config --global --add safe.directory /src
               CC_LINUX_ARM64=gcc make -C cbinding build-linux-arm64'
+
+      # Container writes cache files as root; reclaim ownership so the
+      # actions/cache post-step can read them without permission errors.
+      - name: Fix cache ownership
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" .gocache
 
       - uses: actions/upload-artifact@v4
         with:
@@ -155,6 +180,8 @@ jobs:
   publish:
     name: Publish to PyPI
     needs: build_wheels
+    # Only publish on tag pushes; workflow_dispatch runs build+test wheels only.
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
