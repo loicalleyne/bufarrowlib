@@ -1,0 +1,141 @@
+name: Build and publish wheels
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Cross-compile libbufarrow for both linux arches on one host, since the
+  # manylinux containers used by cibuildwheel have no Go toolchain.
+  build-linux-libs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.x"
+
+      - name: Install aarch64 cross toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Install buf CLI
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate proto bindings
+        run: buf generate
+
+      - name: Cross-compile libbufarrow (amd64 + arm64)
+        run: make -C cbinding build-linux-amd64 build-linux-arm64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-libs
+          path: |
+            cbinding/libbufarrow-linux-amd64.so
+            cbinding/libbufarrow-linux-arm64.so
+
+  build_wheels:
+    name: wheels / ${{ matrix.os }} (${{ matrix.arch }})
+    needs: build-linux-libs
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x86_64
+            cibw_build: "cp3{9,10,11,12,13}-manylinux_x86_64"
+          - os: ubuntu-latest
+            arch: aarch64
+            cibw_build: "cp3{9,10,11,12,13}-manylinux_aarch64"
+          - os: macos-13
+            arch: x86_64
+            cibw_build: "cp3{9,10,11,12,13}-macosx_x86_64"
+          - os: macos-14
+            arch: arm64
+            cibw_build: "cp3{9,10,11,12,13}-macosx_arm64"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        if: startsWith(matrix.os, 'macos')
+        with:
+          go-version: "1.26.x"
+
+      - name: Install buf CLI
+        if: startsWith(matrix.os, 'macos')
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate proto bindings
+        if: startsWith(matrix.os, 'macos')
+        run: buf generate
+
+      - name: Build native libbufarrow (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: make libbufarrow
+
+      - uses: actions/download-artifact@v4
+        if: startsWith(matrix.os, 'ubuntu')
+        with:
+          name: linux-libs
+          path: cbinding/
+
+      - name: Set up QEMU (linux/aarch64)
+        if: matrix.arch == 'aarch64'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Stage libbufarrow for wheel build
+        run: |
+          case "${{ matrix.os }}-${{ matrix.arch }}" in
+            ubuntu-latest-x86_64)  cp cbinding/libbufarrow-linux-amd64.so python/pybufarrow/libbufarrow.so ;;
+            ubuntu-latest-aarch64) cp cbinding/libbufarrow-linux-arm64.so python/pybufarrow/libbufarrow.so ;;
+            *)                     cp cbinding/libbufarrow.dylib python/pybufarrow/libbufarrow.dylib ;;
+          esac
+        shell: bash
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.21
+        with:
+          package-dir: python
+        env:
+          CIBW_BUILD: ${{ matrix.cibw_build }}
+          CIBW_SKIP: "*-musllinux*"
+          CIBW_ARCHS_LINUX: ${{ matrix.arch }}
+          CIBW_ARCHS_MACOS: ${{ matrix.arch }}
+          CIBW_BEFORE_BUILD: "true"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}-${{ matrix.arch }}
+          path: wheelhouse/*.whl
+
+  publish:
+    name: Publish to PyPI
+    needs: build_wheels
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      # Required for PyPI trusted publishing (OIDC) — no API token needed.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist
+          merge-multiple: true
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
