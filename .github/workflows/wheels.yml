@@ -107,10 +107,6 @@ jobs:
           - os: ubuntu-latest
             arch: aarch64
             cibw_build: "cp3{9,10,11,12,13}-manylinux_aarch64"
-          - os: macos-13
-            arch: x86_64
-            cibw_build: "cp3{9,10,11,12,13}-macosx_x86_64"
-            macos_target: "10.13"
           - os: macos-14
             arch: arm64
             cibw_build: "cp3{9,10,11,12,13}-macosx_arm64"
