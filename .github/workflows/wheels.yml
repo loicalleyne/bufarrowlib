@@ -9,8 +9,10 @@ permissions:
   contents: read
 
 jobs:
-  # Cross-compile libbufarrow for both linux arches on one host, since the
-  # manylinux containers used by cibuildwheel have no Go toolchain.
+  # Cross-compile libbufarrow for both linux arches inside the manylinux2014
+  # containers (see build steps below) so the resulting .so only links glibc
+  # symbol versions manylinux2014 allows; auditwheel later repairs the wheel
+  # against that same baseline.
   build-linux-libs:
     runs-on: ubuntu-latest
     steps:
@@ -19,11 +21,6 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26.x"
-
-      - name: Install aarch64 cross toolchain
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
 
       - name: Install buf CLI
         uses: bufbuild/buf-setup-action@v1
@@ -36,8 +33,33 @@ jobs:
       - name: Generate proto bindings
         run: buf generate
 
-      - name: Cross-compile libbufarrow (amd64 + arm64)
-        run: make -C cbinding build-linux-amd64 build-linux-arm64
+      - name: Set up QEMU (for aarch64 container)
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      # Build inside the same manylinux2014 image auditwheel will repair
+      # against, so libbufarrow only links the old glibc symbol versions
+      # manylinux2014 allows. A gcc build on the ubuntu-latest host (or a
+      # cross toolchain targeting the host's glibc) links too-new versioned
+      # symbols and auditwheel refuses to repair the wheel.
+      - name: Cross-compile libbufarrow (manylinux2014_x86_64)
+        run: |
+          docker run --rm -v "$PWD":/src -w /src \
+            quay.io/pypa/manylinux2014_x86_64:2024.10.07-1 \
+            bash -c 'set -euo pipefail
+              curl -fsSL https://go.dev/dl/go1.26.5.linux-amd64.tar.gz | tar -C /usr/local -xz
+              export PATH=/usr/local/go/bin:$PATH
+              make -C cbinding build-linux-amd64'
+
+      - name: Cross-compile libbufarrow (manylinux2014_aarch64)
+        run: |
+          docker run --rm --platform linux/arm64 -v "$PWD":/src -w /src \
+            quay.io/pypa/manylinux2014_aarch64:2024.10.07-1 \
+            bash -c 'set -euo pipefail
+              curl -fsSL https://go.dev/dl/go1.26.5.linux-arm64.tar.gz | tar -C /usr/local -xz
+              export PATH=/usr/local/go/bin:$PATH
+              CC_LINUX_ARM64=gcc make -C cbinding build-linux-arm64'
 
       - uses: actions/upload-artifact@v4
         with:
