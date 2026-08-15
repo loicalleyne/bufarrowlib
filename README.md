@@ -452,9 +452,32 @@ Opens at `localhost:4195`. Two modes: **Pipeline** (live path evaluation against
 
 > **Which path does this table describe?** The scalar rows apply to both output
 > modes. The `google.protobuf.*` and `google.type.*` rows above describe the
-> **denormalizer**. The full-fidelity path currently expands most well-known
+> **denormalizer**. By default the full-fidelity path expands most well-known
 > types structurally instead — `google.protobuf.Timestamp` becomes
-> `struct<seconds: int64, nanos: int32>` there, not `Timestamp(ms, UTC)`.
+> `struct<seconds: int64, nanos: int32>` there, not `Timestamp(ms, UTC)`. Pass
+> [`WithWellKnownTypes()`](#aligning-the-two-paths) to make it match.
+
+### Aligning the two paths
+
+`WithWellKnownTypes()` makes the full-fidelity schema use the flat mappings in
+the table above, so both output modes agree:
+
+```go
+tc, err := ba.New(md, mem, ba.WithWellKnownTypes())
+// ts: timestamp[ms, tz=UTC]   instead of struct<seconds, nanos>
+// sv: utf8                    instead of struct<value>
+```
+
+It is opt-in because it changes the Arrow and Parquet schema of any message
+containing these types — data written with it is not readable without it, and
+vice versa. `Proto()` round-trips through the flattened columns.
+
+Two types keep their structural form even when the option is on:
+
+- the recursive types below, which have no finite struct representation;
+- `google.protobuf.Duration`, because arrow-go's Parquet writer does not
+  implement `DURATION`, and the full-fidelity schema is converted to a Parquet
+  schema at construction time.
 
 ### Recursive well-known types
 

@@ -17,7 +17,6 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/dynamicpb"
-	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // maxDepth is the maximum recursion depth when building the Arrow schema tree
@@ -172,19 +171,27 @@ func unmarshal(msgType *hyperpb.MessageType, n *node, r arrow.RecordBatch, rows 
 // buildState carries state shared across a single schema construction. seen is
 // the set of message types on the current ancestor path, used to detect cycles;
 // entries are removed as the walk unwinds so that a type appearing in two
-// sibling fields is not mistaken for a cycle.
+// sibling fields is not mistaken for a cycle. flattenWKT enables the
+// WithWellKnownTypes mapping.
 type buildState struct {
-	seen map[protoreflect.FullName]struct{}
+	seen       map[protoreflect.FullName]struct{}
+	flattenWKT bool
 }
 
 // build constructs the full Arrow schema tree and Parquet schema from a
+// protobuf message using default options.
+func build(msg protoreflect.Message) (*message, error) {
+	return buildWith(msg, false)
+}
+
+// buildWith constructs the full Arrow schema tree and Parquet schema from a
 // protobuf message. It recursively creates nodes for every field and returns
 // a message struct ready for builder initialisation via message.build.
 //
 // Panics raised during tree construction (cyclic types, depth exhaustion,
 // unsupported fields) are recovered and returned as errors so that the failing
 // type and path survive.
-func build(msg protoreflect.Message) (m *message, err error) {
+func buildWith(msg protoreflect.Message, flattenWKT bool) (m *message, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			m = nil
@@ -204,9 +211,10 @@ func build(msg protoreflect.Message) (m *message, err error) {
 	// The root type is on every path by definition, so seeding it makes a
 	// direct self-reference report the root name rather than being detected a
 	// level deeper.
-	st := &buildState{seen: map[protoreflect.FullName]struct{}{
-		msg.Descriptor().FullName(): {},
-	}}
+	st := &buildState{
+		seen:       map[protoreflect.FullName]struct{}{msg.Descriptor().FullName(): {}},
+		flattenWKT: flattenWKT,
+	}
 	fields := msg.Descriptor().Fields()
 	root.children = make([]*node, fields.Len())
 	a := make([]arrow.Field, fields.Len())
@@ -328,6 +336,11 @@ func createNode(parent *node, field protoreflect.FieldDescriptor, depth int, st 
 			n.field.Nullable = true
 			n.setup = jsonWKTSetup()
 			n.encode = jsonWKTEncode()
+		case st.flattenWKT && flattenableWKT(field):
+			n.field.Type = ProtoKindToArrowType(field)
+			n.field.Nullable = true
+			n.setup = wktFlattenSetup(field)
+			n.encode = wktFlattenEncode(field)
 		}
 		if n.field.Type != nil {
 			if field.IsList() {
@@ -482,11 +495,6 @@ func createNode(parent *node, field protoreflect.FieldDescriptor, depth int, st 
 		}
 		n.encode = func(value protoreflect.Value, a arrow.Array, row int) protoreflect.Value {
 			msg := value.Message()
-			if t, ok := a.(*array.Timestamp); ok {
-				tv := t.Value(row).ToTime(arrow.Millisecond)
-				ts := timestamppb.New(tv)
-				return protoreflect.ValueOfMessage(ts.ProtoReflect())
-			}
 			s := a.(*array.Struct)
 			typ := a.DataType().(*arrow.StructType)
 			for j := 0; j < s.NumField(); j++ {
