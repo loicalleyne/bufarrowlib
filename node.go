@@ -14,7 +14,6 @@ import (
 	"github.com/apache/arrow-go/v18/parquet/compress"
 	"github.com/apache/arrow-go/v18/parquet/pqarrow"
 	"github.com/apache/arrow-go/v18/parquet/schema"
-	commonv1 "go.opentelemetry.io/proto/otlp/common/v1"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/dynamicpb"
@@ -35,7 +34,25 @@ var (
 	// ErrPathNotFound is returned by node.getPath when a field name is not
 	// found in the node's hash map.
 	ErrPathNotFound = errors.New("path not found")
+	// ErrCyclicType is returned when a message type recursively contains
+	// itself, which cannot be represented as a finite Arrow schema.
+	ErrCyclicType = errors.New("cyclic message type")
 )
+
+// cyclicError reports a self-referential message type and the field path at
+// which the cycle was detected.
+type cyclicError struct {
+	name protoreflect.FullName
+	path string
+}
+
+// Error implements the error interface.
+func (e cyclicError) Error() string {
+	return fmt.Sprintf("bufarrow: cyclic message type %s at path %s: consider serializing this field or excluding it from the schema", e.name, e.path)
+}
+
+// Unwrap allows errors.Is(err, ErrCyclicType).
+func (e cyclicError) Unwrap() error { return ErrCyclicType }
 
 // valueFn appends a single protobuf field value to the corresponding Arrow
 // array builder. The bool parameter indicates whether the field is set
@@ -152,20 +169,49 @@ func unmarshal(msgType *hyperpb.MessageType, n *node, r arrow.RecordBatch, rows 
 	return o
 }
 
+// buildState carries state shared across a single schema construction. seen is
+// the set of message types on the current ancestor path, used to detect cycles;
+// entries are removed as the walk unwinds so that a type appearing in two
+// sibling fields is not mistaken for a cycle.
+type buildState struct {
+	seen map[protoreflect.FullName]struct{}
+}
+
 // build constructs the full Arrow schema tree and Parquet schema from a
 // protobuf message. It recursively creates nodes for every field and returns
 // a message struct ready for builder initialisation via message.build.
-func build(msg protoreflect.Message) (*message, error) {
+//
+// Panics raised during tree construction (cyclic types, depth exhaustion,
+// unsupported fields) are recovered and returned as errors so that the failing
+// type and path survive.
+func build(msg protoreflect.Message) (m *message, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			m = nil
+			switch x := r.(type) {
+			case error:
+				err = x
+			default:
+				err = fmt.Errorf("bufarrow: %v", x)
+			}
+		}
+	}()
 	root := &node{
 		desc:  msg.Descriptor(),
 		field: arrow.Field{},
 		hash:  make(map[string]*node),
 	}
+	// The root type is on every path by definition, so seeding it makes a
+	// direct self-reference report the root name rather than being detected a
+	// level deeper.
+	st := &buildState{seen: map[protoreflect.FullName]struct{}{
+		msg.Descriptor().FullName(): {},
+	}}
 	fields := msg.Descriptor().Fields()
 	root.children = make([]*node, fields.Len())
 	a := make([]arrow.Field, fields.Len())
 	for i := 0; i < fields.Len(); i++ {
-		x := createNode(root, fields.Get(i), 0)
+		x := createNode(root, fields.Get(i), 0, st)
 		root.children[i] = x
 		root.hash[x.field.Name] = x
 		a[i] = root.children[i].field
@@ -241,9 +287,9 @@ func (m *message) NewRecordBatch() arrow.RecordBatch {
 
 // createNode recursively builds a node for a single protobuf field, resolving
 // the Arrow type via baseType for scalar kinds and recursing into sub-messages
-// for message kinds. It also handles well-known types (otelAnyDescriptor),
-// list wrapping, and oneof nullability.
-func createNode(parent *node, field protoreflect.FieldDescriptor, depth int) *node {
+// for message kinds. It also handles well-known types that terminate as flat
+// leaves, list wrapping, oneof nullability, and cycle detection.
+func createNode(parent *node, field protoreflect.FieldDescriptor, depth int, st *buildState) *node {
 	if depth >= maxDepth {
 		panic(ErrMxDepth)
 	}
@@ -268,41 +314,20 @@ func createNode(parent *node, field protoreflect.FieldDescriptor, depth int) *no
 	}
 	// Try a message
 	if msg := field.Message(); msg != nil {
-		switch msg {
-		case otelAnyDescriptor:
+		// Recursive well-known types cannot be expanded into a finite schema;
+		// they terminate here as serialised leaves. Dispatch is by name, not by
+		// descriptor identity, so runtime-compiled descriptors also match.
+		switch {
+		case msg.FullName() == otelAnyName:
 			n.field.Type = arrow.BinaryTypes.Binary
 			n.field.Nullable = true
-			n.setup = func(b array.Builder) valueFn {
-				a := b.(*array.BinaryBuilder)
-				return func(v protoreflect.Value, set bool) error {
-					if !v.IsValid() {
-						a.AppendNull()
-						return nil
-					}
-					e := v.Message().Interface().(*commonv1.AnyValue)
-					bs, err := proto.Marshal(e)
-					if err != nil {
-						return err
-					}
-					a.Append(bs)
-					return nil
-				}
-			}
-			n.encode = func(value protoreflect.Value, a arrow.Array, row int) protoreflect.Value {
-				if a.IsNull(row) {
-					return protoreflect.Value{}
-				}
-				msg := value.Message()
-				var v []byte
-				if a.DataType().ID() == arrow.DICTIONARY {
-					d := a.(*array.Dictionary)
-					v = d.Dictionary().(*array.Binary).Value(d.GetValueIndex(row))
-				} else {
-					v = a.(*array.Binary).Value(row)
-				}
-				proto.Unmarshal(v, msg.Interface())
-				return value
-			}
+			n.setup = binaryWKTSetup()
+			n.encode = binaryWKTEncode()
+		case isRecursiveWKT(msg):
+			n.field.Type = arrow.BinaryTypes.String
+			n.field.Nullable = true
+			n.setup = jsonWKTSetup()
+			n.encode = jsonWKTEncode()
 		}
 		if n.field.Type != nil {
 			if field.IsList() {
@@ -348,7 +373,7 @@ func createNode(parent *node, field protoreflect.FieldDescriptor, depth int) *no
 			}
 
 			// Value node – may be scalar, well-known type, or message.
-			valueNode := createNode(n, valueFD, depth+1)
+			valueNode := createNode(n, valueFD, depth+1, st)
 			valueType := valueNode.field.Type
 
 			n.children = []*node{keyNode, valueNode}
@@ -414,14 +439,22 @@ func createNode(parent *node, field protoreflect.FieldDescriptor, depth int) *no
 			return n
 		}
 		f := msg.Fields()
+		msgName := msg.FullName()
+		if _, dup := st.seen[msgName]; dup {
+			panic(cyclicError{name: msgName, path: name})
+		}
+		st.seen[msgName] = struct{}{}
 		n.children = make([]*node, f.Len())
 		a := make([]arrow.Field, f.Len())
 		for i := 0; i < f.Len(); i++ {
-			x := createNode(n, f.Get(i), depth+1)
+			x := createNode(n, f.Get(i), depth+1, st)
 			n.children[i] = x
 			n.hash[x.field.Name] = x
 			a[i] = n.children[i].field
 		}
+		// Unwind: the type is no longer an ancestor, so a sibling field of the
+		// same type is not a cycle.
+		delete(st.seen, msgName)
 		n.field.Type = arrow.StructOf(a...)
 		n.field.Nullable = true
 		n.setup = func(b array.Builder) valueFn {

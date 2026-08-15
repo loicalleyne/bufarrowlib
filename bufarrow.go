@@ -359,7 +359,10 @@ func (s *Transcoder) Clone(mem memory.Allocator) (tc *Transcoder, err error) {
 		}
 	}()
 	a := s.stencil
-	b, _ := build(a.ProtoReflect())
+	b, err := build(a.ProtoReflect())
+	if err != nil {
+		return nil, fmt.Errorf("bufarrow: failed to build message: %w", err)
+	}
 
 	b.build(mem)
 	tc = &Transcoder{msgDesc: s.msgDesc, msg: b, msgType: s.msgType, stencil: a, opts: s.opts}

@@ -301,6 +301,7 @@ Call via `pbpath.Func*(...)` constructors or reference by name in YAML `expr.fun
 | `google.type.Date` | `Date32` |
 | `google.type.TimeOfDay` | `Time64(µs)` |
 | `google.type.Money` / `LatLng` / `Color` / etc. | `Utf8` (protojson-encoded) |
+| `google.protobuf.Struct` / `Value` / `ListValue` | `Utf8` (protojson-encoded; recursive, never expanded) |
 | `opentelemetry AnyValue` | `Binary` (proto-marshalled) |
 | repeated field | `List<T>` |
 | map field | `Map<K,V>` |
@@ -310,6 +311,8 @@ Call via `pbpath.Func*(...)` constructors or reference by name in YAML `expr.fun
 
 ```go
 bufarrowlib.ErrMxDepth     // message nesting exceeds maxDepth (10 levels)
+bufarrowlib.ErrCyclicType  // message type recursively contains itself; the
+                           // error names the type and the field path
 bufarrowlib.ErrPathNotFound // field name not found in schema tree
 ```
 

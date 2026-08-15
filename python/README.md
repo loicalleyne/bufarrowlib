@@ -57,6 +57,65 @@ import duckdb
 duckdb.sql("SELECT * FROM batch WHERE event_type = 'purchase'")
 ```
 
+## Proto Files with Imports
+
+`import_paths` are the root directories searched for every `import "..."` statement inside a `.proto` file — and the `proto_path`/`proto_file` argument itself must also be given **relative to one of those roots**, the same way `protoc -I <root> <relative/path.proto>` works. Passing an absolute path as `proto_path` will fail to resolve, even if `import_paths` is set correctly.
+
+**Real-world example** — a shared proto repository laid out one directory per package:
+
+```
+proto-specs/
+└── docs/
+    ├── OrganizationManager/
+    │   └── Organization.proto      # imports google/protobuf/struct.proto
+    └── Campaign/
+        └── Campaign.proto          # imports OrganizationManager/Organization.proto
+```
+
+The shared `docs/` directory is the import root; every `.proto` path — including cross-package imports like `Campaign.proto`'s reference to `Organization.proto` — is given relative to it:
+
+```python
+from pybufarrow import HyperType, Transcoder
+
+import_paths = ["/path/to/platform-specs/docs"]
+
+ht = HyperType(
+    "OrganizationManager/Organization.proto",  # relative to import_paths, not absolute
+    "Organization",
+    import_paths=import_paths,
+)
+
+with Transcoder.from_proto_file(
+    "OrganizationManager/Organization.proto",
+    "Organization",
+    import_paths=import_paths,
+    hyper_type=ht,
+) as tc:
+    for raw_bytes in kafka_consumer:
+        tc.append(raw_bytes)
+    batch = tc.flush()
+```
+
+### Recursive well-known types
+
+The example above imports `google/protobuf/struct.proto`. `Struct`, `Value`,
+and `ListValue` are mutually recursive — `Struct` holds a map of `Value`, and
+`Value` reaches back to `Struct` and `ListValue` — so they have no finite Arrow
+struct representation. They arrive as a single **string** column holding the
+canonical protojson encoding, which DuckDB can query with the `json_*`
+functions:
+
+```python
+duckdb.sql("SELECT json_extract_string(settings, '$.mode') FROM batch")
+```
+
+protojson output is not byte-stable across processes, so compare these columns
+semantically rather than by string equality, and do not content-hash them. An
+unset `google.protobuf.Value` becomes a null.
+
+A message type that recursively contains *itself* is rejected when the
+transcoder is constructed, with an error naming the type and field path.
+
 ## Streaming Batches
 
 Process millions of messages without holding everything in memory. `transcode_batch` yields fixed-size RecordBatches as an iterator:

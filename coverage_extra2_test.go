@@ -1,6 +1,7 @@
 package bufarrowlib
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/apache/arrow-go/v18/arrow"
@@ -333,20 +334,17 @@ func TestSchemaFieldCount(t *testing.T) {
 	}
 }
 
-// ── Test Cyclic detection (maxDepth) ──
+// ── Test Cyclic detection ──
 
 func TestCyclicMessageDepthLimit(t *testing.T) {
 	md := (&samples.Cyclic{}).ProtoReflect().Descriptor()
 
-	// New should handle cyclic messages without infinite recursion
-	// createNode has a maxDepth guard
-	schema, err := New(md, memory.DefaultAllocator)
-	if err != nil {
-		// Expected - cyclic may hit depth limit
-		t.Logf("New(Cyclic) error (expected): %v", err)
-		return
+	// A self-referential message has no finite Arrow schema and must be
+	// rejected by name, not merely bounded by the depth guard.
+	_, err := New(md, memory.DefaultAllocator)
+	if !errors.Is(err, ErrCyclicType) {
+		t.Fatalf("New(Cyclic) error = %v, want ErrCyclicType", err)
 	}
-	defer schema.Release()
 }
 
 // ── Test Optional fields (oneof handling) ──

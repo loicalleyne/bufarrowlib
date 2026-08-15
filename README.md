@@ -287,6 +287,32 @@ fd, _ := ba.CompileProtoToFileDescriptor("event.proto", []string{"./schema"})
 md, _ := ba.GetMessageDescriptorByName(fd, "EventMessage")
 ```
 
+#### `protoFilePath` is resolved *through* `importPaths`, not as an absolute path
+
+`importPaths` are the root directories protocompile searches for every `import "..."` statement — and the entry file (`protoFilePath`) must **also** be given relative to one of those roots, exactly like `protoc -I <root> <relative/path.proto>`. Passing an absolute path for `protoFilePath` will fail to resolve.
+
+**Real-world example** — a shared proto repository laid out one directory per package:
+
+```
+proto-specs/
+└── docs/
+    ├── OrganizationManager/
+    │   └── Organization.proto      # imports google/protobuf/struct.proto
+    └── Campaign/
+        └── Campaign.proto          # imports OrganizationManager/Organization.proto
+```
+
+The shared `docs/` directory is the import root; every `.proto` path is given relative to it — including cross-package imports like `Campaign.proto`'s reference to `Organization.proto`:
+
+```go
+tc, err := ba.NewFromFile(
+    "OrganizationManager/Organization.proto", // relative to the import root, not absolute
+    "Organization",
+    []string{"/path/to/platform-specs/docs"}, // import root
+    mem,
+)
+```
+
 ---
 
 ## Performance
@@ -418,10 +444,46 @@ Opens at `localhost:4195`. Two modes: **Pipeline** (live path evaluation against
 | `google.type.Date` | `Date32` |
 | `google.type.TimeOfDay` | `Time64(µs)` |
 | `google.type.Money / LatLng / Color / PostalAddress / Interval` | `Utf8` (protojson) |
+| `google.protobuf.Struct / Value / ListValue` | `Utf8` (protojson) — see below |
 | OpenTelemetry `AnyValue` | `Binary` (proto-marshalled) |
 | repeated field | `List<T>` |
 | map field | `Map<K,V>` |
 | embedded message | `Struct{...}` |
+
+> **Which path does this table describe?** The scalar rows apply to both output
+> modes. The `google.protobuf.*` and `google.type.*` rows above describe the
+> **denormalizer**. The full-fidelity path currently expands most well-known
+> types structurally instead — `google.protobuf.Timestamp` becomes
+> `struct<seconds: int64, nanos: int32>` there, not `Timestamp(ms, UTC)`.
+
+### Recursive well-known types
+
+`google.protobuf.Struct`, `Value`, and `ListValue` are mutually recursive:
+`Struct` holds a map of `Value`, and `Value`'s oneof reaches back to `Struct`
+and `ListValue`. There is no finite Arrow struct that represents them, so
+**both** output modes terminate them as a single `Utf8` column containing the
+canonical protojson encoding. OpenTelemetry `AnyValue` is recursive for the
+same reason and terminates as `Binary`.
+
+Query them in DuckDB with the `json_*` functions:
+
+```sql
+SELECT json_extract_string(settings, '$.mode') FROM events;
+```
+
+Two caveats:
+
+- protojson output is **not byte-stable across processes** — protobuf-go
+  deliberately randomises whitespace. Compare semantically
+  (`protojson.Unmarshal` then `proto.Equal`); never by string equality, and do
+  not content-hash the column.
+- An unset `google.protobuf.Value` cannot be marshalled at all and is stored as
+  a null.
+
+A message type that recursively contains *itself* has no such fallback and is
+rejected at construction time with `ErrCyclicType`, naming the type and the
+field path. A type appearing in two sibling fields is a diamond, not a cycle,
+and is accepted.
 
 ---
 

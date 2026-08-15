@@ -113,15 +113,9 @@ func TestMessage_metricsData(t *testing.T) {
 func TestMessage_Cyclic(t *testing.T) {
 	m := &samples.Cyclic{}
 
-	err := func() (err error) {
-		defer func() {
-			err = recover().(error)
-		}()
-		build(m.ProtoReflect())
-		return nil
-	}()
-	if !errors.Is(err, ErrMxDepth) {
-		t.Errorf("expected %v got %v", ErrMxDepth, err)
+	_, err := build(m.ProtoReflect())
+	if !errors.Is(err, ErrCyclicType) {
+		t.Errorf("expected %v got %v", ErrCyclicType, err)
 	}
 }
 

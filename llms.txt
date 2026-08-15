@@ -27,6 +27,8 @@ Two output modes:
 
 Both modes run on the same `Transcoder`. The denormlizer is driven by a `WithDenormalizerPlan(paths...)` option or a YAML config file.
 
+Recursive well-known types (`google.protobuf.Struct` / `Value` / `ListValue`, otel `AnyValue`) have no finite Arrow representation and terminate as a single protojson `Utf8` column (`Binary` for `AnyValue`). A message type that recursively contains itself is rejected with `ErrCyclicType`.
+
 ## Key types
 
 - `Transcoder` — central type; not goroutine-safe; use `Clone` per goroutine
