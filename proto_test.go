@@ -18,6 +18,18 @@ func testProtoDir(t *testing.T) string {
 	return filepath.Join(filepath.Dir(f), "proto", "samples")
 }
 
+// testdataProtoDir returns the absolute path to the testdata/proto directory.
+// Fixtures live there rather than in proto/samples because buf.work.yaml scopes
+// code generation to proto/samples; these are compiled at runtime only.
+func testdataProtoDir(t *testing.T) string {
+	t.Helper()
+	_, f, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("unable to determine test file path")
+	}
+	return filepath.Join(filepath.Dir(f), "testdata", "proto")
+}
+
 func TestCompileProtoToFileDescriptor(t *testing.T) {
 	protoDir := testProtoDir(t)
 

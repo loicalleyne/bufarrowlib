@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package samples;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/wrappers.proto";
+
+// Non-recursive well-known types. These expand structurally by default and
+// flatten to scalars under WithWellKnownTypes.
+message Flat {
+  google.protobuf.Timestamp ts = 1;
+  google.protobuf.Duration dur = 2;
+  google.protobuf.FieldMask mask = 3;
+  google.protobuf.BoolValue bv = 4;
+  google.protobuf.Int32Value i32 = 5;
+  google.protobuf.Int64Value i64 = 6;
+  google.protobuf.UInt32Value u32 = 7;
+  google.protobuf.UInt64Value u64 = 8;
+  google.protobuf.FloatValue f32 = 9;
+  google.protobuf.DoubleValue f64 = 10;
+  google.protobuf.StringValue sv = 11;
+  google.protobuf.BytesValue bs = 12;
+  Plain plain = 13;
+}
+
+message Plain { string a = 1; }
+
+message FlatRepeated { repeated google.protobuf.Timestamp ts = 1; }
+
+message FlatMap { map<string, google.protobuf.Timestamp> ts = 1; }

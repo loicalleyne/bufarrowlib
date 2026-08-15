@@ -104,6 +104,16 @@ bufarrowlib.WithHyperType(ht *HyperType) Option
 // Pruning is performed before schema construction; field numbers of surviving fields are unchanged.
 // New() and NewFromFile() return an error at construction time if the root message itself becomes empty after pruning.
 bufarrowlib.WithPruneEmptyMessages() Option
+
+// Map non-recursive well-known types to flat Arrow scalars in the full-fidelity
+// schema instead of expanding them structurally, matching the denormalizer:
+// Timestamp -> Timestamp(ms, UTC), the *Value wrappers -> their inner scalar,
+// FieldMask -> Utf8, google.type.* as in the mapping table.
+// Opt-in: it changes the Arrow and Parquet schema. Proto() round-trips through
+// the flattened columns.
+// Excluded even when enabled: the recursive types (Struct/Value/ListValue,
+// otel AnyValue), and google.protobuf.Duration (no Parquet DURATION support).
+bufarrowlib.WithWellKnownTypes() Option
 ```
 
 ```go
@@ -301,7 +311,13 @@ Call via `pbpath.Func*(...)` constructors or reference by name in YAML `expr.fun
 | `google.type.Date` | `Date32` |
 | `google.type.TimeOfDay` | `Time64(µs)` |
 | `google.type.Money` / `LatLng` / `Color` / etc. | `Utf8` (protojson-encoded) |
+| `google.protobuf.Struct` / `Value` / `ListValue` | `Utf8` (protojson-encoded; recursive, never expanded) |
 | `opentelemetry AnyValue` | `Binary` (proto-marshalled) |
+
+The `google.protobuf.*` / `google.type.*` rows describe the denormalizer. The
+full-fidelity path expands them structurally unless `WithWellKnownTypes()` is
+passed (`google.protobuf.Duration` stays structural regardless: arrow-go's
+Parquet writer has no DURATION support).
 | repeated field | `List<T>` |
 | map field | `Map<K,V>` |
 | embedded message (other) | `Struct{...}` |
@@ -310,6 +326,8 @@ Call via `pbpath.Func*(...)` constructors or reference by name in YAML `expr.fun
 
 ```go
 bufarrowlib.ErrMxDepth     // message nesting exceeds maxDepth (10 levels)
+bufarrowlib.ErrCyclicType  // message type recursively contains itself; the
+                           // error names the type and the field path
 bufarrowlib.ErrPathNotFound // field name not found in schema tree
 ```
 

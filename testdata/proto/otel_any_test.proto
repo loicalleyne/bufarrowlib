@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+// Locally-declared stand-in for the OpenTelemetry AnyValue. The upstream OTLP
+// .proto is not vendored in this repo, and node.go dispatches on the
+// fully-qualified name, so a compatible declaration under the same package is
+// sufficient to exercise the protocompile path.
+package opentelemetry.proto.common.v1;
+
+message AnyValue {
+  oneof value {
+    string string_value = 1;
+    int64 int_value = 3;
+  }
+}

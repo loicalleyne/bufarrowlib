@@ -68,7 +68,7 @@ test-go:
 test-go-race:
 	$(GO) test -count=1 -race -timeout 300s -run '^Test' ./...
 
-test-python: venv-sync
+test-python: libbufarrow venv-sync
 	cp $(LIB) python/pybufarrow/
 	cd python && $(UV) pip install -e . --quiet
 	cd python && $(UV) run pytest tests/ -v

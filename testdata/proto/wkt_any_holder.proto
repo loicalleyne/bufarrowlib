@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package samples;
+
+import "otel_any_test.proto";
+
+message WithAny { opentelemetry.proto.common.v1.AnyValue any = 1; }

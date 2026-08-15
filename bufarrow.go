@@ -81,6 +81,7 @@ type Opt struct {
 	hyperType         *HyperType
 	hyperTypeMismatchPolicy HyperTypeMismatchPolicy
 	pruneEmpty        bool
+	flattenWKT        bool
 }
 
 // HyperTypeMismatchPolicy controls how New() handles a descriptor mismatch
@@ -177,6 +178,28 @@ func WithHyperTypeMismatchPolicy(policy HyperTypeMismatchPolicy) Option {
 func WithPruneEmptyMessages() Option {
 	return func(cfg config) {
 		cfg.pruneEmpty = true
+	}
+}
+
+// WithWellKnownTypes maps non-recursive well-known types to flat Arrow scalars
+// in the full-fidelity schema instead of expanding them structurally:
+// google.protobuf.Timestamp becomes Timestamp(ms, UTC) rather than
+// struct{seconds, nanos}, the google.protobuf.*Value wrappers unwrap to their
+// inner scalar, and the google.type.* types map as the denormalizer already
+// maps them. This makes both output modes agree.
+//
+// This changes the Arrow and Parquet schema for any message containing these
+// types, so it is opt-in: existing data written without it is not readable
+// with it, and vice versa.
+//
+// Two exceptions keep their structural form. The recursive well-known types
+// (google.protobuf.Struct, Value, ListValue and the OpenTelemetry AnyValue)
+// always terminate as a serialised leaf because they have no finite struct
+// representation. google.protobuf.Duration stays a struct because arrow-go's
+// Parquet writer does not implement DURATION.
+func WithWellKnownTypes() Option {
+	return func(cfg config) {
+		cfg.flattenWKT = true
 	}
 }
 
@@ -315,13 +338,13 @@ func New(msgDesc protoreflect.MessageDescriptor, mem memory.Allocator, opts ...O
 			}
 		}
 
-		b, err = build(a.ProtoReflect())
+		b, err = buildWith(a.ProtoReflect(), o.flattenWKT)
 		if err != nil {
 			return nil, fmt.Errorf("bufarrow: failed to build message: %w", err)
 		}
 		b.build(mem)
 	} else {
-		b, err = build(a.ProtoReflect())
+		b, err = buildWith(a.ProtoReflect(), o.flattenWKT)
 		if err != nil {
 			return nil, fmt.Errorf("bufarrow: failed to build message: %w", err)
 		}
@@ -359,7 +382,10 @@ func (s *Transcoder) Clone(mem memory.Allocator) (tc *Transcoder, err error) {
 		}
 	}()
 	a := s.stencil
-	b, _ := build(a.ProtoReflect())
+	b, err := buildWith(a.ProtoReflect(), s.opts.flattenWKT)
+	if err != nil {
+		return nil, fmt.Errorf("bufarrow: failed to build message: %w", err)
+	}
 
 	b.build(mem)
 	tc = &Transcoder{msgDesc: s.msgDesc, msg: b, msgType: s.msgType, stencil: a, opts: s.opts}

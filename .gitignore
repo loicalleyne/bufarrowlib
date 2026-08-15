@@ -9,3 +9,13 @@ test
 .rsyncignore
 /*.sh
 /.gocache
+bufarrow
+/.adversarial
+
+# C shared library build outputs (`make libbufarrow`, `make libbufarrow-all`).
+# cbinding/bufarrow.h is the hand-written public header and stays tracked;
+# libbufarrow.h is cgo-generated.
+cbinding/libbufarrow.h
+cbinding/libbufarrow*.so
+cbinding/libbufarrow*.dylib
+cbinding/libbufarrow*.dll

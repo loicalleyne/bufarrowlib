@@ -114,6 +114,11 @@ func ProtoKindToArrowType(fd protoreflect.FieldDescriptor) arrow.DataType {
 		case "google.type.Money", "google.type.LatLng", "google.type.Color",
 			"google.type.PostalAddress", "google.type.Interval":
 			return arrow.BinaryTypes.String
+		// Recursive well-known types → protojson-serialized String. These have no
+		// finite struct representation, so they terminate here.
+		case "google.protobuf.Struct", "google.protobuf.Value",
+			"google.protobuf.ListValue":
+			return arrow.BinaryTypes.String
 		default:
 			// OpenTelemetry AnyValue → proto-serialized Binary
 			if msg.FullName() == otelAnyDescriptor.FullName() {
@@ -293,6 +298,20 @@ func ProtoKindToAppendFunc(fd protoreflect.FieldDescriptor, b array.Builder) pro
 		// Google common types → protojson-serialized String
 		case "google.type.Money", "google.type.LatLng", "google.type.Color",
 			"google.type.PostalAddress", "google.type.Interval":
+			a := b.(*array.StringBuilder)
+			return func(v protoreflect.Value) {
+				bs, err := protojson.Marshal(v.Message().Interface())
+				if err != nil {
+					a.AppendNull()
+					return
+				}
+				a.Append(string(bs))
+			}
+		// Recursive well-known types → protojson-serialized String. An unset
+		// google.protobuf.Value cannot be marshalled, so failures become nulls.
+		// AppendDenorm already filters unset leaves via leaf.IsNull().
+		case "google.protobuf.Struct", "google.protobuf.Value",
+			"google.protobuf.ListValue":
 			a := b.(*array.StringBuilder)
 			return func(v protoreflect.Value) {
 				bs, err := protojson.Marshal(v.Message().Interface())

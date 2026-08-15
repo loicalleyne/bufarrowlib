@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package samples;
+
+import "google/protobuf/struct.proto";
+
+// Recursive well-known types terminate as protojson strings rather than being
+// expanded into the Arrow schema.
+
+message WithValueMap { map<string, google.protobuf.Value> attrs = 1; }
+
+message WithStruct { google.protobuf.Struct settings = 1; }
+
+message WithValueList { repeated google.protobuf.Value values = 1; }
+
+message NsEntry { map<string, google.protobuf.Value> settings = 1; }
+
+// WithNestedNs reproduces the reported failure: a map whose values contain a
+// further map of google.protobuf.Value.
+message WithNestedNs { map<string, NsEntry> settings_namespaces = 1; }
+
+// WithValue exercises the unset and oneof paths, where protojson.Marshal fails.
+message WithValue {
+  google.protobuf.Value v = 1;
+  oneof kind {
+    google.protobuf.Value ov = 2;
+    string s = 3;
+  }
+}
+
+message DiamondInner { string val = 1; }
+
+// DiamondOuter is not cyclic: the same message type appears in two sibling
+// fields. Cycle detection must accept it.
+message DiamondOuter {
+  DiamondInner left = 1;
+  DiamondInner right = 2;
+}
+
+// SelfRef is genuinely cyclic and must be rejected with ErrCyclicType.
+message SelfRef {
+  string name = 1;
+  SelfRef child = 2;
+}
+
+// DeepAcyclic12 chains past maxDepth without any cycle, proving the depth guard
+// is still reachable.
+message DeepAcyclic12 { DeepAcyclic11 next = 1; }
+message DeepAcyclic11 { DeepAcyclic10 next = 1; }
+message DeepAcyclic10 { DeepAcyclic9 next = 1; }
+message DeepAcyclic9 { DeepAcyclic8 next = 1; }
+message DeepAcyclic8 { DeepAcyclic7 next = 1; }
+message DeepAcyclic7 { DeepAcyclic6 next = 1; }
+message DeepAcyclic6 { DeepAcyclic5 next = 1; }
+message DeepAcyclic5 { DeepAcyclic4 next = 1; }
+message DeepAcyclic4 { DeepAcyclic3 next = 1; }
+message DeepAcyclic3 { DeepAcyclic2 next = 1; }
+message DeepAcyclic2 { DeepAcyclic1 next = 1; }
+message DeepAcyclic1 { string val = 1; }
