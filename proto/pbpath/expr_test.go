@@ -542,7 +542,7 @@ func TestExprComposition(t *testing.T) {
 		// Coalesce(Add(zero, zero), Default(zero, 99)) → 99
 		msg := exprTestMsg(md, map[string]any{})
 		expr := FuncCoalesce(
-			FuncAdd(PathRef("zero"), PathRef("zero")),                   // 0+0 = 0 (zero → not valid for coalesce)
+			FuncAdd(PathRef("zero"), PathRef("zero")),     // 0+0 = 0 (zero → not valid for coalesce)
 			FuncDefault(PathRef("zero"), ScalarInt64(99)), // → 99
 		)
 		plan, err := NewPlan(md, nil,

@@ -225,7 +225,7 @@ func BenchmarkE2EPipeline_ConcurrentAppendDenormRaw(b *testing.B) {
 
 	// PGO warm-up.
 	for _, raw := range corpus {
-		if err := base.AppendDenormRaw(raw); err != nil {
+		if _, err := base.AppendDenormRaw(raw); err != nil {
 			b.Fatalf("PGO warm-up: %v", err)
 		}
 	}
@@ -295,7 +295,7 @@ func BenchmarkE2EPipeline_ConcurrentAppendDenormRaw(b *testing.B) {
 					go func(tc *Transcoder) {
 						defer wg.Done()
 						for raw := range mChan {
-							if err := tc.AppendDenormRaw(raw); err != nil {
+							if _, err := tc.AppendDenormRaw(raw); err != nil {
 								b.Error(err)
 								return
 							}

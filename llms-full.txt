@@ -95,6 +95,11 @@ bufarrowlib.WithCustomMessageFile(protoFilePath, messageName string, importPaths
 // paths is a variadic list of pbpath.PlanPathSpec (created via pbpath.PlanPath).
 bufarrowlib.WithDenormalizerPlan(paths ...pbpath.PlanPathSpec) Option
 
+// Add nullable, source-agnostic metadata columns after the plan-derived
+// columns. Requires WithDenormalizerPlan. Metadata columns are configured via
+// this Go option only; YAML config does not declare them.
+bufarrowlib.WithDenormMetadataColumns(cols ...DenormMetadataColumn) Option
+
 // Attach a shared HyperType for hyperpb fast parsing.
 // Required for AppendRaw / AppendRawMerged; optional for AppendDenormRaw (falls back to proto.Unmarshal).
 bufarrowlib.WithHyperType(ht *HyperType) Option
@@ -143,15 +148,27 @@ func (t *Transcoder) AppendRawMerged(baseBytes, customBytes []byte) error
 
 // Denorm: append from a deserialized proto.Message.
 // Requires WithDenormalizerPlan.
-func (t *Transcoder) AppendDenorm(msg proto.Message) error
+// Returns the number of output rows produced for this message.
+func (t *Transcoder) AppendDenorm(msg proto.Message, meta ...DenormMetaValue) (int, error)
 
 // Denorm: append from raw wire bytes.
 // Uses hyperpb if WithHyperType was set, else falls back to proto.Unmarshal.
 // Requires WithDenormalizerPlan.
-func (t *Transcoder) AppendDenormRaw(b []byte) error
+// Returns the number of output rows produced for this message.
+func (t *Transcoder) AppendDenormRaw(b []byte, meta ...DenormMetaValue) (int, error)
 
 // Denorm: merge two raw wire byte slices, then denorm-append.
-func (t *Transcoder) AppendDenormRawMerged(baseBytes, customBytes []byte) error
+// Returns the number of output rows produced for this message.
+func (t *Transcoder) AppendDenormRawMerged(baseBytes, customBytes []byte, meta ...DenormMetaValue) (int, error)
+
+// Metadata column declaration and name-keyed value.
+type MetaCol string
+type DenormMetadataColumn struct { Name MetaCol; Type arrow.DataType }
+type DenormMetaValue struct { Col MetaCol; Value any }
+func Meta(col MetaCol, value any) DenormMetaValue
+
+// Returns registered metadata columns in schema order, or nil when unset.
+func (t *Transcoder) DenormMetaColumns() []DenormMetadataColumn
 ```
 
 ### Flushing to Arrow
@@ -381,11 +398,18 @@ tc, _ := ba.New(md, memory.DefaultAllocator,
 defer tc.Release()
 
 for _, raw := range kafkaMessages {
-    if err := tc.AppendDenormRaw(raw); err != nil { ... }
+  if _, err := tc.AppendDenormRaw(raw); err != nil { ... }
 }
 rec := tc.NewDenormalizerRecordBatch()
 defer rec.Release()
 ```
+
+Metadata columns are appended after plan columns and are always nullable. A
+metadata value supplied with `Meta(col, value)` is repeated across all rows
+from that append call; an omitted value becomes null. Timestamp metadata accepts
+`time.Time` or `arrow.Timestamp` in Go. Pool submission accepts metadata but is
+asynchronous, so it does not expose a row count. YAML-created transcoders do
+not register metadata columns.
 
 ### Fan-out cross-join (two independent repeated fields)
 

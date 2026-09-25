@@ -6,6 +6,7 @@ import (
 
 	"github.com/apache/arrow-go/v18/arrow/memory"
 	"github.com/loicalleyne/bufarrowlib/gen/go/samples"
+	"github.com/loicalleyne/bufarrowlib/proto/pbpath"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/dynamicpb"
@@ -185,6 +186,52 @@ func TestAppendRawMerged(t *testing.T) {
 func TestAppendDenormRawMerged(t *testing.T) {
 	protoDir := testProtoDir(t)
 
+	t.Run("success_returns_row_count", func(t *testing.T) {
+		baseMD := new(samples.Three).ProtoReflect().Descriptor()
+
+		customFD, err := CompileProtoToFileDescriptor("custom_fields.proto", []string{protoDir})
+		if err != nil {
+			t.Fatalf("setup: %v", err)
+		}
+		customMD, err := GetMessageDescriptorByName(customFD, "CustomFields")
+		if err != nil {
+			t.Fatalf("setup: %v", err)
+		}
+
+		tc, err := New(baseMD, memory.DefaultAllocator,
+			WithCustomMessage(customMD),
+			WithDenormalizerPlan(
+				pbpath.PlanPath("value", pbpath.Alias("value")),
+			),
+		)
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+		defer tc.Release()
+
+		baseMsg := &samples.Three{Value: 42}
+		baseBytes, err := proto.Marshal(baseMsg)
+		if err != nil {
+			t.Fatalf("marshal base: %v", err)
+		}
+
+		customMsg := dynamicpb.NewMessage(customMD)
+		customMsg.Set(customMD.Fields().ByName("event_timestamp"), protoreflect.ValueOfInt64(1234567890))
+		customMsg.Set(customMD.Fields().ByName("source_id"), protoreflect.ValueOfString("test-source"))
+		customBytes, err := proto.Marshal(customMsg)
+		if err != nil {
+			t.Fatalf("marshal custom: %v", err)
+		}
+
+		rows, err := tc.AppendDenormRawMerged(baseBytes, customBytes)
+		if err != nil {
+			t.Fatalf("AppendDenormRawMerged() error = %v", err)
+		}
+		if rows != 1 {
+			t.Fatalf("rows = %d, want 1", rows)
+		}
+	})
+
 	t.Run("error_without_custom_configured", func(t *testing.T) {
 		baseMD := new(samples.Three).ProtoReflect().Descriptor()
 
@@ -194,7 +241,7 @@ func TestAppendDenormRawMerged(t *testing.T) {
 		}
 		defer tc.Release()
 
-		err = tc.AppendDenormRawMerged([]byte{}, []byte{})
+		_, err = tc.AppendDenormRawMerged([]byte{}, []byte{})
 		if err == nil {
 			t.Fatal("expected error when calling AppendDenormRawMerged without custom configured")
 		}
@@ -221,7 +268,7 @@ func TestAppendDenormRawMerged(t *testing.T) {
 		}
 		defer tc.Release()
 
-		err = tc.AppendDenormRawMerged([]byte{}, []byte{})
+		_, err = tc.AppendDenormRawMerged([]byte{}, []byte{})
 		if err == nil {
 			t.Fatal("expected error when calling AppendDenormRawMerged without denorm plan")
 		}
@@ -232,6 +279,64 @@ func TestAppendDenormRawMerged(t *testing.T) {
 }
 
 func TestAppendDenormRaw(t *testing.T) {
+	t.Run("success_returns_fanout_row_count", func(t *testing.T) {
+		orderMD, itemMD := buildDenormTestSchema(t)
+		tc, err := New(orderMD, memory.DefaultAllocator,
+			WithDenormalizerPlan(
+				pbpath.PlanPath("items[*].id", pbpath.Alias("item_id")),
+			),
+		)
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+		defer tc.Release()
+
+		msg := makeOrder(t, orderMD, itemMD, "order", []struct {
+			id    string
+			price float64
+		}{{"A", 1}, {"B", 2}, {"C", 3}}, nil, 1)
+
+		raw, err := proto.Marshal(msg)
+		if err != nil {
+			t.Fatalf("marshal order: %v", err)
+		}
+
+		rows, err := tc.AppendDenormRaw(raw)
+		if err != nil {
+			t.Fatalf("AppendDenormRaw() error = %v", err)
+		}
+		if rows != 3 {
+			t.Fatalf("rows = %d, want 3", rows)
+		}
+	})
+	t.Run("success_returns_row_count", func(t *testing.T) {
+		baseMD := new(samples.Three).ProtoReflect().Descriptor()
+
+		tc, err := New(baseMD, memory.DefaultAllocator,
+			WithDenormalizerPlan(
+				pbpath.PlanPath("value", pbpath.Alias("value")),
+			),
+		)
+		if err != nil {
+			t.Fatalf("New() error = %v", err)
+		}
+		defer tc.Release()
+
+		baseMsg := &samples.Three{Value: 42}
+		baseBytes, err := proto.Marshal(baseMsg)
+		if err != nil {
+			t.Fatalf("marshal base: %v", err)
+		}
+
+		rows, err := tc.AppendDenormRaw(baseBytes)
+		if err != nil {
+			t.Fatalf("AppendDenormRaw() error = %v", err)
+		}
+		if rows != 1 {
+			t.Fatalf("rows = %d, want 1", rows)
+		}
+	})
+
 	t.Run("error_without_denorm_plan", func(t *testing.T) {
 		baseMD := new(samples.Three).ProtoReflect().Descriptor()
 
@@ -241,7 +346,7 @@ func TestAppendDenormRaw(t *testing.T) {
 		}
 		defer tc.Release()
 
-		err = tc.AppendDenormRaw([]byte{})
+		_, err = tc.AppendDenormRaw([]byte{})
 		if err == nil {
 			t.Fatal("expected error when calling AppendDenormRaw without denorm plan")
 		}

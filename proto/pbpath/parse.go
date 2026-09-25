@@ -623,6 +623,7 @@ func (p *parser) step(tok *token) error {
 //   - Any of start, end, step may be omitted: [::2], [1::], [::-1], [::]
 //   - step=0 is an error.
 //   - Both [:] and [::] produce a wildcard.
+//
 // A list wildcard step is path '[' '*' ']' or '[' ':' ']' or '[' '::' ']'
 // A root step is '(' msg.Descriptor().String() ')'
 //

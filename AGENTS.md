@@ -40,6 +40,7 @@ Run a single Go test file or package:
 ```sh
 go test -v -run TestAppendDenorm ./...
 go test -v -run TestAppend ./proto/pbpath/...
+go test -v -run 'TestDenormMetadata|TestAppendDenormMetadata' ./...
 ```
 
 ## Benchmark commands
@@ -103,6 +104,9 @@ Python tests are **not** in CI (require a pre-built shared library and platform-
 - **Do not call `New` or `Clone` inside a message processing loop.** Construction is expensive (~300 µs). Pre-create workers, then feed messages through channels.
 - **Do not omit `defer rec.Release()`** on every `RecordBatch` returned by `NewRecordBatch()` or `NewDenormalizerRecordBatch()`.
 - **Do not share a `Transcoder` between goroutines.** Use `Clone` to get independent builder state per goroutine.
+- **Denormalizer metadata is opt-in and Go-configured.** Use `WithDenormMetadataColumns` together with `WithDenormalizerPlan`, then pass name-keyed `Meta(col, value)` values to the denorm append methods. Metadata columns follow plan columns, are nullable, and omitted values become nulls. YAML configuration does not register metadata columns.
+- **Denorm append methods return row counts.** `AppendDenorm`, `AppendDenormRaw`, and `AppendDenormRawMerged` return `(int, error)`; the count is the number of fan-out rows produced by that call. Pool submission is asynchronous and does not return a count.
+- **Metadata values repeat across fan-out rows.** Timestamp columns accept `time.Time` or `arrow.Timestamp` in Go. Pass an untyped `nil` for a null value; typed nil pointers fail type validation.
 - **Do not drop `HyperType`** on raw-bytes paths. Without it, `AppendRaw` falls back to `dynamicpb` which is 3–5× slower.
 - **Do not use `proto.Unmarshal` then `Append`** when raw bytes are available. Use `AppendRaw` / `AppendDenormRaw` instead.
 - **Do not write protobuf schemas with empty message fields directly to Parquet.** Parquet rejects Struct nodes with no children. Use `WithPruneEmptyMessages()` at `New`/`NewFromFile` time, or call `PruneEmptyMessages(md)` on the descriptor before construction. Pruning is recursive: a message that only held empty-message fields also gets pruned. Field numbers of surviving fields are unchanged.

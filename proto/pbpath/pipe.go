@@ -15,8 +15,8 @@ import (
 // and variable bindings from `as $name` expressions.
 type PipeContext struct {
 	md        protoreflect.MessageDescriptor
-	vars      map[string][]Value // variable bindings ($name → values)
-	userFuncs []*pipeUserFunc    // user-defined functions from `def`
+	vars      map[string][]Value   // variable bindings ($name → values)
+	userFuncs []*pipeUserFunc      // user-defined functions from `def`
 	inputFn   func() (Value, bool) // optional input source for `input`/`inputs`
 }
 
@@ -640,7 +640,7 @@ func builtinTonumber(_ *PipeContext, input Value) ([]Value, error) {
 			i, err := strconv.ParseInt(s, 10, 64)
 			if err != nil {
 				return nil, fmt.Errorf("tonumber: %q is not a number", s)
-				}
+			}
 			return []Value{ScalarInt64(i)}, nil
 		case bool:
 			b := iface.(bool)

@@ -535,9 +535,9 @@ type pipeUserFunc struct {
 
 // pipeUserFuncCall calls a user-defined function at runtime.
 type pipeUserFuncCall struct {
-	name  string       // function name for runtime lookup
-	arity int          // number of arguments (for overload resolution)
-	args  []*Pipeline  // argument pipelines, one per parameter
+	name  string      // function name for runtime lookup
+	arity int         // number of arguments (for overload resolution)
+	args  []*Pipeline // argument pipelines, one per parameter
 }
 
 func (p *pipeUserFuncCall) exec(ctx *PipeContext, input Value) ([]Value, error) {

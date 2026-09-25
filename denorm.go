@@ -38,6 +38,15 @@ type denormColumn struct {
 	fd protoreflect.FieldDescriptor
 }
 
+// denormMetaColumn stores metadata column append wiring compiled once at
+// denormalizer compilation time.
+type denormMetaColumn struct {
+	col       MetaCol
+	typ       arrow.DataType
+	schemaIdx int
+	appendFn  metadataAppendFunc
+}
+
 // fanoutSignature computes a string key that identifies the fan-out shape of a
 // compiled path. Only ListWildcardStep and ListRangeStep contribute to the
 // signature; ListIndexStep is excluded because it selects a single element
@@ -116,6 +125,27 @@ func (s *Transcoder) cloneDenorm(src *Transcoder, mem memory.Allocator) error {
 			appendFn: fn,
 			fd:       src.denormCols[i].fd,
 		}
+	}
+
+	if len(src.denormMetaCols) > 0 {
+		s.denormMetaCols = make([]denormMetaColumn, len(src.denormMetaCols))
+		s.denormMetaIndex = make(map[MetaCol]int, len(src.denormMetaIndex))
+		for i, col := range src.denormMetaCols {
+			builder := s.denormBuilder.Field(col.schemaIdx)
+			appendFn := arrowTypeToMetadataAppendFunc(col.typ, builder)
+			if appendFn == nil {
+				return fmt.Errorf("bufarrow: failed to create metadata append function for %q in clone", col.col)
+			}
+			s.denormMetaCols[i] = denormMetaColumn{
+				col:       col.col,
+				typ:       col.typ,
+				schemaIdx: col.schemaIdx,
+				appendFn:  appendFn,
+			}
+			s.denormMetaIndex[col.col] = i
+		}
+		s.denormMetaSupplied = make([]bool, len(src.denormMetaCols))
+		s.denormMetaValues = make([]any, len(src.denormMetaCols))
 	}
 	return nil
 }
@@ -200,6 +230,21 @@ func (s *Transcoder) compileDenormPlan(mem memory.Allocator) error {
 		}
 	}
 
+	if len(s.opts.denormMetaCols) > 0 {
+		existing := make(map[string]struct{}, len(arrowFields))
+		for _, f := range arrowFields {
+			existing[f.Name] = struct{}{}
+		}
+		for _, mc := range s.opts.denormMetaCols {
+			name := string(mc.Name)
+			if _, ok := existing[name]; ok {
+				return fmt.Errorf("bufarrow: denormalizer metadata column %q collides with existing denormalizer column", name)
+			}
+			existing[name] = struct{}{}
+			arrowFields = append(arrowFields, arrow.Field{Name: name, Type: mc.Type, Nullable: true})
+		}
+	}
+
 	s.denormSchema = arrow.NewSchema(arrowFields, nil)
 	s.denormBuilder = array.NewRecordBuilder(mem, s.denormSchema)
 
@@ -249,6 +294,27 @@ func (s *Transcoder) compileDenormPlan(mem memory.Allocator) error {
 		}
 	}
 
+	if len(s.opts.denormMetaCols) > 0 {
+		s.denormMetaCols = make([]denormMetaColumn, len(s.opts.denormMetaCols))
+		s.denormMetaIndex = make(map[MetaCol]int, len(s.opts.denormMetaCols))
+		for i, mc := range s.opts.denormMetaCols {
+			schemaIdx := nCols + i
+			appendFn := arrowTypeToMetadataAppendFunc(mc.Type, s.denormBuilder.Field(schemaIdx))
+			if appendFn == nil {
+				return fmt.Errorf("bufarrow: unsupported metadata arrow type for %q: %v", mc.Name, mc.Type)
+			}
+			s.denormMetaCols[i] = denormMetaColumn{
+				col:       mc.Name,
+				typ:       mc.Type,
+				schemaIdx: schemaIdx,
+				appendFn:  appendFn,
+			}
+			s.denormMetaIndex[mc.Name] = i
+		}
+		s.denormMetaSupplied = make([]bool, len(s.opts.denormMetaCols))
+		s.denormMetaValues = make([]any, len(s.opts.denormMetaCols))
+	}
+
 	return nil
 }
 
@@ -260,14 +326,36 @@ func (s *Transcoder) compileDenormPlan(mem memory.Allocator) error {
 // fan-out groups (no branches) contribute 1 null row (left-join semantics).
 //
 // This method is not safe for concurrent use.
-func (s *Transcoder) AppendDenorm(msg proto.Message) error {
+func (s *Transcoder) AppendDenorm(msg proto.Message, meta ...DenormMetaValue) (int, error) {
 	if s.denormPlan == nil {
-		return fmt.Errorf("bufarrow: AppendDenorm called without denormalizer plan configured")
+		return 0, fmt.Errorf("bufarrow: AppendDenorm called without denormalizer plan configured")
 	}
 
 	results, err := s.denormPlan.EvalLeaves(msg)
 	if err != nil {
-		return fmt.Errorf("bufarrow: denormalizer eval: %w", err)
+		return 0, fmt.Errorf("bufarrow: denormalizer eval: %w", err)
+	}
+
+	if cap(s.denormMetaSupplied) < len(s.denormMetaCols) {
+		s.denormMetaSupplied = make([]bool, len(s.denormMetaCols))
+		s.denormMetaValues = make([]any, len(s.denormMetaCols))
+	}
+	metaSupplied := s.denormMetaSupplied[:len(s.denormMetaCols)]
+	metaValues := s.denormMetaValues[:len(s.denormMetaCols)]
+	for i := range metaSupplied {
+		metaSupplied[i] = false
+		metaValues[i] = nil
+	}
+	for _, entry := range meta {
+		idx, ok := s.denormMetaIndex[entry.Col]
+		if !ok {
+			return 0, fmt.Errorf("unknown MetaCol %q", entry.Col)
+		}
+		if err := s.denormMetaCols[idx].appendFn(entry.Value, 0); err != nil {
+			return 0, fmt.Errorf("metadata column %q: %w", entry.Col, err)
+		}
+		metaSupplied[idx] = true
+		metaValues[idx] = entry.Value
 	}
 
 	nGroups := len(s.denormGroups)
@@ -313,7 +401,7 @@ func (s *Transcoder) AppendDenorm(msg proto.Message) error {
 		totalRows *= c
 	}
 	if totalRows == 0 {
-		return nil
+		return 0, nil
 	}
 
 	// --- Null fast-path: bulk-append nulls for entirely-null groups ---
@@ -329,8 +417,22 @@ func (s *Transcoder) AppendDenorm(msg proto.Message) error {
 	}
 
 	// If every column is null, we're done.
+	if len(s.denormMetaCols) > 0 {
+		for i, col := range s.denormMetaCols {
+			if metaSupplied[i] {
+				if err := col.appendFn(metaValues[i], totalRows); err != nil {
+					return 0, fmt.Errorf("metadata column %q: %w", col.col, err)
+				}
+				continue
+			}
+			if err := col.appendFn(nil, totalRows); err != nil {
+				return 0, fmt.Errorf("metadata column %q: %w", col.col, err)
+			}
+		}
+	}
+
 	if nullColCount == nCols {
-		return nil
+		return totalRows, nil
 	}
 
 	// --- Per-row iteration with div/mod cross-join ---
@@ -361,5 +463,5 @@ func (s *Transcoder) AppendDenorm(msg proto.Message) error {
 		}
 	}
 
-	return nil
+	return totalRows, nil
 }

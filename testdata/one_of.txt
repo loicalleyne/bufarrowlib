@@ -30,5 +30,5 @@ schema:
         metadata: ["PARQUET:field_id": "14", "path": "string"]
     - bytes: type=binary, nullable
        metadata: ["PARQUET:field_id": "15", "path": "bytes"]
-    - one: type=struct<two: struct<three: struct<value: uint64>>>, nullable
+    - one: type=struct<two: struct<three: struct<value: uint64> nullable> nullable>, nullable
      metadata: ["PARQUET:field_id": "16", "path": "one"]

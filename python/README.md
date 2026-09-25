@@ -188,6 +188,37 @@ with Transcoder.from_proto_file(
 
 Empty repeated fields produce one row with nulls (left-join semantics), so you never lose parent records.
 
+### Per-message metadata columns
+
+For source metadata such as Kafka partitions, offsets, or event timestamps,
+declare nullable metadata columns when constructing a denormalizer and pass
+values as keyword arguments. Metadata values are repeated across every fan-out
+row produced by that message; omitted columns become nulls:
+
+```python
+with Transcoder.from_proto_file(
+    "order.proto", "Order",
+    denorm_columns=["name", "items[*].id"],
+    denorm_metadata_columns=[
+        ("kafka_partition", "int32"),
+        ("kafka_offset", "int64"),
+    ],
+) as tc:
+    rows = tc.append_denorm(
+        raw_order,
+        kafka_partition=partition,
+        kafka_offset=offset,
+    )
+    # rows is the number of output rows produced for raw_order
+    flat = tc.flush_denorm()
+```
+
+Use integer epoch milliseconds or microseconds for timestamp metadata,
+matching the declared timestamp unit. Metadata columns are configured through
+`from_proto_file`; YAML configuration does not declare them. `Pool.submit`
+and `Pool.submit_merged` accept the same metadata keyword arguments but remain
+asynchronous and do not return a row count.
+
 ### Why denormalize?
 
 Nested protobuf structures are great for wire transport but terrible for analytics. Querying nested Arrow structs or repeated fields requires unnesting at query time — which is expensive and makes aggregations slow. The denormalizer does the fan-out once at ingest time, producing flat columns that DuckDB, Pandas, and Polars can aggregate at full speed:
@@ -304,7 +335,8 @@ No gRPC. No protoc codegen. No serialization round-trips. The Arrow C Data Inter
 |---|---|
 | `append(data)` | Ingest raw protobuf bytes (requires HyperType) |
 | `append_merged(base, custom)` | Ingest two protobuf messages as one row (requires `custom_proto`) |
-| `append_denorm(data)` | Ingest with denormalization / fan-out (requires HyperType + denorm plan) |
+| `append_denorm(data, **metadata)` → `int` | Ingest with denormalization / fan-out and return the output row count |
+| `append_denorm_merged(base, custom, **metadata)` → `int` | Merge, denormalize, and return the output row count |
 | `flush()` → `RecordBatch` | Flush accumulated rows as a zero-copy Arrow RecordBatch |
 | `flush_denorm()` → `RecordBatch` | Flush denormalized rows |
 | `write_parquet(path)` | Write buffered data to Parquet |

@@ -142,3 +142,89 @@ class TestMergedAppend:
             assert "name" in names
             assert "event_ts" in names
             assert "source_id" in names
+
+
+class TestDenormMetadata:
+    """Test denorm metadata column support in the Python Transcoder API."""
+
+    def test_append_denorm_returns_row_count(self, order_proto, order_hyper_type):
+        with Transcoder.from_proto_file(
+            order_proto,
+            "Order",
+            hyper_type=order_hyper_type,
+            denorm_columns=["items[*].id"],
+            denorm_metadata_columns=[("kafka_partition", "int32"), ("kafka_offset", "int64")],
+        ) as tc:
+            from .conftest import encode_order
+
+            rows = tc.append_denorm(
+                encode_order("ord-1", [("a", 1.0), ("b", 2.0)], seq=1),
+                kafka_partition=2,
+                kafka_offset=123,
+            )
+            assert rows == 2
+
+            batch = tc.flush_denorm()
+            assert batch.num_rows == 2
+            assert "kafka_partition" in batch.schema.names
+            assert "kafka_offset" in batch.schema.names
+
+    def test_append_denorm_omitted_metadata_is_null(self, order_proto, order_hyper_type):
+        with Transcoder.from_proto_file(
+            order_proto,
+            "Order",
+            hyper_type=order_hyper_type,
+            denorm_columns=["items[*].id"],
+            denorm_metadata_columns=[("kafka_partition", "int32"), ("kafka_offset", "int64")],
+        ) as tc:
+            from .conftest import encode_order
+
+            tc.append_denorm(
+                encode_order("ord-2", [("a", 1.0)], seq=1),
+                kafka_partition=1,
+            )
+            batch = tc.flush_denorm()
+            assert batch.num_rows == 1
+            assert batch.column("kafka_offset")[0].as_py() is None
+
+    def test_append_denorm_unknown_metadata_kwarg_raises(self, order_proto, order_hyper_type):
+        with Transcoder.from_proto_file(
+            order_proto,
+            "Order",
+            hyper_type=order_hyper_type,
+            denorm_columns=["items[*].id"],
+            denorm_metadata_columns=[("kafka_partition", "int32")],
+        ) as tc:
+            from .conftest import encode_order
+
+            with pytest.raises(BufarrowError):
+                tc.append_denorm(
+                    encode_order("ord-3", [("a", 1.0)], seq=1),
+                    nope=1,
+                )
+
+
+class TestDenormMergedRowCount:
+    """Test append_denorm_merged row-count return behavior."""
+
+    def test_append_denorm_merged_returns_row_count(self, test_proto, custom_proto):
+        with Transcoder.from_proto_file(
+            test_proto,
+            "TestMsg",
+            custom_proto=custom_proto,
+            custom_message="CustomExtra",
+            denorm_columns=["name"],
+            denorm_metadata_columns=[("kafka_offset", "int64")],
+        ) as tc:
+            from .conftest import encode_custom_extra
+
+            rows = tc.append_denorm_merged(
+                encode_test_msg("Alice", 30, 95.5, True),
+                encode_custom_extra(1234567890, "sensor-1"),
+                kafka_offset=123,
+            )
+            assert rows == 1
+
+            batch = tc.flush_denorm()
+            assert batch.num_rows == 1
+            assert batch.column("kafka_offset")[0].as_py() == 123

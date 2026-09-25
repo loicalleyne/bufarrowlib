@@ -51,9 +51,9 @@ func PathRef(path string) Expr {
 	return &pathExpr{path: path, entryIdx: -1}
 }
 
-func (e *pathExpr) inputPaths() []string { return []string{e.path} }
+func (e *pathExpr) inputPaths() []string          { return []string{e.path} }
 func (e *pathExpr) outputKind() protoreflect.Kind { return 0 } // pass-through
-func (e *pathExpr) children() []Expr               { return nil }
+func (e *pathExpr) children() []Expr              { return nil }
 
 func (e *pathExpr) eval(leafValues [][]Value, branchIdx int) Value {
 	vals := leafValues[e.entryIdx]
@@ -134,29 +134,29 @@ const (
 	funcListConcat
 
 	// Wave 4 — filter / logic functions
-	funcSelect  // mid-traversal filter: pass-through if predicate is truthy, null otherwise
-	funcAnd     // logical AND of two boolean children
-	funcOr      // logical OR of two boolean children
-	funcNot     // logical NOT of a boolean child
+	funcSelect // mid-traversal filter: pass-through if predicate is truthy, null otherwise
+	funcAnd    // logical AND of two boolean children
+	funcOr     // logical OR of two boolean children
+	funcNot    // logical NOT of a boolean child
 )
 
 // funcExpr is an interior Expr node that applies a function to child
 // expressions. The [8]protoreflect.Value scratch array avoids heap
 // allocation when the function has ≤8 children.
 type funcExpr struct {
-	kind         funcKind
-	kids         []Expr
-	literal      Value                            // for Default: the fallback literal; Coerce: ifTrue; Mask: keepFirst (as int64)
-	separator    string                           // for Concat: separator; TrimPrefix/Suffix: affix; Strptime: format; DatePart: part name; Mask: mask char; ListConcat: separator
-	autoPromote  *bool                            // for Cond: per-expr override; nil = use plan default
-	outKind      protoreflect.Kind                // cached output kind (0 = pass-through)
-	literal2     Value                            // for Coerce: ifFalse
-	intParam     int                              // for Bucket: size; Mask: keepLast
-	enumDesc     protoreflect.EnumDescriptor      // for EnumName: resolved at plan compile time
+	kind        funcKind
+	kids        []Expr
+	literal     Value                       // for Default: the fallback literal; Coerce: ifTrue; Mask: keepFirst (as int64)
+	separator   string                      // for Concat: separator; TrimPrefix/Suffix: affix; Strptime: format; DatePart: part name; Mask: mask char; ListConcat: separator
+	autoPromote *bool                       // for Cond: per-expr override; nil = use plan default
+	outKind     protoreflect.Kind           // cached output kind (0 = pass-through)
+	literal2    Value                       // for Coerce: ifFalse
+	intParam    int                         // for Bucket: size; Mask: keepLast
+	enumDesc    protoreflect.EnumDescriptor // for EnumName: resolved at plan compile time
 }
 
 func (e *funcExpr) outputKind() protoreflect.Kind { return e.outKind }
-func (e *funcExpr) children() []Expr               { return e.kids }
+func (e *funcExpr) children() []Expr              { return e.kids }
 
 func (e *funcExpr) inputPaths() []string {
 	var paths []string
@@ -579,9 +579,9 @@ func FilterPathRef(relPath string, fields ...protoreflect.FieldDescriptor) Expr 
 	return &filterPathExpr{relPath: relPath, fields: fields}
 }
 
-func (e *filterPathExpr) inputPaths() []string           { return nil } // not a root-relative path
+func (e *filterPathExpr) inputPaths() []string          { return nil } // not a root-relative path
 func (e *filterPathExpr) outputKind() protoreflect.Kind { return 0 }
-func (e *filterPathExpr) children() []Expr               { return nil }
+func (e *filterPathExpr) children() []Expr              { return nil }
 
 // eval evaluates the filter path against the cursor message stored in
 // leafValues[0][branchIdx] (by convention, filter evaluation passes the
@@ -630,9 +630,9 @@ func Literal(val Value, kind protoreflect.Kind) Expr {
 	return &literalExpr{val: val, litKind: kind}
 }
 
-func (e *literalExpr) inputPaths() []string           { return nil }
-func (e *literalExpr) outputKind() protoreflect.Kind   { return e.litKind }
-func (e *literalExpr) children() []Expr                 { return nil }
+func (e *literalExpr) inputPaths() []string          { return nil }
+func (e *literalExpr) outputKind() protoreflect.Kind { return e.litKind }
+func (e *literalExpr) children() []Expr              { return nil }
 func (e *literalExpr) eval(_ [][]Value, _ int) Value { return e.val }
 
 // resolvePathExprs recursively walks the Expr tree and collects all

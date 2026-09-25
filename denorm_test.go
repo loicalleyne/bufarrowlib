@@ -73,7 +73,8 @@ func buildDenormTestSchema(t *testing.T) (orderMD, itemMD protoreflect.MessageDe
 func makeOrder(t *testing.T, orderMD, itemMD protoreflect.MessageDescriptor, name string, items []struct {
 	id    string
 	price float64
-}, tags []string, seq int64) proto.Message {
+}, tags []string, seq int64,
+) proto.Message {
 	t.Helper()
 	msg := dynamicpb.NewMessage(orderMD)
 	msg.Set(orderMD.Fields().ByName("name"), protoreflect.ValueOfString(name))
@@ -111,7 +112,7 @@ func TestDenormSingleScalar(t *testing.T) {
 	defer tc.Release()
 
 	msg := makeOrder(t, orderMD, itemMD, "test", nil, nil, 42)
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		t.Fatalf("AppendDenorm: %v", err)
 	}
 
@@ -156,7 +157,7 @@ func TestDenormWildcardFanout(t *testing.T) {
 		{"C", 3.0},
 	}
 	msg := makeOrder(t, orderMD, itemMD, "order1", items, nil, 1)
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		t.Fatalf("AppendDenorm: %v", err)
 	}
 
@@ -193,7 +194,7 @@ func TestDenormCrossJoin(t *testing.T) {
 		{"B", 2.0},
 	}
 	msg := makeOrder(t, orderMD, itemMD, "order1", items, []string{"x", "y", "z"}, 1)
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		t.Fatalf("AppendDenorm: %v", err)
 	}
 
@@ -222,7 +223,7 @@ func TestDenormLeftJoinEmptyRepeated(t *testing.T) {
 
 	// 0 items, 2 tags → items group is null → 1×2 = 2 rows
 	msg := makeOrder(t, orderMD, itemMD, "order1", nil, []string{"x", "y"}, 1)
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		t.Fatalf("AppendDenorm: %v", err)
 	}
 
@@ -258,7 +259,7 @@ func TestDenormLeftJoinBothEmpty(t *testing.T) {
 
 	// Both empty → 1×1 = 1 row, item_id and tag both null
 	msg := makeOrder(t, orderMD, itemMD, "order1", nil, nil, 1)
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		t.Fatalf("AppendDenorm: %v", err)
 	}
 
@@ -302,7 +303,7 @@ func TestDenormListIndexBroadcast(t *testing.T) {
 		{"B", 2.0},
 	}
 	msg := makeOrder(t, orderMD, itemMD, "order1", items, []string{"x", "y", "z"}, 1)
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		t.Fatalf("AppendDenorm: %v", err)
 	}
 
@@ -335,7 +336,7 @@ func TestDenormRangeSlice(t *testing.T) {
 		{"A", 1.0}, {"B", 2.0}, {"C", 3.0},
 	}
 	msg := makeOrder(t, orderMD, itemMD, "order1", items, nil, 1)
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		t.Fatalf("AppendDenorm: %v", err)
 	}
 
@@ -367,7 +368,7 @@ func TestDenormNegativeIndex(t *testing.T) {
 		{"A", 1.0}, {"B", 2.0}, {"C", 3.0},
 	}
 	msg := makeOrder(t, orderMD, itemMD, "order1", items, nil, 1)
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		t.Fatalf("AppendDenorm: %v", err)
 	}
 
@@ -433,7 +434,7 @@ func TestDenormStrictPath(t *testing.T) {
 		{"A", 1.0}, {"B", 2.0},
 	}
 	msg := makeOrder(t, orderMD, itemMD, "order1", items, nil, 1)
-	err = tc.AppendDenorm(msg)
+	_, err = tc.AppendDenorm(msg)
 	if err == nil {
 		t.Fatal("expected strict path error, got nil")
 	}
@@ -471,7 +472,7 @@ func TestDenormClone(t *testing.T) {
 		price float64
 	}{{"X", 9.0}}
 	msg := makeOrder(t, orderMD, itemMD, "clone_test", items, nil, 1)
-	if err := tc2.AppendDenorm(msg); err != nil {
+	if _, err := tc2.AppendDenorm(msg); err != nil {
 		t.Fatalf("AppendDenorm on clone: %v", err)
 	}
 	rec := tc2.NewDenormalizerRecordBatch()
@@ -500,7 +501,7 @@ func TestDenormMultipleMessages(t *testing.T) {
 		price float64
 	}{{"A", 1.0}, {"B", 2.0}}
 	msg1 := makeOrder(t, orderMD, itemMD, "order1", items1, nil, 1)
-	if err := tc.AppendDenorm(msg1); err != nil {
+	if _, err := tc.AppendDenorm(msg1); err != nil {
 		t.Fatalf("AppendDenorm msg1: %v", err)
 	}
 
@@ -510,7 +511,7 @@ func TestDenormMultipleMessages(t *testing.T) {
 		price float64
 	}{{"C", 3.0}}
 	msg2 := makeOrder(t, orderMD, itemMD, "order2", items2, nil, 2)
-	if err := tc.AppendDenorm(msg2); err != nil {
+	if _, err := tc.AppendDenorm(msg2); err != nil {
 		t.Fatalf("AppendDenorm msg2: %v", err)
 	}
 
@@ -576,7 +577,7 @@ func TestDenormNoPlan(t *testing.T) {
 	}
 
 	msg := makeOrder(t, orderMD, itemMD, "test", nil, nil, 1)
-	err = tc.AppendDenorm(msg)
+	_, err = tc.AppendDenorm(msg)
 	if err == nil {
 		t.Error("expected error from AppendDenorm without plan")
 	}
@@ -676,7 +677,7 @@ func TestAppendDenormRaw_WithHyperType_SeparateCompilations(t *testing.T) {
 	}
 
 	// Step 4: AppendDenormRaw — this should produce 3 rows (fan-out on nested_repeated_scalar)
-	if err := tc.AppendDenormRaw(data); err != nil {
+	if _, err := tc.AppendDenormRaw(data); err != nil {
 		t.Fatalf("AppendDenormRaw: %v", err)
 	}
 
@@ -737,7 +738,7 @@ func TestAppendDenormRaw_WithoutHyperType(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 
-	if err := tc.AppendDenormRaw(data); err != nil {
+	if _, err := tc.AppendDenormRaw(data); err != nil {
 		t.Fatalf("AppendDenormRaw: %v", err)
 	}
 

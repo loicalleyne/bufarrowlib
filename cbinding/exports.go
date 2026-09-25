@@ -4,6 +4,18 @@ package main
 
 /*
 #include <stdlib.h>
+#include <stdint.h>
+
+#ifndef BUFARROW_META_VALUE_DEFINED
+#define BUFARROW_META_VALUE_DEFINED
+typedef struct {
+	uint8_t kind;
+	int64_t i64;
+	double f64;
+	char *ptr;
+	int32_t len;
+} BufarrowMetaValue;
+#endif
 */
 import "C"
 
@@ -16,6 +28,7 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/memory/mallocator"
 	bufarrowlib "github.com/loicalleyne/bufarrowlib"
 	"github.com/loicalleyne/bufarrowlib/proto/pbpath"
@@ -171,14 +184,30 @@ func BufarrowAppendDenormRaw(
 	handle unsafe.Pointer,
 	data unsafe.Pointer,
 	dataLen C.int,
+	metaValues *C.BufarrowMetaValue,
+	nMeta C.int,
+	outRows *C.int,
 ) C.int {
 	var ct *cTranscoder
 	defer func() { recoverTranscoder(recover(), ct) }()
 	ct = getFromHandle[cTranscoder](handle)
+	if nMeta < 0 {
+		ct.setError(fmt.Errorf("bufarrow: n_meta must be >= 0, got %d", int(nMeta)))
+		return -1
+	}
 	buf := C.GoBytes(data, dataLen)
-	if err := ct.tc.AppendDenormRaw(buf); err != nil {
+	meta, err := cMetaValuesToGo(ct.tc, metaValues, nMeta)
+	if err != nil {
 		ct.setError(err)
 		return -1
+	}
+	n, err := ct.tc.AppendDenormRaw(buf, meta...)
+	if err != nil {
+		ct.setError(err)
+		return -1
+	}
+	if outRows != nil {
+		*outRows = C.int(n)
 	}
 	return 0
 }
@@ -210,15 +239,31 @@ func BufarrowAppendDenormRawMerged(
 	baseLen C.int,
 	customData unsafe.Pointer,
 	customLen C.int,
+	metaValues *C.BufarrowMetaValue,
+	nMeta C.int,
+	outRows *C.int,
 ) C.int {
 	var ct *cTranscoder
 	defer func() { recoverTranscoder(recover(), ct) }()
 	ct = getFromHandle[cTranscoder](handle)
+	if nMeta < 0 {
+		ct.setError(fmt.Errorf("bufarrow: n_meta must be >= 0, got %d", int(nMeta)))
+		return -1
+	}
 	baseBuf := C.GoBytes(baseData, baseLen)
 	customBuf := C.GoBytes(customData, customLen)
-	if err := ct.tc.AppendDenormRawMerged(baseBuf, customBuf); err != nil {
+	meta, err := cMetaValuesToGo(ct.tc, metaValues, nMeta)
+	if err != nil {
 		ct.setError(err)
 		return -1
+	}
+	n, err := ct.tc.AppendDenormRawMerged(baseBuf, customBuf, meta...)
+	if err != nil {
+		ct.setError(err)
+		return -1
+	}
+	if outRows != nil {
+		*outRows = C.int(n)
 	}
 	return 0
 }
@@ -551,10 +596,16 @@ func setGlobalError(_ *unsafe.Pointer, err error) C.int {
 
 // optsPayload is the JSON structure for option overrides passed via opts_json.
 type optsPayload struct {
-	CustomProto       string   `json:"custom_proto,omitempty"`
-	CustomMessage     string   `json:"custom_message,omitempty"`
-	CustomImportPaths []string `json:"custom_import_paths,omitempty"`
-	DenormColumns     []string `json:"denorm_columns,omitempty"`
+	CustomProto       string          `json:"custom_proto,omitempty"`
+	CustomMessage     string          `json:"custom_message,omitempty"`
+	CustomImportPaths []string        `json:"custom_import_paths,omitempty"`
+	DenormColumns     []string        `json:"denorm_columns,omitempty"`
+	DenormMetaColumns []metaColumnDTO `json:"denorm_metadata_columns,omitempty"`
+}
+
+type metaColumnDTO struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
 }
 
 // parseOptsJSON decodes JSON option overrides into bufarrowlib.Option values.
@@ -587,7 +638,131 @@ func parseOptsJSON(s string) ([]bufarrowlib.Option, error) {
 		}
 		opts = append(opts, bufarrowlib.WithDenormalizerPlan(specs...))
 	}
+	if len(p.DenormMetaColumns) > 0 {
+		cols := make([]bufarrowlib.DenormMetadataColumn, 0, len(p.DenormMetaColumns))
+		for _, mc := range p.DenormMetaColumns {
+			dt, err := parseMetadataArrowType(mc.Type)
+			if err != nil {
+				return nil, err
+			}
+			cols = append(cols, bufarrowlib.DenormMetadataColumn{Name: bufarrowlib.MetaCol(mc.Name), Type: dt})
+		}
+		opts = append(opts, bufarrowlib.WithDenormMetadataColumns(cols...))
+	}
 	return opts, nil
+}
+
+func parseMetadataArrowType(name string) (arrow.DataType, error) {
+	switch strings.ToLower(name) {
+	case "bool", "boolean":
+		return arrow.FixedWidthTypes.Boolean, nil
+	case "int32":
+		return arrow.PrimitiveTypes.Int32, nil
+	case "int64":
+		return arrow.PrimitiveTypes.Int64, nil
+	case "uint32":
+		return arrow.PrimitiveTypes.Uint32, nil
+	case "uint64":
+		return arrow.PrimitiveTypes.Uint64, nil
+	case "float32":
+		return arrow.PrimitiveTypes.Float32, nil
+	case "float64":
+		return arrow.PrimitiveTypes.Float64, nil
+	case "utf8", "string":
+		return arrow.BinaryTypes.String, nil
+	case "large_string":
+		return arrow.BinaryTypes.LargeString, nil
+	case "binary":
+		return arrow.BinaryTypes.Binary, nil
+	case "large_binary":
+		return arrow.BinaryTypes.LargeBinary, nil
+	case "timestamp_ms":
+		return &arrow.TimestampType{Unit: arrow.Millisecond, TimeZone: "UTC"}, nil
+	case "timestamp_us":
+		return &arrow.TimestampType{Unit: arrow.Microsecond, TimeZone: "UTC"}, nil
+	default:
+		return nil, fmt.Errorf("bufarrow: unsupported denorm metadata column type %q", name)
+	}
+}
+
+func cMetaValuesToGo(tc *bufarrowlib.Transcoder, metaValues *C.BufarrowMetaValue, nMeta C.int) ([]bufarrowlib.DenormMetaValue, error) {
+	if nMeta == 0 {
+		return nil, nil
+	}
+	registered := tc.DenormMetaColumns()
+	if int(nMeta) != len(registered) {
+		return nil, fmt.Errorf("bufarrow: metadata value count %d does not match registered metadata columns %d", int(nMeta), len(registered))
+	}
+	slice := unsafe.Slice(metaValues, int(nMeta))
+	out := make([]bufarrowlib.DenormMetaValue, len(slice))
+	for i, mv := range slice {
+		val, err := decodeCMetaValue(registered[i], mv)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = bufarrowlib.DenormMetaValue{Col: registered[i].Name, Value: val}
+	}
+	return out, nil
+}
+
+func decodeCMetaValue(col bufarrowlib.DenormMetadataColumn, mv C.BufarrowMetaValue) (any, error) {
+	if mv.kind == 3 {
+		return nil, nil
+	}
+	switch col.Type.(type) {
+	case *arrow.BooleanType:
+		if mv.kind != 0 {
+			return nil, fmt.Errorf("metadata column %q: cannot represent kind %d as %v", col.Name, int(mv.kind), col.Type)
+		}
+		return mv.i64 != 0, nil
+	case *arrow.Int32Type:
+		if mv.kind != 0 {
+			return nil, fmt.Errorf("metadata column %q: cannot represent kind %d as %v", col.Name, int(mv.kind), col.Type)
+		}
+		return int32(mv.i64), nil
+	case *arrow.Int64Type:
+		if mv.kind != 0 {
+			return nil, fmt.Errorf("metadata column %q: cannot represent kind %d as %v", col.Name, int(mv.kind), col.Type)
+		}
+		return int64(mv.i64), nil
+	case *arrow.Uint32Type:
+		if mv.kind != 0 {
+			return nil, fmt.Errorf("metadata column %q: cannot represent kind %d as %v", col.Name, int(mv.kind), col.Type)
+		}
+		return uint32(mv.i64), nil
+	case *arrow.Uint64Type:
+		if mv.kind != 0 {
+			return nil, fmt.Errorf("metadata column %q: cannot represent kind %d as %v", col.Name, int(mv.kind), col.Type)
+		}
+		return uint64(mv.i64), nil
+	case *arrow.Float32Type:
+		if mv.kind != 1 {
+			return nil, fmt.Errorf("metadata column %q: cannot represent kind %d as %v", col.Name, int(mv.kind), col.Type)
+		}
+		return float32(mv.f64), nil
+	case *arrow.Float64Type:
+		if mv.kind != 1 {
+			return nil, fmt.Errorf("metadata column %q: cannot represent kind %d as %v", col.Name, int(mv.kind), col.Type)
+		}
+		return float64(mv.f64), nil
+	case *arrow.StringType, *arrow.LargeStringType:
+		if mv.kind != 2 {
+			return nil, fmt.Errorf("metadata column %q: cannot represent kind %d as %v", col.Name, int(mv.kind), col.Type)
+		}
+		return C.GoStringN(mv.ptr, C.int(mv.len)), nil
+	case *arrow.BinaryType, *arrow.LargeBinaryType:
+		if mv.kind != 2 {
+			return nil, fmt.Errorf("metadata column %q: cannot represent kind %d as %v", col.Name, int(mv.kind), col.Type)
+		}
+		return C.GoBytes(unsafe.Pointer(mv.ptr), C.int(mv.len)), nil
+	case *arrow.TimestampType:
+		if mv.kind != 0 {
+			return nil, fmt.Errorf("metadata column %q: cannot represent kind %d as %v", col.Name, int(mv.kind), col.Type)
+		}
+		return arrow.Timestamp(mv.i64), nil
+	default:
+		return nil, fmt.Errorf("metadata column %q: unsupported type %v", col.Name, col.Type)
+	}
 }
 
 // main is required by c-shared buildmode.

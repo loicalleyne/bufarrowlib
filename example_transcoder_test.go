@@ -330,7 +330,7 @@ func ExampleTranscoder_WriteParquet() {
 	fmt.Printf("parquet bytes: %d\n", buf.Len())
 	fmt.Println("wrote parquet successfully")
 	// Output:
-	// parquet bytes: 714
+	// parquet bytes: 576
 	// wrote parquet successfully
 }
 
@@ -466,7 +466,7 @@ func ExampleTranscoder_NewDenormalizerRecordBatch() {
 		}{{"A", 1.0}, {"B", 2.0}},
 		nil, 1,
 	)
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		log.Fatal(err)
 	}
 
@@ -589,7 +589,7 @@ func ExampleWithDenormalizerPlan() {
 		}{{"X", 1.0}, {"Y", 2.0}},
 		nil, 1,
 	)
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		log.Fatal(err)
 	}
 

@@ -8,8 +8,10 @@ import (
 // Typed constructor error sentinels for errors.Is checks.
 var (
 	ErrMutuallyExclusiveCustomMessageOptions = errors.New("bufarrow: WithCustomMessage and WithCustomMessageFile are mutually exclusive")
-	ErrHyperTypeDescriptorMismatch          = errors.New("bufarrow: WithHyperType descriptor does not match active message descriptor")
-	ErrInvalidHyperTypeMismatchPolicy       = errors.New("bufarrow: invalid hyper type mismatch policy")
+	ErrHyperTypeDescriptorMismatch           = errors.New("bufarrow: WithHyperType descriptor does not match active message descriptor")
+	ErrInvalidHyperTypeMismatchPolicy        = errors.New("bufarrow: invalid hyper type mismatch policy")
+	ErrDenormMetadataWithoutPlan             = errors.New("bufarrow: WithDenormMetadataColumns requires WithDenormalizerPlan")
+	ErrDenormMetadataOnNonDenormPool         = errors.New("bufarrow: metadata values are only supported on denorm pool modes")
 )
 
 // HyperTypeDescriptorMismatchError reports a descriptor fingerprint mismatch

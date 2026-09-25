@@ -35,45 +35,48 @@ LIB      = cbinding/libbufarrow.$(EXT)
         bench-throughput-python bench-compare bench-compare-pmr \
         bench-e2e bench-compare-e2e clean
 
+help: ## Display this help screen
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+
 # ── Shared library ──────────────────────────────────────────────────────
 
-libbufarrow: $(LIB)
+libbufarrow: $(LIB) ## Build the shared C library
 
 $(LIB):
 	CGO_ENABLED=1 $(GO) build -buildmode=c-shared -tags cgo -o $(LIB) ./cbinding
 
-libbufarrow-all:
+libbufarrow-all: ## Build shared libraries for all platforms
 	$(MAKE) -C cbinding build-all
 
 # ── Python ──────────────────────────────────────────────────────────────
 
 # venv-sync — create/update the uv-managed .venv inside python/ and install
 # all dev dependencies declared in pyproject.toml [dependency-groups.dev].
-venv-sync:
+venv-sync: ## Create or update the Python development environment
 	cd python && $(UV) sync --all-groups
 
-python: libbufarrow
+python: libbufarrow ## Build the Python wheel
 	cp $(LIB) python/pybufarrow/
 	cd python && $(UV) build
 
-python-dev: libbufarrow venv-sync
+python-dev: libbufarrow venv-sync ## Build and install the Python package in editable mode
 	cp $(LIB) python/pybufarrow/
 	cd python && $(UV) pip install -e .
 
 # ── Tests ───────────────────────────────────────────────────────────────
 
-test-go:
+test-go: ## Run Go tests
 	$(GO) test -count=1 -timeout 180s ./...
 
-test-go-race:
+test-go-race: ## Run Go tests with the race detector
 	$(GO) test -count=1 -race -timeout 300s -run '^Test' ./...
 
-test-python: libbufarrow venv-sync
+test-python: libbufarrow venv-sync ## Run Python tests
 	cp $(LIB) python/pybufarrow/
 	cd python && $(UV) pip install -e . --quiet
 	cd python && $(UV) run pytest tests/ -v
 
-test: test-go test-python
+test: test-go test-python ## Run Go and Python tests
 
 # ── Benchmarks ──────────────────────────────────────────────────────────
 #
@@ -83,9 +86,9 @@ test: test-go test-python
 # bench-python— Python only (uv-managed venv, pytest-benchmark)
 # bench-compare — Go bench saved to BENCH_OUT for diffing with benchstat
 
-bench: bench-go bench-python
+bench: bench-go bench-python ## Run Go and Python benchmarks
 
-bench-go:
+bench-go: ## Run Go benchmarks
 	$(GO) test -run='^$$' \
 	    -bench='$(BENCH_FILTER)' \
 	    -benchtime=$(BENCH_TIME) \
@@ -93,7 +96,7 @@ bench-go:
 	    -timeout=60m \
 	    ./...
 
-bench-python:
+bench-python: ## Run Python benchmarks
 	cd python && $(UV) run pytest tests/test_benchmark.py \
 	    --benchmark-only \
 	    --benchmark-columns=min,mean,stddev,rounds \
@@ -105,9 +108,9 @@ bench-python:
 #   Python: TestBenchmarkMaxThroughputConcurrent (all three × all worker counts)
 #   Override worker-count filter with:
 #     make bench-throughput BENCH_FILTER=BenchmarkMaxThroughput_ConcurrentAppendRaw
-bench-throughput: bench-throughput-go bench-throughput-python
+bench-throughput: bench-throughput-go bench-throughput-python ## Run concurrent throughput benchmarks
 
-bench-throughput-go:
+bench-throughput-go: ## Run Go concurrent throughput benchmarks
 	$(GO) test -run='^$$' \
 	    -bench='BenchmarkMaxThroughput_Concurrent' \
 	    -benchtime=$(BENCH_TIME) \
@@ -115,7 +118,7 @@ bench-throughput-go:
 	    -timeout=60m \
 	    ./...
 
-bench-throughput-python:
+bench-throughput-python: ## Run Python concurrent throughput benchmarks
 	cd python && $(UV) run pytest tests/test_benchmark.py \
 	    -k 'TestBenchmarkMaxThroughputConcurrent or TestBenchmarkMaxThroughputPool' \
 	    --benchmark-only \
@@ -128,7 +131,7 @@ bench-throughput-python:
 #   Subsequent runs: benchstat old.txt new.txt shows delta automatically.
 # bench-compare-pmr — same rotation + diff, but only for BenchmarkVsPMR_* into
 #   BENCH_OUT_PMR; called automatically by bench-compare and usable standalone.
-bench-compare: bench-compare-pmr
+bench-compare: bench-compare-pmr ## Run benchmarks and compare with previous results
 	@if [ -f $(BENCH_OUT) ]; then \
 	    cp $(BENCH_OUT) $(BENCH_OUT).old; \
 	    echo "Rotated previous Go results to $(BENCH_OUT).old"; \
@@ -164,7 +167,7 @@ bench-compare: bench-compare-pmr
 	    echo "Python results saved to $(BENCH_OUT_PYTHON) — run again to compare."; \
 	fi
 
-bench-compare-pmr:
+bench-compare-pmr: ## Run PMR comparison benchmarks and compare with previous results
 	@if [ -f $(BENCH_OUT_PMR) ]; then \
 	    cp $(BENCH_OUT_PMR) $(BENCH_OUT_PMR).old; \
 	    echo "Rotated previous PMR comparison results to $(BENCH_OUT_PMR).old"; \
@@ -188,7 +191,7 @@ bench-compare-pmr:
 # Requires DuckDB driver installed via `dbc install duckdb`.
 # If unavailable, benchmarks are skipped (not failed).
 
-bench-e2e:
+bench-e2e: ## Run end-to-end pipeline benchmarks
 	$(GO) test -run='^$$' \
 	    -bench='BenchmarkE2EPipeline_Concurrent' \
 	    -benchtime=$(BENCH_TIME) \
@@ -196,7 +199,7 @@ bench-e2e:
 	    -timeout=60m \
 	    ./...
 
-bench-compare-e2e:
+bench-compare-e2e: ## Run end-to-end benchmarks and compare with previous results
 	@if [ -f $(BENCH_OUT_E2E) ]; then \
 	    cp $(BENCH_OUT_E2E) $(BENCH_OUT_E2E).old; \
 	    echo "Rotated previous E2E pipeline results to $(BENCH_OUT_E2E).old"; \
@@ -217,7 +220,9 @@ bench-compare-e2e:
 
 # ── Clean ───────────────────────────────────────────────────────────────
 
-clean:
+clean: ## Remove built libraries and Python artifacts
 	$(MAKE) -C cbinding clean
 	rm -f python/pybufarrow/libbufarrow.so python/pybufarrow/libbufarrow.dylib
 	rm -rf python/dist python/build python/*.egg-info
+
+.DEFAULT_GOAL := help

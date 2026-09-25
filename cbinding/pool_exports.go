@@ -5,6 +5,17 @@ package main
 /*
 #include <stdlib.h>
 #include <stdint.h>
+
+#ifndef BUFARROW_META_VALUE_DEFINED
+#define BUFARROW_META_VALUE_DEFINED
+typedef struct {
+	uint8_t kind;
+	int64_t i64;
+	double f64;
+	char *ptr;
+	int32_t len;
+} BufarrowMetaValue;
+#endif
 */
 import "C"
 
@@ -164,12 +175,39 @@ func BufarrowPoolSubmit(
 	handle unsafe.Pointer,
 	data unsafe.Pointer,
 	dataLen C.int,
+	metaValues *C.BufarrowMetaValue,
+	nMeta C.int,
 ) C.int {
 	var p *cPool
 	defer func() { recoverPool(recover(), p) }()
 	p = getFromHandle[cPool](handle)
+	if nMeta < 0 {
+		p.setError(fmt.Errorf("bufarrow: n_meta must be >= 0, got %d", int(nMeta)))
+		return -1
+	}
 	buf := C.GoBytes(data, dataLen)
-	if err := p.submit(buf, nil); err != nil {
+	registered := p.clones[0].DenormMetaColumns()
+	if nMeta == 0 {
+		if err := p.submit(buf, nil); err != nil {
+			p.setError(err)
+			return -1
+		}
+		return 0
+	}
+	if len(registered) == 0 {
+		placeholder := make([]bufarrowlib.DenormMetaValue, int(nMeta))
+		if err := p.submit(buf, nil, placeholder...); err != nil {
+			p.setError(err)
+			return -1
+		}
+		return 0
+	}
+	meta, err := cMetaValuesToGo(p.clones[0], metaValues, nMeta)
+	if err != nil {
+		p.setError(err)
+		return -1
+	}
+	if err := p.submit(buf, nil, meta...); err != nil {
 		p.setError(err)
 		return -1
 	}
@@ -183,13 +221,40 @@ func BufarrowPoolSubmitMerged(
 	baseLen C.int,
 	customData unsafe.Pointer,
 	customLen C.int,
+	metaValues *C.BufarrowMetaValue,
+	nMeta C.int,
 ) C.int {
 	var p *cPool
 	defer func() { recoverPool(recover(), p) }()
 	p = getFromHandle[cPool](handle)
+	if nMeta < 0 {
+		p.setError(fmt.Errorf("bufarrow: n_meta must be >= 0, got %d", int(nMeta)))
+		return -1
+	}
 	base := C.GoBytes(baseData, baseLen)
 	custom := C.GoBytes(customData, customLen)
-	if err := p.submit(base, custom); err != nil {
+	registered := p.clones[0].DenormMetaColumns()
+	if nMeta == 0 {
+		if err := p.submit(base, custom); err != nil {
+			p.setError(err)
+			return -1
+		}
+		return 0
+	}
+	if len(registered) == 0 {
+		placeholder := make([]bufarrowlib.DenormMetaValue, int(nMeta))
+		if err := p.submit(base, custom, placeholder...); err != nil {
+			p.setError(err)
+			return -1
+		}
+		return 0
+	}
+	meta, err := cMetaValuesToGo(p.clones[0], metaValues, nMeta)
+	if err != nil {
+		p.setError(err)
+		return -1
+	}
+	if err := p.submit(base, custom, meta...); err != nil {
 		p.setError(err)
 		return -1
 	}
@@ -247,8 +312,9 @@ func BufarrowPoolFree(handle unsafe.Pointer) {
 
 // ── helper ───────────────────────────────────────────────────────────────
 
-// hasDenorm returns true if the opts JSON payload specifies denorm_columns,
-// indicating the pool should use the denorm append/flush path.
+// hasDenorm returns true if opts JSON contains denorm_columns.
+//
+// denorm_metadata_columns alone does not trigger denorm mode.
 func hasDenorm(optsStr string) bool {
 	if optsStr == "" {
 		return false

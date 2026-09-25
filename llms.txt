@@ -34,6 +34,8 @@ Recursive well-known types (`google.protobuf.Struct` / `Value` / `ListValue`, ot
 - `Transcoder` — central type; not goroutine-safe; use `Clone` per goroutine
 - `HyperType` — goroutine-safe shared compiled parser (`hyperpb`); enables 2–4× faster raw-bytes parsing with online PGO
 - `DenormConfig` / `ColumnDef` — YAML config structs for `NewTranscoderFromConfigFile`
+- `MetaCol` / `Meta` — name-keyed per-message metadata for denorm columns
+- `DenormMetadataColumn` — declares nullable metadata columns after plan columns
 
 ## Performance (i7-13700H, realistic BidRequest corpus)
 
@@ -69,11 +71,20 @@ tc, _ := ba.New(md, memory.DefaultAllocator,
 defer tc.Release()
 
 for _, raw := range messages {
-    tc.AppendDenormRaw(raw)
+    rows, err := tc.AppendDenormRaw(raw)
+    _ = rows // fan-out row count for this message
+    _ = err
 }
 rec := tc.NewDenormalizerRecordBatch()
 defer rec.Release()
 ```
+
+Denorm append methods return `(rowCount, error)`. Optional source metadata can
+be declared with `WithDenormMetadataColumns` and supplied by name with
+`Meta(col, value)`; each value is repeated across that message's fan-out rows,
+and omitted values become nulls. Metadata columns are Go-option only and
+require `WithDenormalizerPlan`. Pool submission supports metadata but is
+asynchronous and does not return a row count.
 
 ## Proto Utility Functions
 

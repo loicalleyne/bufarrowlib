@@ -5,13 +5,14 @@ from __future__ import annotations
 import ctypes
 import json
 from functools import cached_property
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pyarrow as pa
 
 from ._ffi import (
     ArrowArray,
     ArrowSchema,
+    BufarrowMetaValue,
     BufarrowError,
     _check,
     _check_global,
@@ -19,6 +20,7 @@ from ._ffi import (
     _get_lib,
     _make_import_paths,
 )
+from ._meta import _to_meta_value
 
 if TYPE_CHECKING:
     from .hypertype import HyperType
@@ -35,6 +37,7 @@ class Transcoder:
     def __init__(self, handle: ctypes.c_void_p) -> None:
         self._handle = handle
         self._closed = False
+        self._meta_col_order: list[str] = []
 
     # ── Constructors ────────────────────────────────────────────────────
 
@@ -49,6 +52,7 @@ class Transcoder:
         custom_message: str | None = None,
         custom_import_paths: list[str] | None = None,
         denorm_columns: list[str] | None = None,
+        denorm_metadata_columns: list[tuple[str, str]] | None = None,
         hyper_type: HyperType | None = None,
         opts: dict | None = None,
     ) -> Transcoder:
@@ -90,6 +94,11 @@ class Transcoder:
             opts_payload["custom_import_paths"] = custom_import_paths
         if denorm_columns:
             opts_payload["denorm_columns"] = denorm_columns
+        if denorm_metadata_columns:
+            opts_payload["denorm_metadata_columns"] = [
+                {"name": name, "type": typ}
+                for name, typ in denorm_metadata_columns
+            ]
 
         opts_json = _encode(json.dumps(opts_payload)) if opts_payload else None
 
@@ -115,7 +124,10 @@ class Transcoder:
 
         if status != 0:
             _check_global(status)
-        return cls(handle)
+        tc = cls(handle)
+        if denorm_metadata_columns:
+            tc._meta_col_order = [name for name, _ in denorm_metadata_columns]
+        return tc
 
     @classmethod
     def from_config(cls, config_path: str) -> Transcoder:
@@ -165,21 +177,55 @@ class Transcoder:
         )
         _check(status, self._handle)
 
-    def append_denorm(self, data: bytes) -> None:
-        """Append serialized protobuf bytes to the denormalizer."""
-        self._ensure_open()
-        lib = _get_lib()
-        status = lib.BufarrowAppendDenormRaw(self._handle, data, len(data))
-        _check(status, self._handle)
+    def append_denorm(self, data: bytes, **meta_values: Any) -> int:
+        """Append serialized protobuf bytes to the denormalizer.
 
-    def append_denorm_merged(self, base: bytes, custom: bytes) -> None:
-        """Append merged base + custom bytes to the denormalizer."""
+        Returns the number of denormalized rows produced by this message.
+        Timestamp metadata values must be passed as int epoch values in the
+        declared timestamp unit.
+        """
         self._ensure_open()
         lib = _get_lib()
-        status = lib.BufarrowAppendDenormRawMerged(
-            self._handle, base, len(base), custom, len(custom)
+        meta_array, n_meta, keepalive = self._build_meta_values(meta_values)
+        out_rows = ctypes.c_int()
+        status = lib.BufarrowAppendDenormRaw(
+            self._handle,
+            data,
+            len(data),
+            meta_array,
+            n_meta,
+            ctypes.byref(out_rows),
         )
+        _ = keepalive
         _check(status, self._handle)
+        return int(out_rows.value)
+
+    def append_denorm_merged(
+        self, base: bytes, custom: bytes, **meta_values: Any
+    ) -> int:
+        """Append merged base + custom bytes to the denormalizer.
+
+        Returns the number of denormalized rows produced by this message.
+        Timestamp metadata values must be passed as int epoch values in the
+        declared timestamp unit.
+        """
+        self._ensure_open()
+        lib = _get_lib()
+        meta_array, n_meta, keepalive = self._build_meta_values(meta_values)
+        out_rows = ctypes.c_int()
+        status = lib.BufarrowAppendDenormRawMerged(
+            self._handle,
+            base,
+            len(base),
+            custom,
+            len(custom),
+            meta_array,
+            n_meta,
+            ctypes.byref(out_rows),
+        )
+        _ = keepalive
+        _check(status, self._handle)
+        return int(out_rows.value)
 
     # ── Flush ───────────────────────────────────────────────────────────
 
@@ -315,6 +361,29 @@ class Transcoder:
     def _ensure_open(self) -> None:
         if self._closed:
             raise BufarrowError("Transcoder has been closed")
+
+    def _build_meta_values(
+        self, meta_values: dict[str, Any]
+    ) -> tuple[ctypes.Array[BufarrowMetaValue] | None, int, list[ctypes.Array[ctypes.c_char]]]:
+        if not self._meta_col_order:
+            if meta_values:
+                raise BufarrowError("metadata columns are not configured for this transcoder")
+            return None, 0, []
+
+        unknown = [k for k in meta_values if k not in self._meta_col_order]
+        if unknown:
+            raise BufarrowError(f"unknown metadata column(s): {', '.join(sorted(unknown))}")
+
+        n = len(self._meta_col_order)
+        arr_type = BufarrowMetaValue * n
+        arr = arr_type()
+        keepalive: list[ctypes.Array[ctypes.c_char]] = []
+        for i, key in enumerate(self._meta_col_order):
+            mv, raw = _to_meta_value(meta_values.get(key))
+            arr[i] = mv
+            if raw is not None:
+                keepalive.append(raw)
+        return arr, n, keepalive
 
     def __enter__(self) -> Transcoder:
         return self

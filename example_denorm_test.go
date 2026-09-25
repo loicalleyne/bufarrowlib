@@ -65,7 +65,8 @@ func buildExampleDescriptors() (orderMD, itemMD protoreflect.MessageDescriptor) 
 func newOrder(orderMD, itemMD protoreflect.MessageDescriptor, name string, items []struct {
 	id    string
 	price float64
-}, tags []string, seq int64) proto.Message {
+}, tags []string, seq int64,
+) proto.Message {
 	msg := dynamicpb.NewMessage(orderMD)
 	msg.Set(orderMD.Fields().ByName("name"), protoreflect.ValueOfString(name))
 	msg.Set(orderMD.Fields().ByName("seq"), protoreflect.ValueOfInt64(seq))
@@ -107,7 +108,7 @@ func ExampleTranscoder_AppendDenorm() {
 		}{{"A", 1.50}, {"B", 2.75}},
 		nil, 1,
 	)
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		log.Fatal(err)
 	}
 
@@ -150,7 +151,7 @@ func ExampleTranscoder_AppendDenorm_crossJoin() {
 		}{{"A", 1.0}, {"B", 2.0}},
 		[]string{"x", "y", "z"}, 1,
 	)
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		log.Fatal(err)
 	}
 
@@ -192,7 +193,7 @@ func ExampleTranscoder_AppendDenorm_leftJoin() {
 
 	// Zero items, 2 tags → items group produces 1 null row → 1 × 2 = 2 rows
 	msg := newOrder(orderMD, itemMD, "order-1", nil, []string{"x", "y"}, 1)
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		log.Fatal(err)
 	}
 

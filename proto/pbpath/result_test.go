@@ -295,9 +295,9 @@ func TestResultUint64s(t *testing.T) {
 	vals := []Value{
 		Scalar(protoreflect.ValueOfUint64(100)),
 		Scalar(protoreflect.ValueOfUint32(50)),
-		ScalarInt64(42),  // positive int64 should be included
-		ScalarInt64(-1),  // negative should be skipped
-		ListVal(nil),     // non-scalar skipped
+		ScalarInt64(42),   // positive int64 should be included
+		ScalarInt64(-1),   // negative should be skipped
+		ListVal(nil),      // non-scalar skipped
 		ScalarString("x"), // non-numeric skipped
 	}
 	r = NewResult(vals)

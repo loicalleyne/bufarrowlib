@@ -447,7 +447,7 @@ func TestAppendMessage_LogsData(t *testing.T) {
 func match(t testing.TB, path string, value string, write ...struct{}) {
 	t.Helper()
 	if len(write) > 0 {
-		os.WriteFile(path, []byte(value), 0600)
+		os.WriteFile(path, []byte(value), 0o600)
 	}
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -462,7 +462,7 @@ func match(t testing.TB, path string, value string, write ...struct{}) {
 func matchBytes(t testing.TB, path string, value []byte, write ...struct{}) {
 	t.Helper()
 	if len(write) > 0 {
-		os.WriteFile(path, []byte(value), 0600)
+		os.WriteFile(path, []byte(value), 0o600)
 	}
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -483,7 +483,7 @@ func matchJSON(t testing.TB, path string, value string, write ...struct{}) {
 		t.Fatalf("failed to compact got JSON: %v", err)
 	}
 	if len(write) > 0 {
-		os.WriteFile(path, cv.Bytes(), 0600)
+		os.WriteFile(path, cv.Bytes(), 0o600)
 	}
 	b, err := os.ReadFile(path)
 	if err != nil {
