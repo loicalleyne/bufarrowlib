@@ -115,6 +115,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set package version from release tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          RELEASE_VERSION="${RELEASE_TAG#v}"
+          python - "$RELEASE_VERSION" <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          version = sys.argv[1]
+          path = Path("python/pyproject.toml")
+          text = path.read_text()
+          updated, count = re.subn(
+              r'(?m)^version = "[^"]+"$',
+              f'version = "{version}"',
+              text,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit("could not update project version")
+          path.write_text(updated)
+          print(f"Building pybufarrow {version}")
+          PY
+
       - uses: actions/setup-go@v5
         if: startsWith(matrix.os, 'macos')
         with:
