@@ -41,45 +41,45 @@ var (
 type tokenKind int
 
 const (
-	ident    tokenKind = iota // identifier: field names, root type names, "true"/"false"
-	intlit                    // integer literal: decimal, octal, or hex
-	strlit                    // string literal: single- or double-quoted
-	dot                       // '.'
-	oparen                    // '('
-	cparen                    // ')'
-	obrack                    // '['
-	cbrack                    // ']'
-	colon                     // ':'
-	asterisk                  // '*'
-	pipe                      // '|'
-	question                  // '?'  (used after '[' to start a filter predicate)
-	eqeq                     // '=='
-	bangeq                   // '!='
-	langle                   // '<'
-	langleeq                 // '<='
-	rangle                   // '>'
-	rangleeq                 // '>='
-	comma                    // ','
-	bang                     // '!'  (logical not, when not followed by '=')
-	ampamp                   // '&&'
-	pipepipe                 // '||' (logical or; distinct from pipe '|')
-	floatlit                 // floating-point literal (e.g. 3.14, -0.5)
-	semicolon                // ';'  (argument separator in function calls)
-	at                       // '@'  (format string prefix, e.g. @base64)
-	dollar                   // '$'  (variable prefix)
-	plus                     // '+'
-	minus                    // '-'  (also unary negation)
-	slash                    // '/'
-	percent                  // '%'
-	slashslash               // '//' (alternative operator)
-	questionquestion         // '??' (optional operator / try)
-	obrace                   // '{'
-	cbrace                   // '}'
-	strbegin                 // start of interpolated string: text before first \(
-	strmid                   // middle segment of interpolated string: text between ) and \(
-	strend                   // end of interpolated string: text between ) and closing "
-	illegal                  // unrecognized or malformed token
-	eof                      // end of input
+	ident            tokenKind = iota // identifier: field names, root type names, "true"/"false"
+	intlit                            // integer literal: decimal, octal, or hex
+	strlit                            // string literal: single- or double-quoted
+	dot                               // '.'
+	oparen                            // '('
+	cparen                            // ')'
+	obrack                            // '['
+	cbrack                            // ']'
+	colon                             // ':'
+	asterisk                          // '*'
+	pipe                              // '|'
+	question                          // '?'  (used after '[' to start a filter predicate)
+	eqeq                              // '=='
+	bangeq                            // '!='
+	langle                            // '<'
+	langleeq                          // '<='
+	rangle                            // '>'
+	rangleeq                          // '>='
+	comma                             // ','
+	bang                              // '!'  (logical not, when not followed by '=')
+	ampamp                            // '&&'
+	pipepipe                          // '||' (logical or; distinct from pipe '|')
+	floatlit                          // floating-point literal (e.g. 3.14, -0.5)
+	semicolon                         // ';'  (argument separator in function calls)
+	at                                // '@'  (format string prefix, e.g. @base64)
+	dollar                            // '$'  (variable prefix)
+	plus                              // '+'
+	minus                             // '-'  (also unary negation)
+	slash                             // '/'
+	percent                           // '%'
+	slashslash                        // '//' (alternative operator)
+	questionquestion                  // '??' (optional operator / try)
+	obrace                            // '{'
+	cbrace                            // '}'
+	strbegin                          // start of interpolated string: text before first \(
+	strmid                            // middle segment of interpolated string: text between ) and \(
+	strend                            // end of interpolated string: text between ) and closing "
+	illegal                           // unrecognized or malformed token
+	eof                               // end of input
 )
 
 type token struct {

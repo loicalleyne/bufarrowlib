@@ -512,7 +512,7 @@ func TestParsePath(t *testing.T) {
 			md:   md,
 			path: "repeats[:2]",
 			want: "(testprotopath.Test).repeats[:2]",
-		},		// ---- Python-style stride / step ----
+		}, // ---- Python-style stride / step ----
 		{
 			name: "double colon wildcard",
 			md:   md,
@@ -584,7 +584,8 @@ func TestParsePath(t *testing.T) {
 			md:   md,
 			path: "int32repeats[::2]",
 			want: "(testprotopath.Test).int32repeats[::2]",
-		},	}
+		},
+	}
 	for _, tc := range tcs {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := ParsePath(tc.md, tc.path)

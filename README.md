@@ -150,9 +150,9 @@ Two modes, one `Transcoder`. Use them individually or together.
 | `Append(msg)` | `proto.Message` | baseline | Full-fidelity |
 | `AppendRaw(b)` | `[]byte` | 110–151 k/s | Requires `HyperType` |
 | `AppendRawMerged(base, custom)` | `[]byte, []byte` | 106 k/s | Field-safe wire merge |
-| `AppendDenorm(msg)` | `proto.Message` | 73–535 k/s | Plan-based; fan-out dependent |
-| `AppendDenormRaw(b)` | `[]byte` | **121–296 k/s** | Fastest; + `HyperType` recommended |
-| `AppendDenormRawMerged(base, custom)` | `[]byte, []byte` | 204 k/s | Merge + denorm in one pass |
+| `AppendDenorm(msg, meta...)` | `proto.Message` | 73–535 k/s | Returns output row count; metadata optional |
+| `AppendDenormRaw(b, meta...)` | `[]byte` | **121–296 k/s** | Returns output row count; `HyperType` recommended |
+| `AppendDenormRawMerged(base, custom, meta...)` | `[]byte, []byte` | 204 k/s | Returns output row count; merge + denorm |
 
 > Throughputs are single-threaded, realistic BidRequest corpus, i7-13700H. Scale linearly with `Clone` workers — see [Performance](#performance).
 
@@ -201,6 +201,41 @@ tc, _ := ba.New(md, mem,
 | `repeated[::2]` | step-only slice |
 
 Columns sharing the same wildcard steps are in the same **fan-out group** (lockstep). Different groups are **cross-joined**: `totalRows = ∏ groupSizes`. Empty groups emit one null row (left-join semantics).
+
+### Per-message metadata columns
+
+Attach source metadata such as a Kafka partition, offset, or event timestamp to
+every row produced by one denormalized message. Metadata columns are declared
+in Go and appear after the plan-derived columns. Values are keyed by `MetaCol`
+and repeated across the message's fan-out rows:
+
+```go
+const (
+  kafkaPartition ba.MetaCol = "kafka_partition"
+  kafkaOffset    ba.MetaCol = "kafka_offset"
+)
+
+tc, _ := ba.New(md, memory.DefaultAllocator,
+  ba.WithDenormalizerPlan(pbpath.PlanPath("items[*].id")),
+  ba.WithDenormMetadataColumns(
+    ba.DenormMetadataColumn{Name: kafkaPartition, Type: arrow.PrimitiveTypes.Int32},
+    ba.DenormMetadataColumn{Name: kafkaOffset, Type: arrow.PrimitiveTypes.Int64},
+  ),
+)
+
+rows, err := tc.AppendDenorm(msg,
+  ba.Meta(kafkaPartition, int32(partition)),
+  ba.Meta(kafkaOffset, offset),
+)
+_ = rows // number of output rows produced by this message
+_ = err
+```
+
+`AppendDenorm`, `AppendDenormRaw`, and `AppendDenormRawMerged` return
+`(rowCount, error)`. Metadata omitted for a message is appended as null for
+that column. Metadata columns are configured through the Go option only; YAML
+configuration does not declare them. Pool submission accepts the same metadata
+values but remains asynchronous and does not return a row count.
 
 ### Expression engine
 

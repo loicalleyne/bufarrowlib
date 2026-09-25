@@ -673,16 +673,16 @@ func TestPruneEmptyMessages(t *testing.T) {
 
 	t.Run("pruned_descriptor_is_usable", func(t *testing.T) {
 		// Sanity: the pruned descriptor can be used to look up surviving fields
-			// and the parent file preserves the source package and has the expected
-			// synthetic path.
+		// and the parent file preserves the source package and has the expected
+		// synthetic path.
 		md := get("HasEmptyField")
 		pruned, err := PruneEmptyMessages(md)
 		if err != nil {
 			t.Fatalf("PruneEmptyMessages() error = %v", err)
 		}
-			if pruned.ParentFile().Package() != md.ParentFile().Package() {
-				t.Errorf("expected package %q, got %q", md.ParentFile().Package(), pruned.ParentFile().Package())
-			}
+		if pruned.ParentFile().Package() != md.ParentFile().Package() {
+			t.Errorf("expected package %q, got %q", md.ParentFile().Package(), pruned.ParentFile().Package())
+		}
 		parentPath := string(pruned.ParentFile().Path())
 		if parentPath != "prune_test_pruned.proto" {
 			t.Errorf("expected synthetic parent path prune_test_pruned.proto, got %s", parentPath)
@@ -716,5 +716,4 @@ func TestPruneEmptyMessages(t *testing.T) {
 			t.Error("expected ParentTopLevel.kept to survive")
 		}
 	})
-
 }

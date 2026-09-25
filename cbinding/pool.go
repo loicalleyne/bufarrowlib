@@ -18,36 +18,37 @@ import (
 type poolMode int
 
 const (
-	poolModeRaw         poolMode = iota // AppendRaw + NewRecordBatch
-	poolModeDenorm                      // AppendDenormRaw + NewDenormalizerRecordBatch
-	poolModeMerged                      // AppendRawMerged + NewRecordBatch
-	poolModeDenormMerged                // AppendDenormRawMerged + NewDenormalizerRecordBatch
+	poolModeRaw          poolMode = iota // AppendRaw + NewRecordBatch
+	poolModeDenorm                       // AppendDenormRaw + NewDenormalizerRecordBatch
+	poolModeMerged                       // AppendRawMerged + NewRecordBatch
+	poolModeDenormMerged                 // AppendDenormRawMerged + NewDenormalizerRecordBatch
 )
 
 // poolJob is the message envelope sent through the job channel.
 type poolJob struct {
 	base   []byte // always set
 	custom []byte // non-nil only for merged variants
+	meta   []bufarrowlib.DenormMetaValue
 }
 
 // cPool is the internal state behind a BufarrowPool CGo handle.
 // Python submits messages to the bounded job channel; Go goroutines parse
 // them with independent Transcoder clones; PoolFlush drains and merges.
 type cPool struct {
-	workers  int
-	mode     poolMode
-	jobs     chan poolJob       // bounded; producers block when full (backpressure)
-	clones   []*bufarrowlib.Transcoder
-	allocs   []*mallocator.Mallocator
-	mu       sync.Mutex
-	lastErr  string
-	pending  atomic.Int64 // approximate count of messages in-flight
+	workers int
+	mode    poolMode
+	jobs    chan poolJob // bounded; producers block when full (backpressure)
+	clones  []*bufarrowlib.Transcoder
+	allocs  []*mallocator.Mallocator
+	mu      sync.Mutex
+	lastErr string
+	pending atomic.Int64 // approximate count of messages in-flight
 
 	// fields managed by the worker lifecycle (protected by mu)
-	results  chan arrow.RecordBatch
-	done     []chan struct{}
-	wg       sync.WaitGroup
-	running  bool
+	results chan arrow.RecordBatch
+	done    []chan struct{}
+	wg      sync.WaitGroup
+	running bool
 }
 
 // newCPool allocates a cPool and starts the worker goroutines.
@@ -117,13 +118,13 @@ func (p *cPool) workerLoop(tc *bufarrowlib.Transcoder, done <-chan struct{}) {
 		var err error
 		if j.custom != nil {
 			if isDenorm {
-				err = tc.AppendDenormRawMerged(j.base, j.custom)
+				_, err = tc.AppendDenormRawMerged(j.base, j.custom, j.meta...)
 			} else {
 				err = tc.AppendRawMerged(j.base, j.custom)
 			}
 		} else {
 			if isDenorm {
-				err = tc.AppendDenormRaw(j.base)
+				_, err = tc.AppendDenormRaw(j.base, j.meta...)
 			} else {
 				err = tc.AppendRaw(j.base)
 			}
@@ -167,15 +168,18 @@ func (p *cPool) workerLoop(tc *bufarrowlib.Transcoder, done <-chan struct{}) {
 }
 
 // submit enqueues a job. Blocks when the channel is full (backpressure).
-func (p *cPool) submit(base, custom []byte) error {
+func (p *cPool) submit(base, custom []byte, meta ...bufarrowlib.DenormMetaValue) error {
 	p.mu.Lock()
 	if !p.running {
 		p.mu.Unlock()
 		return fmt.Errorf("bufarrow pool: submit after flush with no restart")
 	}
 	p.mu.Unlock()
+	if len(meta) > 0 && p.mode != poolModeDenorm && p.mode != poolModeDenormMerged {
+		return bufarrowlib.ErrDenormMetadataOnNonDenormPool
+	}
 	p.pending.Add(1)
-	p.jobs <- poolJob{base: base, custom: custom}
+	p.jobs <- poolJob{base: base, custom: custom, meta: meta}
 	return nil
 }
 

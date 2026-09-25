@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import ctypes
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pyarrow as pa
 
 from ._ffi import (
     ArrowArray,
     ArrowSchema,
+    BufarrowMetaValue,
     BufarrowError,
     _check_global,
     _encode,
@@ -18,6 +19,7 @@ from ._ffi import (
     _make_import_paths,
     _read_c_string,
 )
+from ._meta import _to_meta_value
 
 if TYPE_CHECKING:
     from .hypertype import HyperType
@@ -67,6 +69,7 @@ class Pool:
     def __init__(self, handle: ctypes.c_void_p) -> None:
         self._handle = handle
         self._closed = False
+        self._meta_col_order: list[str] = []
 
     # ── Constructors ────────────────────────────────────────────────────
 
@@ -84,6 +87,7 @@ class Pool:
         custom_message: str | None = None,
         custom_import_paths: list[str] | None = None,
         denorm_columns: list[str] | None = None,
+        denorm_metadata_columns: list[tuple[str, str]] | None = None,
         opts: dict | None = None,
     ) -> Pool:
         """Create a Pool from a .proto file.
@@ -128,6 +132,11 @@ class Pool:
             opts_payload["custom_import_paths"] = custom_import_paths
         if denorm_columns:
             opts_payload["denorm_columns"] = denorm_columns
+        if denorm_metadata_columns:
+            opts_payload["denorm_metadata_columns"] = [
+                {"name": name, "type": typ}
+                for name, typ in denorm_metadata_columns
+            ]
 
         opts_json = _encode(json.dumps(opts_payload)) if opts_payload else None
 
@@ -157,11 +166,14 @@ class Pool:
 
         if status != 0:
             _check_global(status)
-        return cls(handle)
+        pool = cls(handle)
+        if denorm_metadata_columns:
+            pool._meta_col_order = [name for name, _ in denorm_metadata_columns]
+        return pool
 
     # ── Ingestion ───────────────────────────────────────────────────────
 
-    def submit(self, data: bytes) -> None:
+    def submit(self, data: bytes, **meta_values: Any) -> None:
         """Enqueue one serialized proto message.
 
         Copies the bytes into Go-managed memory before returning; the
@@ -177,7 +189,15 @@ class Pool:
         """
         self._ensure_open()
         lib = _get_lib()
-        status = lib.BufarrowPoolSubmit(self._handle, data, len(data))
+        meta_array, n_meta, keepalive = self._build_meta_values(meta_values)
+        status = lib.BufarrowPoolSubmit(
+            self._handle,
+            data,
+            len(data),
+            meta_array,
+            n_meta,
+        )
+        _ = keepalive
         if status != 0:
             ptr = lib.BufarrowPoolLastError(self._handle)
             msg = _read_c_string(ptr) or "pool submit error"
@@ -185,7 +205,7 @@ class Pool:
                 lib.BufarrowFreeString(ptr)
             raise BufarrowError(msg)
 
-    def submit_merged(self, base: bytes, custom: bytes) -> None:
+    def submit_merged(self, base: bytes, custom: bytes, **meta_values: Any) -> None:
         """Enqueue one base+custom byte pair (merged ingestion path).
 
         Both buffers are copied before return; the caller may free them
@@ -200,9 +220,17 @@ class Pool:
         """
         self._ensure_open()
         lib = _get_lib()
+        meta_array, n_meta, keepalive = self._build_meta_values(meta_values)
         status = lib.BufarrowPoolSubmitMerged(
-            self._handle, base, len(base), custom, len(custom)
+            self._handle,
+            base,
+            len(base),
+            custom,
+            len(custom),
+            meta_array,
+            n_meta,
         )
+        _ = keepalive
         if status != 0:
             ptr = lib.BufarrowPoolLastError(self._handle)
             msg = _read_c_string(ptr) or "pool submit merged error"
@@ -261,6 +289,29 @@ class Pool:
     def _ensure_open(self) -> None:
         if self._closed:
             raise BufarrowError("Pool is closed")
+
+    def _build_meta_values(
+        self, meta_values: dict[str, Any]
+    ) -> tuple[ctypes.Array[BufarrowMetaValue] | None, int, list[ctypes.Array[ctypes.c_char]]]:
+        if not self._meta_col_order:
+            if meta_values:
+                raise BufarrowError("metadata columns are not configured for this pool")
+            return None, 0, []
+
+        unknown = [k for k in meta_values if k not in self._meta_col_order]
+        if unknown:
+            raise BufarrowError(f"unknown metadata column(s): {', '.join(sorted(unknown))}")
+
+        n = len(self._meta_col_order)
+        arr_type = BufarrowMetaValue * n
+        arr = arr_type()
+        keepalive: list[ctypes.Array[ctypes.c_char]] = []
+        for i, key in enumerate(self._meta_col_order):
+            mv, raw = _to_meta_value(meta_values.get(key))
+            arr[i] = mv
+            if raw is not None:
+                keepalive.append(raw)
+        return arr, n, keepalive
 
     def __enter__(self) -> Pool:
         return self

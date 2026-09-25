@@ -68,8 +68,8 @@ func NewHyperType(md protoreflect.MessageDescriptor, opts ...HyperTypeOption) *H
 	mt := hyperpb.CompileMessageDescriptor(md)
 
 	ht := &HyperType{
-		threshold: cfg.threshold,
-		rate:      cfg.rate,
+		threshold:   cfg.threshold,
+		rate:        cfg.rate,
 		msgFullName: string(md.FullName()),
 		descHash:    descriptorFingerprint(md),
 	}

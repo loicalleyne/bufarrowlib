@@ -443,7 +443,7 @@ func BenchmarkAppendDenorm(b *testing.B) {
 			b.ResetTimer()
 			for b.Loop() {
 				for _, m := range msgs {
-					tc.AppendDenorm(m)
+					_, _ = tc.AppendDenorm(m)
 				}
 				r := tc.NewDenormalizerRecordBatch()
 				r.Release()
@@ -457,6 +457,42 @@ func BenchmarkAppendDenorm(b *testing.B) {
 			b.ReportMetric(float64(msAfter.TotalAlloc-msBefore.TotalAlloc)/totalMsgs, "B/msg")
 			b.ReportMetric(float64(msAfter.Mallocs-msBefore.Mallocs)/totalMsgs, "allocs/msg")
 		})
+	}
+}
+
+func BenchmarkAppendDenorm_WithMetadata(b *testing.B) {
+	const N = 200
+	msgs, orderMD := generateDenormOrders(b, N, 4, 2)
+	tc, err := New(orderMD, memory.DefaultAllocator,
+		WithDenormalizerPlan(
+			pbpath.PlanPath("name", pbpath.Alias("order_name")),
+			pbpath.PlanPath("items[*].id", pbpath.Alias("item_id")),
+		),
+		WithDenormMetadataColumns(
+			DenormMetadataColumn{Name: MetaCol("kafka_partition"), Type: arrow.PrimitiveTypes.Int32},
+			DenormMetadataColumn{Name: MetaCol("kafka_offset"), Type: arrow.PrimitiveTypes.Int64},
+		),
+	)
+	if err != nil {
+		b.Fatalf("New: %v", err)
+	}
+	defer tc.Release()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for b.Loop() {
+		for i, m := range msgs {
+			if _, err := tc.AppendDenorm(
+				m,
+				Meta(MetaCol("kafka_partition"), int32(i%8)),
+				Meta(MetaCol("kafka_offset"), int64(i)),
+			); err != nil {
+				b.Fatal(err)
+			}
+		}
+		rec := tc.NewDenormalizerRecordBatch()
+		rec.Release()
 	}
 }
 
@@ -864,7 +900,7 @@ func BenchmarkEndToEnd_DenormPipeline(b *testing.B) {
 	b.ResetTimer()
 	for b.Loop() {
 		for _, m := range msgs {
-			tc.AppendDenorm(m)
+			_, _ = tc.AppendDenorm(m)
 		}
 		rec := tc.NewDenormalizerRecordBatch()
 		_ = rec.NumRows()
@@ -1226,7 +1262,7 @@ func BenchmarkAppendBidRequest_AppendDenorm(b *testing.B) {
 			if err := proto.Unmarshal(raw, msg); err != nil {
 				b.Fatal(err)
 			}
-			if err := tc.AppendDenorm(msg); err != nil {
+			if _, err := tc.AppendDenorm(msg); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -1318,7 +1354,7 @@ func BenchmarkAppendBidRequest_HyperpbRaw(b *testing.B) {
 
 			for b.Loop() {
 				for _, raw := range corpus {
-					if err := tc.AppendDenormRaw(raw); err != nil {
+					if _, err := tc.AppendDenormRaw(raw); err != nil {
 						b.Fatal(err)
 					}
 				}
@@ -1394,7 +1430,7 @@ func BenchmarkAppendBidRequest_HyperpbPGO(b *testing.B) {
 
 	// Profile the entire corpus with 100% sampling rate.
 	for _, raw := range corpus {
-		if err := tc.AppendDenormRaw(raw); err != nil {
+		if _, err := tc.AppendDenormRaw(raw); err != nil {
 			b.Fatalf("profiling pass: %v", err)
 		}
 	}
@@ -1419,7 +1455,7 @@ func BenchmarkAppendBidRequest_HyperpbPGO(b *testing.B) {
 
 	for b.Loop() {
 		for _, raw := range corpus {
-			if err := tc.AppendDenormRaw(raw); err != nil {
+			if _, err := tc.AppendDenormRaw(raw); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -1846,7 +1882,7 @@ func BenchmarkAppendDenormRawMerged(b *testing.B) {
 
 	for b.Loop() {
 		for _, raw := range corpus {
-			if err := tc.AppendDenormRawMerged(raw, customBytes); err != nil {
+			if _, err := tc.AppendDenormRawMerged(raw, customBytes); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -1982,7 +2018,7 @@ func BenchmarkAppendDenormRaw_Fallback(b *testing.B) {
 
 	for b.Loop() {
 		for _, raw := range corpus {
-			if err := tc.AppendDenormRaw(raw); err != nil {
+			if _, err := tc.AppendDenormRaw(raw); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -2074,7 +2110,7 @@ func BenchmarkConcurrent_CloneAppendDenormRaw(b *testing.B) {
 			go func(tc *Transcoder, shard [][]byte) {
 				defer wg.Done()
 				for _, raw := range shard {
-					if err := tc.AppendDenormRaw(raw); err != nil {
+					if _, err := tc.AppendDenormRaw(raw); err != nil {
 						b.Error(err)
 						return
 					}
@@ -2607,7 +2643,7 @@ func BenchmarkMaxThroughput_ConcurrentAppendDenormRaw(b *testing.B) {
 	defer base.Release()
 
 	for _, raw := range corpus {
-		if err := base.AppendDenormRaw(raw); err != nil {
+		if _, err := base.AppendDenormRaw(raw); err != nil {
 			b.Fatalf("PGO warm-up: %v", err)
 		}
 	}
@@ -2656,7 +2692,7 @@ func BenchmarkMaxThroughput_ConcurrentAppendDenormRaw(b *testing.B) {
 					go func(tc *Transcoder, shard [][]byte) {
 						defer wg.Done()
 						for _, raw := range shard {
-							if err := tc.AppendDenormRaw(raw); err != nil {
+							if _, err := tc.AppendDenormRaw(raw); err != nil {
 								b.Error(err)
 								return
 							}

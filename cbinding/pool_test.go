@@ -4,12 +4,14 @@ package main
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 	"path/filepath"
 	"runtime"
 	"testing"
 
+	"github.com/apache/arrow-go/v18/arrow"
 	"github.com/apache/arrow-go/v18/arrow/memory/mallocator"
 	bufarrowlib "github.com/loicalleyne/bufarrowlib"
 	"github.com/loicalleyne/bufarrowlib/proto/pbpath"
@@ -414,6 +416,24 @@ func TestPool_SubmitAfterRelease_ReturnsError(t *testing.T) {
 	}
 }
 
+func TestPool_SubmitMetadataOnNonDenormPool_ReturnsError(t *testing.T) {
+	base := newPoolBase(t)
+	pool, err := newCPool(base, 1, 0, poolModeRaw)
+	if err != nil {
+		t.Fatalf("newCPool: %v", err)
+	}
+	defer pool.release()
+
+	err = pool.submit(
+		poolEncodeTestMsg("x", 1),
+		nil,
+		bufarrowlib.Meta("kafka_partition", int32(1)),
+	)
+	if !errors.Is(err, bufarrowlib.ErrDenormMetadataOnNonDenormPool) {
+		t.Fatalf("expected ErrDenormMetadataOnNonDenormPool, got %v", err)
+	}
+}
+
 // ── merge helper ──────────────────────────────────────────────────────────
 
 func TestMergeRecordBatches_NilInput(t *testing.T) {
@@ -455,11 +475,71 @@ func TestHasDenorm(t *testing.T) {
 		{`{"custom_proto":"foo.proto"}`, false},
 		{`{"denorm_columns":["name"]}`, true},
 		{`{"other":"val","denorm_columns":[]}`, true},
+		{`{"denorm_metadata_columns":[{"name":"kafka_offset","type":"int64"}]}`, false},
 	}
 	for _, c := range cases {
 		got := hasDenorm(c.in)
 		if got != c.want {
 			t.Errorf("hasDenorm(%q) = %v, want %v", c.in, got, c.want)
 		}
+	}
+}
+
+func BenchmarkPool_Submit_WithMetadata(b *testing.B) {
+	dir := poolTestDir()
+	alloc := mallocator.NewMallocator()
+
+	fd, err := bufarrowlib.CompileProtoToFileDescriptor("order.proto", []string{dir})
+	if err != nil {
+		b.Fatalf("CompileProtoToFileDescriptor Order: %v", err)
+	}
+	md, err := bufarrowlib.GetMessageDescriptorByName(fd, "Order")
+	if err != nil {
+		b.Fatalf("GetMessageDescriptorByName Order: %v", err)
+	}
+	ht := bufarrowlib.NewHyperType(md, bufarrowlib.WithAutoRecompile(0, 1.0))
+
+	base, err := bufarrowlib.NewFromFile("order.proto", "Order", []string{dir}, alloc,
+		bufarrowlib.WithHyperType(ht),
+		bufarrowlib.WithDenormalizerPlan(
+			pbpath.PlanPath("items[*].id", pbpath.Alias("item_id")),
+		),
+		bufarrowlib.WithDenormMetadataColumns(
+			bufarrowlib.DenormMetadataColumn{Name: "kafka_partition", Type: arrow.PrimitiveTypes.Int32},
+			bufarrowlib.DenormMetadataColumn{Name: "kafka_offset", Type: arrow.PrimitiveTypes.Int64},
+		),
+	)
+	if err != nil {
+		b.Fatalf("NewFromFile Order: %v", err)
+	}
+	defer base.Release()
+
+	pool, err := newCPool(base, 4, 4096, poolModeDenorm)
+	if err != nil {
+		b.Fatalf("newCPool: %v", err)
+	}
+	defer pool.release()
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for b.Loop() {
+		for i := 0; i < 512; i++ {
+			msg := poolEncodeOrder(fmt.Sprintf("order-%d", i), 3)
+			err := pool.submit(
+				msg,
+				nil,
+				bufarrowlib.Meta("kafka_partition", int32(i%8)),
+				bufarrowlib.Meta("kafka_offset", int64(i)),
+			)
+			if err != nil {
+				b.Fatalf("submit: %v", err)
+			}
+		}
+		rb, err := pool.flush()
+		if err != nil {
+			b.Fatalf("flush: %v", err)
+		}
+		rb.Release()
 	}
 }

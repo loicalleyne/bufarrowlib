@@ -70,7 +70,8 @@ func newSale(saleMD, lineItemMD protoreflect.MessageDescriptor, customer, email,
 	sku   string
 	price float64
 	qty   int64
-}, ts int64) proto.Message {
+}, ts int64,
+) proto.Message {
 	msg := dynamicpb.NewMessage(saleMD)
 	if customer != "" {
 		msg.Set(saleMD.Fields().ByName("customer"), protoreflect.ValueOfString(customer))
@@ -119,12 +120,10 @@ func ExampleTranscoder_AppendDenorm_coalesce() {
 
 	// Message 1: customer is set → "Alice" is used.
 	msg1 := newSale(saleMD, lineItemMD, "Alice", "alice@example.com", "US", nil, 0)
-	tc.AppendDenorm(msg1)
-
+	_, _ = tc.AppendDenorm(msg1)
 	// Message 2: customer is empty → email is used as fallback.
 	msg2 := newSale(saleMD, lineItemMD, "", "bob@example.com", "EU", nil, 0)
-	tc.AppendDenorm(msg2)
-
+	_, _ = tc.AppendDenorm(msg2)
 	rec := tc.NewDenormalizerRecordBatch()
 	defer rec.Release()
 
@@ -161,8 +160,8 @@ func ExampleTranscoder_AppendDenorm_default() {
 	}
 	defer tc.Release()
 
-	tc.AppendDenorm(newSale(saleMD, lineItemMD, "Alice", "", "US", nil, 0))
-	tc.AppendDenorm(newSale(saleMD, lineItemMD, "Bob", "", "", nil, 0)) // no region
+	_, _ = tc.AppendDenorm(newSale(saleMD, lineItemMD, "Alice", "", "US", nil, 0))
+	_, _ = tc.AppendDenorm(newSale(saleMD, lineItemMD, "Bob", "", "", nil, 0)) // no region
 
 	rec := tc.NewDenormalizerRecordBatch()
 	defer rec.Release()
@@ -199,9 +198,8 @@ func ExampleTranscoder_AppendDenorm_concat() {
 	}
 	defer tc.Release()
 
-	tc.AppendDenorm(newSale(saleMD, lineItemMD, "Alice", "", "US", nil, 0))
-	tc.AppendDenorm(newSale(saleMD, lineItemMD, "Bob", "", "EU", nil, 0))
-
+	_, _ = tc.AppendDenorm(newSale(saleMD, lineItemMD, "Alice", "", "US", nil, 0))
+	_, _ = tc.AppendDenorm(newSale(saleMD, lineItemMD, "Bob", "", "EU", nil, 0))
 	rec := tc.NewDenormalizerRecordBatch()
 	defer rec.Release()
 
@@ -233,8 +231,7 @@ func ExampleTranscoder_AppendDenorm_upper() {
 	}
 	defer tc.Release()
 
-	tc.AppendDenorm(newSale(saleMD, lineItemMD, "Alice", "", "us-east", nil, 0))
-
+	_, _ = tc.AppendDenorm(newSale(saleMD, lineItemMD, "Alice", "", "us-east", nil, 0))
 	rec := tc.NewDenormalizerRecordBatch()
 	defer rec.Release()
 
@@ -266,8 +263,8 @@ func ExampleTranscoder_AppendDenorm_has() {
 	}
 	defer tc.Release()
 
-	tc.AppendDenorm(newSale(saleMD, lineItemMD, "Alice", "alice@example.com", "", nil, 0))
-	tc.AppendDenorm(newSale(saleMD, lineItemMD, "Bob", "", "", nil, 0)) // no email
+	_, _ = tc.AppendDenorm(newSale(saleMD, lineItemMD, "Alice", "alice@example.com", "", nil, 0))
+	_, _ = tc.AppendDenorm(newSale(saleMD, lineItemMD, "Bob", "", "", nil, 0)) // no email
 
 	rec := tc.NewDenormalizerRecordBatch()
 	defer rec.Release()
@@ -314,9 +311,8 @@ func ExampleTranscoder_AppendDenorm_composedExpr() {
 	}
 	defer tc.Release()
 
-	tc.AppendDenorm(newSale(saleMD, lineItemMD, "Alice", "alice@ex.com", "us", nil, 0))
-	tc.AppendDenorm(newSale(saleMD, lineItemMD, "", "bob@ex.com", "eu", nil, 0))
-
+	_, _ = tc.AppendDenorm(newSale(saleMD, lineItemMD, "Alice", "alice@ex.com", "us", nil, 0))
+	_, _ = tc.AppendDenorm(newSale(saleMD, lineItemMD, "", "bob@ex.com", "eu", nil, 0))
 	rec := tc.NewDenormalizerRecordBatch()
 	defer rec.Release()
 
@@ -362,8 +358,7 @@ func ExampleTranscoder_AppendDenorm_withExprAndFanout() {
 		{"WIDGET-001", 9.99, 2},
 		{"GADGET-002", 24.50, 1},
 	}, 0)
-	tc.AppendDenorm(msg)
-
+	_, _ = tc.AppendDenorm(msg)
 	rec := tc.NewDenormalizerRecordBatch()
 	defer rec.Release()
 

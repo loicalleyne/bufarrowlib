@@ -41,6 +41,8 @@ type Transcoder struct {
 	denormSchema     *arrow.Schema
 	denormGroups     []fanoutGroup
 	denormCols       []denormColumn
+	denormMetaCols   []denormMetaColumn
+	denormMetaIndex  map[MetaCol]int
 	opts             *Opt
 
 	// hyperType is the shared HyperType coordinator for PGO-enabled raw-bytes
@@ -64,24 +66,27 @@ type Transcoder struct {
 	mergeScratch []byte
 
 	// Scratch slices reused across AppendDenorm calls to avoid per-call allocations.
-	denormGroupCounts []int
-	denormGroupIsNull []bool
-	denormBranchIdx   []int
-	denormNullCols    []bool
+	denormGroupCounts  []int
+	denormGroupIsNull  []bool
+	denormBranchIdx    []int
+	denormNullCols     []bool
+	denormMetaSupplied []bool
+	denormMetaValues   []any
 }
 
 // Opt holds the option values collected from [Option] functions and passed
 // to [New] or [NewFromFile]. Fields are unexported; use the With* helpers.
 type Opt struct {
-	customMsgDesc     protoreflect.MessageDescriptor
-	customProtoPath   string
-	customMsgName     string
-	customImportPaths []string
-	denormPaths       []pbpath.PlanPathSpec
-	hyperType         *HyperType
+	customMsgDesc           protoreflect.MessageDescriptor
+	customProtoPath         string
+	customMsgName           string
+	customImportPaths       []string
+	denormPaths             []pbpath.PlanPathSpec
+	denormMetaCols          []DenormMetadataColumn
+	hyperType               *HyperType
 	hyperTypeMismatchPolicy HyperTypeMismatchPolicy
-	pruneEmpty        bool
-	flattenWKT        bool
+	pruneEmpty              bool
+	flattenWKT              bool
 }
 
 // HyperTypeMismatchPolicy controls how New() handles a descriptor mismatch
@@ -142,6 +147,18 @@ func WithCustomMessageFile(protoFilePath, messageName string, importPaths []stri
 func WithDenormalizerPlan(paths ...pbpath.PlanPathSpec) Option {
 	return func(cfg config) {
 		cfg.denormPaths = append(cfg.denormPaths, paths...)
+	}
+}
+
+// WithDenormMetadataColumns configures additional metadata columns that are
+// appended by AppendDenorm* calls via Meta values. This option requires
+// WithDenormalizerPlan.
+//
+// Metadata columns are not configurable through YAML config constructors
+// (NewTranscoderFromConfigFile / NewTranscoderFromConfig).
+func WithDenormMetadataColumns(cols ...DenormMetadataColumn) Option {
+	return func(cfg config) {
+		cfg.denormMetaCols = append(cfg.denormMetaCols, cols...)
 	}
 }
 
@@ -251,9 +268,12 @@ func New(msgDesc protoreflect.MessageDescriptor, mem memory.Allocator, opts ...O
 			return nil, fmt.Errorf("bufarrow: failed to prune empty messages: %w", err)
 		}
 	}
-	
+
 	if o.customMsgDesc != nil && o.customProtoPath != "" {
 		return nil, ErrMutuallyExclusiveCustomMessageOptions
+	}
+	if len(o.denormMetaCols) > 0 && len(o.denormPaths) == 0 {
+		return nil, ErrDenormMetadataWithoutPlan
 	}
 
 	// Resolve custom message descriptor from .proto file if specified
@@ -309,7 +329,7 @@ func New(msgDesc protoreflect.MessageDescriptor, mem memory.Allocator, opts ...O
 		msgType = hyperpb.CompileMessageDescriptor(activeMsgDesc)
 	}
 	a := hyperpb.NewMessage(msgType)
-	tc = &Transcoder{msgDesc: msgDesc, msgType: msgType, stencil: a, opts: o}
+	tc = &Transcoder{msgDesc: activeMsgDesc, msgType: msgType, stencil: a, opts: o}
 	if selectedHyperType != nil {
 		tc.hyperType = selectedHyperType
 		tc.hyperShared = new(hyperpb.Shared)

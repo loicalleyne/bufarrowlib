@@ -66,7 +66,8 @@ func buildHyperExampleDescriptors() (outerMD, innerMD protoreflect.MessageDescri
 func newOuterMessage(outerMD, innerMD protoreflect.MessageDescriptor, name, altName string, items []struct {
 	id    string
 	price float64
-}, qty int64) *dynamicpb.Message {
+}, qty int64,
+) *dynamicpb.Message {
 	msg := dynamicpb.NewMessage(outerMD)
 	msg.Set(outerMD.Fields().ByName("name"), protoreflect.ValueOfString(name))
 	if altName != "" {
@@ -200,7 +201,7 @@ func ExampleTranscoder_AppendDenormRaw() {
 	}
 
 	// 4. Feed raw bytes directly into the denormalizer.
-	if err := tc.AppendDenormRaw(raw); err != nil {
+	if _, err := tc.AppendDenormRaw(raw); err != nil {
 		log.Fatal(err)
 	}
 
@@ -264,7 +265,7 @@ func ExampleTranscoder_AppendDenormRaw_batch() {
 	for _, m := range messages {
 		msg := newOuterMessage(outerMD, innerMD, m.name, "", m.items, 0)
 		raw, _ := proto.Marshal(msg)
-		if err := tc.AppendDenormRaw(raw); err != nil {
+		if _, err := tc.AppendDenormRaw(raw); err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -314,15 +315,13 @@ func ExampleTranscoder_Clone_withHyperType() {
 		price float64
 	}{{"A1", 1.0}}, 0)
 	raw1, _ := proto.Marshal(msg1)
-	tc.AppendDenormRaw(raw1)
-
+	_, _ = tc.AppendDenormRaw(raw1)
 	msg2 := newOuterMessage(outerMD, innerMD, "Bravo", "", []struct {
 		id    string
 		price float64
 	}{{"B1", 2.0}, {"B2", 3.0}}, 0)
 	raw2, _ := proto.Marshal(msg2)
-	clone.AppendDenormRaw(raw2)
-
+	_, _ = clone.AppendDenormRaw(raw2)
 	// Each transcoder flushes independently.
 	rec1 := tc.NewDenormalizerRecordBatch()
 	defer rec1.Release()
@@ -372,7 +371,7 @@ func ExampleHyperType_Recompile() {
 			}, int64(i),
 		)
 		raw, _ := proto.Marshal(msg)
-		tc.AppendDenormRaw(raw)
+		_, _ = tc.AppendDenormRaw(raw)
 	}
 	rec := tc.NewDenormalizerRecordBatch()
 	rec.Release()
@@ -389,8 +388,7 @@ func ExampleHyperType_Recompile() {
 		price float64
 	}{{"Z", 99.99}}, 1)
 	raw, _ := proto.Marshal(msg)
-	tc.AppendDenormRaw(raw)
-
+	_, _ = tc.AppendDenormRaw(raw)
 	rec2 := tc.NewDenormalizerRecordBatch()
 	defer rec2.Release()
 

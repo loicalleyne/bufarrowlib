@@ -55,9 +55,9 @@ func (p *pipeFuncWithPipeline) exec(ctx *PipeContext, input Value) ([]Value, err
 // separated by semicolons (e.g. gsub(re; replacement), sub(re; replacement),
 // limit(n; f)).
 type pipeFuncWith2Pipelines struct {
-	name        string
-	arg1, arg2  *Pipeline
-	fn          func(ctx *PipeContext, input Value, arg1, arg2 *Pipeline) ([]Value, error)
+	name       string
+	arg1, arg2 *Pipeline
+	fn         func(ctx *PipeContext, input Value, arg1, arg2 *Pipeline) ([]Value, error)
 }
 
 func (p *pipeFuncWith2Pipelines) exec(ctx *PipeContext, input Value) ([]Value, error) {
@@ -208,9 +208,9 @@ func builtinMatch(_ *PipeContext, input Value, arg *Pipeline) ([]Value, error) {
 	// as jq does. We use a list since we don't have object construction yet.
 	matched := s[loc[0]:loc[1]]
 	return []Value{ListVal([]Value{
-		ScalarInt64(int64(loc[0])),               // offset
-		ScalarInt64(int64(loc[1] - loc[0])),      // length
-		ScalarString(matched),                     // string
+		ScalarInt64(int64(loc[0])),          // offset
+		ScalarInt64(int64(loc[1] - loc[0])), // length
+		ScalarString(matched),               // string
 	})}, nil
 }
 
@@ -954,27 +954,27 @@ func init() {
 // pipeFuncsWith1Arg maps function names to implementations that take one
 // sub-pipeline argument: name(pipeline).
 var pipeFuncsWith1Arg = map[string]func(*PipeContext, Value, *Pipeline) ([]Value, error){
-	"ltrimstr":  execLtrimstr,
-	"rtrimstr":  execRtrimstr,
+	"ltrimstr":   execLtrimstr,
+	"rtrimstr":   execRtrimstr,
 	"startswith": builtinStartswith,
-	"endswith":  builtinEndswith,
-	"split":     builtinSplit,
-	"join":      builtinJoin,
-	"test":      builtinTest,
-	"match":     builtinMatch,
-	"capture":   builtinCapture,
-	"map":       execMap,
-	"sort_by":   execSortBy,
-	"group_by":  execGroupBy,
-	"unique_by": execUniqueBy,
-	"min_by":    execMinBy,
-	"max_by":    execMaxBy,
-	"nth":       builtinNth,
-	"indices":   builtinIndices,
-	"index":     builtinIndex,
-	"rindex":    builtinRindex,
-	"contains":  builtinContains,
-	"inside":    builtinInside,
+	"endswith":   builtinEndswith,
+	"split":      builtinSplit,
+	"join":       builtinJoin,
+	"test":       builtinTest,
+	"match":      builtinMatch,
+	"capture":    builtinCapture,
+	"map":        execMap,
+	"sort_by":    execSortBy,
+	"group_by":   execGroupBy,
+	"unique_by":  execUniqueBy,
+	"min_by":     execMinBy,
+	"max_by":     execMaxBy,
+	"nth":        builtinNth,
+	"indices":    builtinIndices,
+	"index":      builtinIndex,
+	"rindex":     builtinRindex,
+	"contains":   builtinContains,
+	"inside":     builtinInside,
 }
 
 // pipeFuncsWith2Args maps function names to implementations that take two

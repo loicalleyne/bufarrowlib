@@ -264,3 +264,74 @@ class TestPoolDenorm:
             # Column names should include the last segments of the paths
             names = set(batch.schema.names)
             assert "name" in names
+
+
+class TestPoolDenormMetadata:
+    def test_submit_with_metadata_kwargs(self, order_proto, order_hyper_type):
+        with Pool.from_proto_file(
+            order_proto,
+            "Order",
+            workers=2,
+            hyper_type=order_hyper_type,
+            denorm_columns=["items[*].id"],
+            denorm_metadata_columns=[("kafka_partition", "int32"), ("kafka_offset", "int64")],
+        ) as pool:
+            for i in range(3):
+                pool.submit(
+                    encode_order(f"ord-{i}", [("a", 1.0), ("b", 2.0)], seq=i),
+                    kafka_partition=i,
+                    kafka_offset=100 + i,
+                )
+            batch = pool.flush()
+            assert batch.num_rows == 6
+            assert "kafka_partition" in batch.schema.names
+            assert "kafka_offset" in batch.schema.names
+
+    def test_submit_metadata_without_configuration_raises(self, order_proto, order_hyper_type):
+        with Pool.from_proto_file(
+            order_proto,
+            "Order",
+            workers=1,
+            hyper_type=order_hyper_type,
+            denorm_columns=["items[*].id"],
+        ) as pool:
+            with pytest.raises(BufarrowError):
+                pool.submit(
+                    encode_order("ord-x", [("a", 1.0)], seq=1),
+                    kafka_partition=1,
+                )
+
+    def test_submit_unknown_metadata_key_raises(self, order_proto, order_hyper_type):
+        with Pool.from_proto_file(
+            order_proto,
+            "Order",
+            workers=1,
+            hyper_type=order_hyper_type,
+            denorm_columns=["items[*].id"],
+            denorm_metadata_columns=[("kafka_partition", "int32")],
+        ) as pool:
+            with pytest.raises(BufarrowError):
+                pool.submit(
+                    encode_order("ord-y", [("a", 1.0)], seq=2),
+                    kafka_offset=77,
+                )
+
+    def test_submit_merged_with_metadata_kwargs(self, test_proto, custom_proto):
+        with Pool.from_proto_file(
+            test_proto,
+            "TestMsg",
+            workers=1,
+            custom_proto=custom_proto,
+            custom_message="CustomExtra",
+            denorm_columns=["name"],
+            denorm_metadata_columns=[("kafka_offset", "int64")],
+        ) as pool:
+            pool.submit_merged(
+                encode_test_msg("alice", 30, 99.9, True),
+                encode_custom_extra(1700000000, "src-1"),
+                kafka_offset=321,
+            )
+            batch = pool.flush()
+            assert batch.num_rows == 1
+            assert "kafka_offset" in batch.schema.names
+            assert batch.column("kafka_offset")[0].as_py() == 321

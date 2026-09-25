@@ -57,7 +57,7 @@ func Example_protoToParquetFile() {
 	info, _ := os.Stat(name)
 	fmt.Printf("wrote %d messages to parquet (%d bytes)\n", len(products), info.Size())
 	// Output:
-	// wrote 3 messages to parquet (738 bytes)
+	// wrote 3 messages to parquet (598 bytes)
 }
 
 // Example_protoToParquetBatched shows writing protobuf messages to Parquet in
@@ -208,7 +208,7 @@ func Example_denormToParquet() {
 		}{{"A", 1.50}, {"B", 2.75}},
 		[]string{"rush", "fragile"}, 1,
 	)
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		log.Fatal(err)
 	}
 
@@ -294,5 +294,5 @@ message Event {
 	fmt.Printf("wrote parquet: %d bytes\n", buf.Len())
 	// Output:
 	// fields: [id action user_id]
-	// wrote parquet: 688 bytes
+	// wrote parquet: 549 bytes
 }

@@ -296,22 +296,22 @@ func TestParseErrorDescriptions(t *testing.T) {
 	containerMD, _ := buildPipeTestDescriptor(t)
 
 	badExprs := []string{
-		`.items | @`,       // illegal token
-		`.items | +`,       // unexpected +
-		`.items[`,          // unexpected eof
-		`.items | (`,       // unclosed paren
-		`.items | ==`,      // unexpected ==
-		`.items | !=`,      // unexpected !=
-		`.items | <`,       // unexpected <
-		`.items | <=`,      // unexpected <=
-		`.items | >`,       // unexpected >
-		`.items | >=`,      // unexpected >=
-		`.items | &&`,      // unexpected &&
-		`.items | ||`,      // unexpected ||
-		`.items | !`,       // unexpected !
-		`.items | ,`,       // unexpected comma
-		`.items | "foo`,    // unterminated string
-		`{`,                // unclosed brace
+		`.items | @`,    // illegal token
+		`.items | +`,    // unexpected +
+		`.items[`,       // unexpected eof
+		`.items | (`,    // unclosed paren
+		`.items | ==`,   // unexpected ==
+		`.items | !=`,   // unexpected !=
+		`.items | <`,    // unexpected <
+		`.items | <=`,   // unexpected <=
+		`.items | >`,    // unexpected >
+		`.items | >=`,   // unexpected >=
+		`.items | &&`,   // unexpected &&
+		`.items | ||`,   // unexpected ||
+		`.items | !`,    // unexpected !
+		`.items | ,`,    // unexpected comma
+		`.items | "foo`, // unterminated string
+		`{`,             // unclosed brace
 	}
 	for _, expr := range badExprs {
 		_, err := ParsePipeline(containerMD, expr)
@@ -325,9 +325,9 @@ func TestPredicateParseErrors(t *testing.T) {
 	containerMD, _ := buildPipeTestDescriptor(t)
 
 	badPreds := []string{
-		`.items[?(@.value == )]`,           // missing rhs
-		`.items[?(@.value <> 1)]`,          // bad operator
-		`.items[?(@ ==)]`,                  // missing operand
+		`.items[?(@.value == )]`,  // missing rhs
+		`.items[?(@.value <> 1)]`, // bad operator
+		`.items[?(@ ==)]`,         // missing operand
 	}
 	for _, expr := range badPreds {
 		_, err := ParsePath(containerMD, expr)

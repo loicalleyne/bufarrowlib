@@ -51,6 +51,16 @@ ArrowArray._fields_ = [
 ]
 
 
+class BufarrowMetaValue(ctypes.Structure):
+    _fields_ = [
+        ("kind", ctypes.c_uint8),
+        ("i64", ctypes.c_int64),
+        ("f64", ctypes.c_double),
+        ("ptr", ctypes.c_char_p),
+        ("len", ctypes.c_int32),
+    ]
+
+
 # ── Library loader ──────────────────────────────────────────────────────
 
 
@@ -133,7 +143,14 @@ def _declare_signatures(lib: ctypes.CDLL) -> None:
     lib.BufarrowAppendRaw.argtypes = [_HANDLE, ctypes.c_void_p, ctypes.c_int]
     lib.BufarrowAppendRaw.restype = ctypes.c_int
 
-    lib.BufarrowAppendDenormRaw.argtypes = [_HANDLE, ctypes.c_void_p, ctypes.c_int]
+    lib.BufarrowAppendDenormRaw.argtypes = [
+        _HANDLE,
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.POINTER(BufarrowMetaValue),
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_int),
+    ]
     lib.BufarrowAppendDenormRaw.restype = ctypes.c_int
 
     lib.BufarrowAppendRawMerged.argtypes = [
@@ -147,6 +164,9 @@ def _declare_signatures(lib: ctypes.CDLL) -> None:
         _HANDLE,
         ctypes.c_void_p, ctypes.c_int,
         ctypes.c_void_p, ctypes.c_int,
+        ctypes.POINTER(BufarrowMetaValue),
+        ctypes.c_int,
+        ctypes.POINTER(ctypes.c_int),
     ]
     lib.BufarrowAppendDenormRawMerged.restype = ctypes.c_int
 
@@ -257,13 +277,21 @@ def _declare_signatures(lib: ctypes.CDLL) -> None:
     ]
     lib.BufarrowPoolNewWithHyperType.restype = ctypes.c_int
 
-    lib.BufarrowPoolSubmit.argtypes = [_HANDLE, ctypes.c_void_p, ctypes.c_int]
+    lib.BufarrowPoolSubmit.argtypes = [
+        _HANDLE,
+        ctypes.c_void_p,
+        ctypes.c_int,
+        ctypes.POINTER(BufarrowMetaValue),
+        ctypes.c_int,
+    ]
     lib.BufarrowPoolSubmit.restype = ctypes.c_int
 
     lib.BufarrowPoolSubmitMerged.argtypes = [
         _HANDLE,
         ctypes.c_void_p, ctypes.c_int,  # base
         ctypes.c_void_p, ctypes.c_int,  # custom
+        ctypes.POINTER(BufarrowMetaValue),
+        ctypes.c_int,
     ]
     lib.BufarrowPoolSubmitMerged.restype = ctypes.c_int
 

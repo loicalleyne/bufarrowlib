@@ -57,6 +57,14 @@ struct ArrowArray {
 typedef void *BufarrowHandle;
 typedef void *BufarrowHyperTypeHandle;
 
+typedef struct {
+    uint8_t kind;
+    int64_t i64;
+    double f64;
+    char *ptr;
+    int32_t len;
+} BufarrowMetaValue;
+
 /* ── Lifecycle ──────────────────────────────────────────────────────── */
 
 /**
@@ -124,7 +132,10 @@ extern int BufarrowAppendRaw(
 extern int BufarrowAppendDenormRaw(
     BufarrowHandle handle,
     const void *data,
-    int         data_len
+    int         data_len,
+    const BufarrowMetaValue *meta_values,
+    int         n_meta,
+    int        *out_rows
 );
 
 /** Append merged base+custom raw bytes. */
@@ -142,7 +153,10 @@ extern int BufarrowAppendDenormRawMerged(
     const void *base_data,
     int         base_len,
     const void *custom_data,
-    int         custom_len
+    int         custom_len,
+    const BufarrowMetaValue *meta_values,
+    int         n_meta,
+    int        *out_rows
 );
 
 /* ── Flush (Arrow C Data Interface) ─────────────────────────────────── */
@@ -325,7 +339,9 @@ extern int BufarrowPoolNewWithHyperType(
 extern int BufarrowPoolSubmit(
     BufarrowPoolHandle handle,
     const void *data,
-    int         data_len
+    int         data_len,
+    const BufarrowMetaValue *meta_values,
+    int         n_meta
 );
 
 /**
@@ -337,7 +353,9 @@ extern int BufarrowPoolSubmitMerged(
     const void *base_data,
     int         base_len,
     const void *custom_data,
-    int         custom_len
+    int         custom_len,
+    const BufarrowMetaValue *meta_values,
+    int         n_meta
 );
 
 /**

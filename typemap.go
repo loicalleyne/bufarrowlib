@@ -135,6 +135,230 @@ func ProtoKindToArrowType(fd protoreflect.FieldDescriptor) arrow.DataType {
 // concrete builder type via a closure.
 type protoAppendFunc func(protoreflect.Value)
 
+// metadataAppendFunc appends a metadata value to an Arrow builder n times.
+// Implementations validate value type and append nulls when v is nil.
+type metadataAppendFunc func(v any, n int) error
+
+// arrowTypeToMetadataAppendFunc returns an append closure for a metadata
+// column based on its Arrow data type.
+func arrowTypeToMetadataAppendFunc(t arrow.DataType, b array.Builder) metadataAppendFunc {
+	switch tt := t.(type) {
+	case *arrow.BooleanType:
+		a := b.(*array.BooleanBuilder)
+		return func(v any, n int) error {
+			if v == nil {
+				a.AppendNulls(n)
+				return nil
+			}
+			val, ok := v.(bool)
+			if !ok {
+				return fmt.Errorf("expected bool, got %T", v)
+			}
+			for i := 0; i < n; i++ {
+				a.Append(val)
+			}
+			return nil
+		}
+	case *arrow.Int32Type:
+		a := b.(*array.Int32Builder)
+		return func(v any, n int) error {
+			if v == nil {
+				a.AppendNulls(n)
+				return nil
+			}
+			val, ok := v.(int32)
+			if !ok {
+				return fmt.Errorf("expected int32, got %T", v)
+			}
+			for i := 0; i < n; i++ {
+				a.Append(val)
+			}
+			return nil
+		}
+	case *arrow.Int64Type:
+		a := b.(*array.Int64Builder)
+		return func(v any, n int) error {
+			if v == nil {
+				a.AppendNulls(n)
+				return nil
+			}
+			val, ok := v.(int64)
+			if !ok {
+				return fmt.Errorf("expected int64, got %T", v)
+			}
+			for i := 0; i < n; i++ {
+				a.Append(val)
+			}
+			return nil
+		}
+	case *arrow.Uint32Type:
+		a := b.(*array.Uint32Builder)
+		return func(v any, n int) error {
+			if v == nil {
+				a.AppendNulls(n)
+				return nil
+			}
+			val, ok := v.(uint32)
+			if !ok {
+				return fmt.Errorf("expected uint32, got %T", v)
+			}
+			for i := 0; i < n; i++ {
+				a.Append(val)
+			}
+			return nil
+		}
+	case *arrow.Uint64Type:
+		a := b.(*array.Uint64Builder)
+		return func(v any, n int) error {
+			if v == nil {
+				a.AppendNulls(n)
+				return nil
+			}
+			val, ok := v.(uint64)
+			if !ok {
+				return fmt.Errorf("expected uint64, got %T", v)
+			}
+			for i := 0; i < n; i++ {
+				a.Append(val)
+			}
+			return nil
+		}
+	case *arrow.Float32Type:
+		a := b.(*array.Float32Builder)
+		return func(v any, n int) error {
+			if v == nil {
+				a.AppendNulls(n)
+				return nil
+			}
+			val, ok := v.(float32)
+			if !ok {
+				return fmt.Errorf("expected float32, got %T", v)
+			}
+			for i := 0; i < n; i++ {
+				a.Append(val)
+			}
+			return nil
+		}
+	case *arrow.Float64Type:
+		a := b.(*array.Float64Builder)
+		return func(v any, n int) error {
+			if v == nil {
+				a.AppendNulls(n)
+				return nil
+			}
+			val, ok := v.(float64)
+			if !ok {
+				return fmt.Errorf("expected float64, got %T", v)
+			}
+			for i := 0; i < n; i++ {
+				a.Append(val)
+			}
+			return nil
+		}
+	case *arrow.StringType:
+		a := b.(*array.StringBuilder)
+		return func(v any, n int) error {
+			if v == nil {
+				a.AppendNulls(n)
+				return nil
+			}
+			val, ok := v.(string)
+			if !ok {
+				return fmt.Errorf("expected string, got %T", v)
+			}
+			for i := 0; i < n; i++ {
+				a.Append(val)
+			}
+			return nil
+		}
+	case *arrow.LargeStringType:
+		a := b.(*array.LargeStringBuilder)
+		return func(v any, n int) error {
+			if v == nil {
+				a.AppendNulls(n)
+				return nil
+			}
+			val, ok := v.(string)
+			if !ok {
+				return fmt.Errorf("expected string, got %T", v)
+			}
+			for i := 0; i < n; i++ {
+				a.Append(val)
+			}
+			return nil
+		}
+	case *arrow.BinaryType:
+		a := b.(*array.BinaryBuilder)
+		return func(v any, n int) error {
+			if v == nil {
+				a.AppendNulls(n)
+				return nil
+			}
+			val, ok := v.([]byte)
+			if !ok {
+				return fmt.Errorf("expected []byte, got %T", v)
+			}
+			for i := 0; i < n; i++ {
+				a.Append(val)
+			}
+			return nil
+		}
+	case *arrow.LargeBinaryType:
+		a := b.(*array.BinaryBuilder)
+		return func(v any, n int) error {
+			if v == nil {
+				a.AppendNulls(n)
+				return nil
+			}
+			val, ok := v.([]byte)
+			if !ok {
+				return fmt.Errorf("expected []byte, got %T", v)
+			}
+			for i := 0; i < n; i++ {
+				a.Append(val)
+			}
+			return nil
+		}
+	case *arrow.TimestampType:
+		a := b.(*array.TimestampBuilder)
+		return func(v any, n int) error {
+			if v == nil {
+				a.AppendNulls(n)
+				return nil
+			}
+			if val, ok := v.(arrow.Timestamp); ok {
+				for i := 0; i < n; i++ {
+					a.Append(val)
+				}
+				return nil
+			}
+			tm, ok := v.(time.Time)
+			if !ok {
+				return fmt.Errorf("expected arrow.Timestamp or time.Time, got %T", v)
+			}
+			var converted arrow.Timestamp
+			switch tt.Unit {
+			case arrow.Second:
+				converted = arrow.Timestamp(tm.Unix())
+			case arrow.Millisecond:
+				converted = arrow.Timestamp(tm.UnixMilli())
+			case arrow.Microsecond:
+				converted = arrow.Timestamp(tm.UnixMicro())
+			case arrow.Nanosecond:
+				converted = arrow.Timestamp(tm.UnixNano())
+			default:
+				return fmt.Errorf("unsupported timestamp unit: %v", tt.Unit)
+			}
+			for i := 0; i < n; i++ {
+				a.Append(converted)
+			}
+			return nil
+		}
+	default:
+		return nil
+	}
+}
+
 // ProtoKindToAppendFunc returns a closure that appends a protoreflect.Value of
 // the appropriate kind to the given Arrow array builder. The builder must match
 // the Arrow data type returned by ProtoKindToArrowType for the same field

@@ -546,7 +546,7 @@ func (p *Plan) EvalLeaves(m proto.Message) ([][]Value, error) {
 // Use Clone when creating independent workers (e.g. [Transcoder.Clone]) that
 // each need to call [Plan.EvalLeaves] without synchronisation.
 func (p *Plan) Clone() *Plan {
-	c := *p        // shallow copy — trie and entries are immutable, safe to share
+	c := *p         // shallow copy — trie and entries are immutable, safe to share
 	c.scratch = nil // fresh scratch; lazily initialised on first EvalLeaves call
 	return &c
 }

@@ -347,7 +347,7 @@ func TestSetAWKTDenormLeaf(t *testing.T) {
 	msg := dynamicpb.NewMessage(md)
 	msg.Set(settingsFD, protoreflect.ValueOfMessage(st))
 
-	if err := tc.AppendDenorm(msg.Interface()); err != nil {
+	if _, err := tc.AppendDenorm(msg.Interface()); err != nil {
 		t.Fatalf("AppendDenorm error = %v", err)
 	}
 	rec := tc.NewDenormalizerRecordBatch()

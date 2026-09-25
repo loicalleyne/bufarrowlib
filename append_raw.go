@@ -56,9 +56,9 @@ func (s *Transcoder) AppendRaw(data []byte) error {
 // A denormalizer plan (via [WithDenormalizerPlan]) must be configured.
 //
 // This method is not safe for concurrent use.
-func (s *Transcoder) AppendDenormRaw(data []byte) error {
+func (s *Transcoder) AppendDenormRaw(data []byte, meta ...DenormMetaValue) (int, error) {
 	if s.denormPlan == nil {
-		return fmt.Errorf("bufarrow: AppendDenormRaw called without denormalizer plan configured")
+		return 0, fmt.Errorf("bufarrow: AppendDenormRaw called without denormalizer plan configured")
 	}
 
 	if s.hyperType != nil {
@@ -73,28 +73,28 @@ func (s *Transcoder) AppendDenormRaw(data []byte) error {
 
 		if err := msg.Unmarshal(data, unmarshalOpts...); err != nil {
 			s.hyperShared.Free()
-			return fmt.Errorf("bufarrow: AppendDenormRaw unmarshal: %w", err)
+			return 0, fmt.Errorf("bufarrow: AppendDenormRaw unmarshal: %w", err)
 		}
 
-		err := s.AppendDenorm(msg)
+		totalRows, err := s.AppendDenorm(msg, meta...)
 		s.hyperShared.Free()
 
 		if err != nil {
-			return err
+			return 0, err
 		}
 
 		if s.hyperType.RecordMessage() {
 			s.hyperType.RecompileAsync()
 		}
-		return nil
+		return totalRows, nil
 	}
 
 	// Fallback: dynamicpb path (no HyperType)
 	v := dynamicpb.NewMessage(s.msgDesc)
 	if err := proto.Unmarshal(data, v); err != nil {
-		return fmt.Errorf("bufarrow: AppendDenormRaw unmarshal: %w", err)
+		return 0, fmt.Errorf("bufarrow: AppendDenormRaw unmarshal: %w", err)
 	}
-	return s.AppendDenorm(v)
+	return s.AppendDenorm(v, meta...)
 }
 
 // AppendRawMerged concatenates base and custom serialized protobuf byte slices
@@ -174,12 +174,12 @@ func (s *Transcoder) AppendRawMerged(baseBytes, customBytes []byte) error {
 // [WithDenormalizerPlan]).
 //
 // This method is not safe for concurrent use.
-func (s *Transcoder) AppendDenormRawMerged(baseBytes, customBytes []byte) error {
+func (s *Transcoder) AppendDenormRawMerged(baseBytes, customBytes []byte, meta ...DenormMetaValue) (int, error) {
 	if s.stencilCustom == nil {
-		return fmt.Errorf("bufarrow: AppendDenormRawMerged called without custom message configured; use WithCustomMessage or WithCustomMessageFile")
+		return 0, fmt.Errorf("bufarrow: AppendDenormRawMerged called without custom message configured; use WithCustomMessage or WithCustomMessageFile")
 	}
 	if s.denormPlan == nil {
-		return fmt.Errorf("bufarrow: AppendDenormRawMerged called without denormalizer plan configured")
+		return 0, fmt.Errorf("bufarrow: AppendDenormRawMerged called without denormalizer plan configured")
 	}
 
 	// Build merged bytes into reusable scratch: baseBytes || remapped(customBytes).
@@ -189,7 +189,7 @@ func (s *Transcoder) AppendDenormRawMerged(baseBytes, customBytes []byte) error 
 	s.mergeScratch = append(s.mergeScratch[:0], baseBytes...)
 	s.mergeScratch, mergeErr = rewriteCustomFieldTagsAppend(s.mergeScratch, customBytes, s.customFieldRemap)
 	if mergeErr != nil {
-		return fmt.Errorf("bufarrow: AppendDenormRawMerged: %w", mergeErr)
+		return 0, fmt.Errorf("bufarrow: AppendDenormRawMerged: %w", mergeErr)
 	}
 	merged := s.mergeScratch
 
@@ -205,28 +205,28 @@ func (s *Transcoder) AppendDenormRawMerged(baseBytes, customBytes []byte) error 
 
 		if err := msg.Unmarshal(merged, unmarshalOpts...); err != nil {
 			s.hyperShared.Free()
-			return fmt.Errorf("bufarrow: AppendDenormRawMerged unmarshal: %w", err)
+			return 0, fmt.Errorf("bufarrow: AppendDenormRawMerged unmarshal: %w", err)
 		}
 
-		err := s.AppendDenorm(msg)
+		totalRows, err := s.AppendDenorm(msg, meta...)
 		s.hyperShared.Free()
 
 		if err != nil {
-			return err
+			return 0, err
 		}
 
 		if s.hyperType.RecordMessage() {
 			s.hyperType.RecompileAsync()
 		}
-		return nil
+		return totalRows, nil
 	}
 
 	// Fallback: dynamicpb path
 	v := proto.Clone(s.stencilCustom)
 	if err := proto.Unmarshal(merged, v); err != nil {
-		return fmt.Errorf("bufarrow: AppendDenormRawMerged unmarshal: %w", err)
+		return 0, fmt.Errorf("bufarrow: AppendDenormRawMerged unmarshal: %w", err)
 	}
-	return s.AppendDenorm(v)
+	return s.AppendDenorm(v, meta...)
 }
 
 // rewriteCustomFieldTags rewrites top-level field numbers in encoded protobuf

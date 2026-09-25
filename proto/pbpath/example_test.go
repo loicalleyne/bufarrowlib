@@ -384,4 +384,3 @@ func ExampleStrictPath() {
 	// Output:
 	// strict error: true
 }
-

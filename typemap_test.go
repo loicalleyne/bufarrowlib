@@ -346,7 +346,7 @@ func TestDenormDuration(t *testing.T) {
 		m.Set(m.Descriptor().Fields().ByName("nanos"), protoreflect.ValueOfInt32(500_000_000))
 	})
 
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		t.Fatal(err)
 	}
 	rec := tc.NewDenormalizerRecordBatch()
@@ -389,7 +389,7 @@ func TestDenormFieldMask(t *testing.T) {
 		paths.Append(protoreflect.ValueOfString("baz"))
 	})
 
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		t.Fatal(err)
 	}
 	rec := tc.NewDenormalizerRecordBatch()
@@ -451,7 +451,7 @@ func TestDenormWrapperTypes(t *testing.T) {
 		m.Set(m.Descriptor().Fields().ByName("value"), protoreflect.ValueOfBytes([]byte{0xDE, 0xAD}))
 	})
 
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		t.Fatal(err)
 	}
 	rec := tc.NewDenormalizerRecordBatch()
@@ -576,7 +576,7 @@ func TestDenormDate(t *testing.T) {
 		m.Set(m.Descriptor().Fields().ByName("day"), protoreflect.ValueOfInt32(25))
 	})
 
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		t.Fatal(err)
 	}
 	rec := tc.NewDenormalizerRecordBatch()
@@ -614,7 +614,7 @@ func TestDenormTimeOfDay(t *testing.T) {
 		m.Set(m.Descriptor().Fields().ByName("nanos"), protoreflect.ValueOfInt32(500_000))
 	})
 
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		t.Fatal(err)
 	}
 	rec := tc.NewDenormalizerRecordBatch()
@@ -653,7 +653,7 @@ func TestDenormMoney(t *testing.T) {
 		m.Set(m.Descriptor().Fields().ByName("nanos"), protoreflect.ValueOfInt32(500_000_000))
 	})
 
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		t.Fatal(err)
 	}
 	rec := tc.NewDenormalizerRecordBatch()
@@ -688,7 +688,7 @@ func TestDenormLatLng(t *testing.T) {
 		m.Set(m.Descriptor().Fields().ByName("longitude"), protoreflect.ValueOfFloat64(-122.083855))
 	})
 
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		t.Fatal(err)
 	}
 	rec := tc.NewDenormalizerRecordBatch()
@@ -725,7 +725,7 @@ func TestDenormPostalAddress(t *testing.T) {
 		lines.Append(protoreflect.ValueOfString("1600 Amphitheatre Parkway"))
 	})
 
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		t.Fatal(err)
 	}
 	rec := tc.NewDenormalizerRecordBatch()
@@ -763,7 +763,7 @@ func TestDenormInterval(t *testing.T) {
 		})
 	})
 
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		t.Fatal(err)
 	}
 	rec := tc.NewDenormalizerRecordBatch()
@@ -798,7 +798,7 @@ func TestDenormColor(t *testing.T) {
 		m.Set(m.Descriptor().Fields().ByName("blue"), protoreflect.ValueOfFloat32(0.0))
 	})
 
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		t.Fatal(err)
 	}
 	rec := tc.NewDenormalizerRecordBatch()

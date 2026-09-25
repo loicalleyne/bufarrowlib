@@ -414,7 +414,7 @@ func (s *serverState) handleDenorm(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Append message and produce record batch.
-	if err := tc.AppendDenorm(msg); err != nil {
+	if _, err := tc.AppendDenorm(msg); err != nil {
 		writeJSON(w, map[string]any{
 			"config_error": "",
 			"exec_error":   fmt.Sprintf("append: %v", err),
