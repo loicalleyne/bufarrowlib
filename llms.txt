@@ -89,7 +89,7 @@ asynchronous and does not return a row count.
 ## Proto Utility Functions
 
 - `CompileProtoToFileDescriptor(protoFilePath string, importPaths []string) (protoreflect.FileDescriptor, error)` — compile a .proto file at runtime
-- `GetMessageDescriptorByName(fd protoreflect.FileDescriptor, messageName string) (protoreflect.MessageDescriptor, error)` — look up a message by name
+- `GetMessageDescriptorByName(fd protoreflect.FileDescriptor, messageName string) (protoreflect.MessageDescriptor, error)` — look up a message by fully-qualified or short name, searching top-level and nested messages
 - `MergeMessageDescriptors(a, b protoreflect.MessageDescriptor, newName string) (protoreflect.MessageDescriptor, error)` — merge two descriptors; renumbers b's fields above a's max
 - `PruneEmptyMessages(md protoreflect.MessageDescriptor) (protoreflect.MessageDescriptor, error)` — remove fields whose message type has zero fields, recursively; required for Parquet compatibility
 - `WithPruneEmptyMessages() Option` — enable pruning at `New` / `NewFromFile` construction time

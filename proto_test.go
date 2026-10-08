@@ -116,6 +116,41 @@ func TestGetMessageDescriptorByName(t *testing.T) {
 		}
 	})
 
+	t.Run("nested_and_fully_qualified", func(t *testing.T) {
+		nfd, err := CompileProtoToFileDescriptor("merge_nested_test.proto", []string{protoDir})
+		if err != nil {
+			t.Fatalf("setup: CompileProtoToFileDescriptor() error = %v", err)
+		}
+
+		// Short name of a nested message type.
+		md, err := GetMessageDescriptorByName(nfd, "InnerA")
+		if err != nil {
+			t.Fatalf("GetMessageDescriptorByName(InnerA) error = %v", err)
+		}
+		if string(md.Name()) != "InnerA" {
+			t.Errorf("expected message name InnerA, got %s", md.Name())
+		}
+
+		// Fully-qualified name of a top-level message.
+		md, err = GetMessageDescriptorByName(nfd, "samples.WithNestedA")
+		if err != nil {
+			t.Fatalf("GetMessageDescriptorByName(samples.WithNestedA) error = %v", err)
+		}
+		if md.FullName() != "samples.WithNestedA" {
+			t.Errorf("expected samples.WithNestedA, got %s", md.FullName())
+		}
+
+		// Fully-qualified name of a nested message type disambiguates between
+		// WithNestedA.InnerA and WithNestedConflict.InnerA.
+		md, err = GetMessageDescriptorByName(nfd, "samples.WithNestedConflict.InnerA")
+		if err != nil {
+			t.Fatalf("GetMessageDescriptorByName(samples.WithNestedConflict.InnerA) error = %v", err)
+		}
+		if md.FullName() != "samples.WithNestedConflict.InnerA" {
+			t.Errorf("expected samples.WithNestedConflict.InnerA, got %s", md.FullName())
+		}
+	})
+
 	t.Run("fields_are_present", func(t *testing.T) {
 		md, err := GetMessageDescriptorByName(fd, "ScalarTypes")
 		if err != nil {

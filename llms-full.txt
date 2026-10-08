@@ -234,7 +234,7 @@ func (ht *HyperType) RecompileAsync() <-chan struct{}   // background recompile;
 // Compile a .proto file at runtime to a FileDescriptor.
 func CompileProtoToFileDescriptor(protoFilePath string, importPaths []string) (protoreflect.FileDescriptor, error)
 
-// Retrieve a MessageDescriptor by name from a compiled FileDescriptor.
+// Retrieve a MessageDescriptor by short name or fully qualified name from a compiled FileDescriptor.
 func GetMessageDescriptorByName(fd protoreflect.FileDescriptor, messageName string) (protoreflect.MessageDescriptor, error)
 
 // Merge two MessageDescriptors. Fields from b are renumbered above a's max field number.
