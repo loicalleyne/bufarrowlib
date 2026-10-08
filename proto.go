@@ -33,16 +33,46 @@ func CompileProtoToFileDescriptor(protoFilePath string, importPaths []string) (p
 	return files[0], nil // Return the first file descriptor (assuming protoFilePath is unique)
 }
 
-// GetMessageDescriptorByName looks up a top-level message by name in the
-// given FileDescriptor. Returns an error if the message is not found.
+// GetMessageDescriptorByName looks up a message in the given FileDescriptor by
+// name. The name may be either a fully-qualified name (e.g.
+// "broadsign.reach.Advertiser") or a short name (e.g. "Advertiser"), and both
+// top-level and nested message types are searched. Returns an error if no
+// matching message is found.
+//
+// A fully-qualified match is always preferred. When matching by short name,
+// top-level messages take precedence over nested ones.
 func GetMessageDescriptorByName(fd protoreflect.FileDescriptor, messageName string) (protoreflect.MessageDescriptor, error) {
-	msgs := fd.Messages()
-	for i := 0; i < msgs.Len(); i++ {
-		if string(msgs.Get(i).Name()) == messageName {
-			return msgs.Get(i), nil
-		}
+	if md, ok := findMessageByFullName(fd, protoreflect.FullName(messageName)); ok {
+		return md, nil
+	}
+	if md, ok := findMessageByShortName(fd, protoreflect.Name(messageName)); ok {
+		return md, nil
 	}
 	return nil, fmt.Errorf("message %s not found in file descriptor", messageName)
+}
+
+// findMessageByShortName locates a message descriptor by its short (unqualified)
+// name in fd, searching top-level and nested messages. Top-level messages are
+// matched before descending into nested types so that a top-level message
+// always wins over a nested one sharing the same short name.
+func findMessageByShortName(fd protoreflect.FileDescriptor, target protoreflect.Name) (protoreflect.MessageDescriptor, bool) {
+	var walk func(msgs protoreflect.MessageDescriptors) (protoreflect.MessageDescriptor, bool)
+	walk = func(msgs protoreflect.MessageDescriptors) (protoreflect.MessageDescriptor, bool) {
+		// Match at this level first.
+		for i := 0; i < msgs.Len(); i++ {
+			if msgs.Get(i).Name() == target {
+				return msgs.Get(i), true
+			}
+		}
+		// Then descend into nested messages.
+		for i := 0; i < msgs.Len(); i++ {
+			if nested, ok := walk(msgs.Get(i).Messages()); ok {
+				return nested, true
+			}
+		}
+		return nil, false
+	}
+	return walk(fd.Messages())
 }
 
 // MergeMessageDescriptors merges two message descriptors into a new one with the specified name.
