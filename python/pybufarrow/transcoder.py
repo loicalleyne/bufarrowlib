@@ -19,6 +19,7 @@ from ._ffi import (
     _encode,
     _get_lib,
     _make_import_paths,
+    _schema_opts,
 )
 from ._meta import _to_meta_value
 
@@ -53,6 +54,10 @@ class Transcoder:
         custom_import_paths: list[str] | None = None,
         denorm_columns: list[str] | None = None,
         denorm_metadata_columns: list[tuple[str, str]] | None = None,
+        json_termination: list[str] | None = None,
+        json_termination_auto: bool = False,
+        well_known_types: bool = False,
+        prune_empty_messages: bool = False,
         hyper_type: HyperType | None = None,
         opts: dict | None = None,
     ) -> Transcoder:
@@ -76,6 +81,24 @@ class Transcoder:
             List of pbpath expressions for denormalization columns
             (e.g. ``["name", "items[*].id", "items[*].price"]``).
             Each path's last segment is used as the output column alias.
+        json_termination : list[str], optional
+            Fully qualified names of self-referential message types to allow.
+            Each type expands normally, and only the field where it would
+            contain itself again becomes a protojson string column
+            (``list<string>`` when repeated). Without it, a cyclic schema
+            raises :class:`CyclicTypeError`. Use :func:`cyclic_types` to find
+            the names. The cells are JSON text, so strings inside them stay
+            double-quoted; compare them after ``json.loads``, never as strings.
+        json_termination_auto : bool, optional
+            Terminate every cyclic type without naming them. Caution: a
+            recursive field added to the .proto later then changes the
+            Arrow and Parquet schema with no error. Prefer
+            ``json_termination=cyclic_types(...)`` to keep that change visible.
+        well_known_types : bool, optional
+            Map well-known types (Timestamp, the wrappers, ...) to flat Arrow
+            scalars, as the denormalizer does. Changes the schema.
+        prune_empty_messages : bool, optional
+            Drop fields of empty message types, which Parquet cannot store.
         hyper_type : HyperType, optional
             Shared HyperType coordinator for PGO-enabled ingestion.
         opts : dict, optional
@@ -99,6 +122,15 @@ class Transcoder:
                 {"name": name, "type": typ}
                 for name, typ in denorm_metadata_columns
             ]
+
+        opts_payload.update(
+            _schema_opts(
+                json_termination,
+                json_termination_auto,
+                well_known_types,
+                prune_empty_messages,
+            )
+        )
 
         opts_json = _encode(json.dumps(opts_payload)) if opts_payload else None
 

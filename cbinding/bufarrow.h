@@ -74,9 +74,16 @@ typedef struct {
  * @param msg_name     Top-level message name to transcode.
  * @param import_paths NULL-terminated array of import directories (may be NULL).
  * @param n_paths      Number of import paths.
- * @param opts_json    JSON-encoded option overrides (may be NULL).
+ * @param opts_json    JSON-encoded option overrides (may be NULL). Keys:
+ *                     custom_proto, custom_message, custom_import_paths,
+ *                     denorm_columns, denorm_metadata_columns,
+ *                     json_termination (array of fully qualified names),
+ *                     json_termination_auto, well_known_types and
+ *                     prune_empty_messages (booleans). Unknown keys are an
+ *                     error.
  * @param out_handle   Receives the new handle on success.
- * @return 0 on success, -1 on error.
+ * @return 0 on success, -1 on error (call BufarrowGetGlobalError, then
+ *         BufarrowGetGlobalErrorInfo for a cyclic type).
  */
 extern int BufarrowNewFromFile(
     const char *proto_path,
@@ -238,6 +245,40 @@ extern void BufarrowFreeString(char *s);
 /** Return library version string (caller must free). */
 extern char *BufarrowVersion(void);
 
+/**
+ * Return and clear the message of the last error raised before a handle
+ * existed, for example by a failed BufarrowNewFromFile (caller must free).
+ */
+extern char *BufarrowGetGlobalError(void);
+
+/**
+ * Return and clear a JSON object describing the last global error, or ""
+ * when it has no structured form (caller must free). Call it after
+ * BufarrowGetGlobalError. A cyclic message type is reported as
+ *   {"kind":"cyclic_type","type":"pkg.Type","path":"field.path"}
+ * where "type" is the name to pass in opts_json "json_termination".
+ */
+extern char *BufarrowGetGlobalErrorInfo(void);
+
+/* ── Schema inspection ──────────────────────────────────────────────── */
+
+/**
+ * List every cyclic message type reachable from msg_name.
+ *
+ * Writes a JSON array of fully qualified names, sorted, to *out_json
+ * ("[]" when there are none; free with BufarrowFreeString). Pass the array as
+ * opts_json "json_termination" to build a Transcoder or Pool for the schema.
+ *
+ * @return 0 on success, -1 on error (call BufarrowGetGlobalError).
+ */
+extern int BufarrowCyclicTypes(
+    const char  *proto_path,
+    const char  *msg_name,
+    const char **import_paths,
+    int          n_paths,
+    char       **out_json
+);
+
 /* ── HyperType ──────────────────────────────────────────────────────── */
 
 /**
@@ -295,6 +336,7 @@ typedef void *BufarrowPoolHandle;
  * @param n_paths      Number of import paths.
  * @param opts_json    JSON-encoded option overrides (may be NULL).
  *                     Include "denorm_columns" to use the denorm path.
+ *                     Keys are the same as for BufarrowNewFromFile.
  * @param workers      Number of worker goroutines (0 → GOMAXPROCS).
  * @param capacity     Job channel capacity (0 → workers×64).
  * @param out_handle   Receives the new Pool handle on success.

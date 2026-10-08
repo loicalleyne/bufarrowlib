@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strconv"
 
 	"buf.build/go/hyperpb"
@@ -38,20 +39,32 @@ var (
 	ErrCyclicType = errors.New("cyclic message type")
 )
 
-// cyclicError reports a self-referential message type and the field path at
-// which the cycle was detected.
-type cyclicError struct {
-	name protoreflect.FullName
-	path string
+// CyclicTypeError reports a self-referential message type and the field path at
+// which the cycle was detected. It wraps [ErrCyclicType]. Use [errors.As] to
+// read it:
+//
+//	var ce *bufarrowlib.CyclicTypeError
+//	if errors.As(err, &ce) {
+//		names = append(names, ce.Type)
+//	}
+//
+// Type is the type being re-entered, which is the name to pass to
+// [WithJSONTermination]. A failed build reports only the first cycle it
+// finds. To get every cyclic type in one call, use [CyclicTypes].
+type CyclicTypeError struct {
+	// Type is the fully qualified name of the re-entered message type.
+	Type protoreflect.FullName
+	// Path is the dotted field path at which the cycle was detected.
+	Path string
 }
 
 // Error implements the error interface.
-func (e cyclicError) Error() string {
-	return fmt.Sprintf("bufarrow: cyclic message type %s at path %s: consider serializing this field or excluding it from the schema", e.name, e.path)
+func (e *CyclicTypeError) Error() string {
+	return fmt.Sprintf("bufarrow: cyclic message type %s at path %s: consider serializing this field or excluding it from the schema", e.Type, e.Path)
 }
 
 // Unwrap allows errors.Is(err, ErrCyclicType).
-func (e cyclicError) Unwrap() error { return ErrCyclicType }
+func (e *CyclicTypeError) Unwrap() error { return ErrCyclicType }
 
 // valueFn appends a single protobuf field value to the corresponding Arrow
 // array builder. The bool parameter indicates whether the field is set
@@ -172,16 +185,86 @@ func unmarshal(msgType *hyperpb.MessageType, n *node, r arrow.RecordBatch, rows 
 // the set of message types on the current ancestor path, used to detect cycles;
 // entries are removed as the walk unwinds so that a type appearing in two
 // sibling fields is not mistaken for a cycle. flattenWKT enables the
-// WithWellKnownTypes mapping.
+// WithWellKnownTypes mapping. jsonTerminate holds the types named by
+// WithJSONTermination. Where one of them would re-enter its own ancestor
+// path, the field becomes a protojson leaf instead of an ErrCyclicType.
+// jsonTerminateAll (WithJSONTerminationAuto) applies that to every type.
+// terminated records each type that was actually terminated, which is how
+// CyclicTypes reports them.
 type buildState struct {
-	seen       map[protoreflect.FullName]struct{}
-	flattenWKT bool
+	seen             map[protoreflect.FullName]struct{}
+	flattenWKT       bool
+	jsonTerminate    map[protoreflect.FullName]struct{}
+	jsonTerminateAll bool
+	terminated       map[protoreflect.FullName]struct{}
+}
+
+// terminatesCycle reports whether msg is a type allowed to terminate as JSON
+// and already on the current ancestor path, so it must become a protojson
+// leaf. It records each type it terminates.
+func (st *buildState) terminatesCycle(msg protoreflect.MessageDescriptor) bool {
+	name := msg.FullName()
+	if _, ok := st.jsonTerminate[name]; !ok && !st.jsonTerminateAll {
+		return false
+	}
+	if _, onPath := st.seen[name]; !onPath {
+		return false
+	}
+	if st.terminated != nil {
+		st.terminated[name] = struct{}{}
+	}
+	return true
+}
+
+// buildOpts groups the schema options that affect tree construction.
+type buildOpts struct {
+	flattenWKT       bool
+	jsonTerminate    map[protoreflect.FullName]struct{}
+	jsonTerminateAll bool
+	// terminated, if non-nil, receives every type terminated as JSON.
+	terminated map[protoreflect.FullName]struct{}
 }
 
 // build constructs the full Arrow schema tree and Parquet schema from a
 // protobuf message using default options.
 func build(msg protoreflect.Message) (*message, error) {
-	return buildWith(msg, false)
+	return buildWith(msg, buildOpts{})
+}
+
+// CyclicTypes returns the fully qualified names of every message type in md's
+// schema that recursively contains itself, sorted by name. It returns nil if
+// md's schema has no cycles. Each name is a type at which a cycle closes, so
+// passing the list to [WithJSONTermination] makes [New] succeed:
+//
+//	names, err := bufarrowlib.CyclicTypes(md)
+//	if err != nil {
+//		return err
+//	}
+//	log.Printf("terminating cyclic types as JSON: %v", names)
+//	tc, err := bufarrowlib.New(md, mem, bufarrowlib.WithJSONTermination(names...))
+//
+// For a two-type cycle such as A -> B -> A, only A is reported, because the
+// cycle closes when A is re-entered. CyclicTypes uses the same schema walk as
+// [New], so the two always agree on what counts as a cycle. It returns an
+// error only for problems unrelated to cycles, such as [ErrMxDepth].
+//
+// Unlike [WithJSONTerminationAuto], this keeps the decision with the caller.
+// A caller can log the list, compare it with a list it expects, or refuse to
+// continue when a new cycle appears.
+func CyclicTypes(md protoreflect.MessageDescriptor) ([]protoreflect.FullName, error) {
+	found := make(map[protoreflect.FullName]struct{})
+	if _, err := buildWith(dynamicpb.NewMessage(md), buildOpts{jsonTerminateAll: true, terminated: found}); err != nil {
+		return nil, err
+	}
+	if len(found) == 0 {
+		return nil, nil
+	}
+	names := make([]protoreflect.FullName, 0, len(found))
+	for n := range found {
+		names = append(names, n)
+	}
+	slices.Sort(names)
+	return names, nil
 }
 
 // buildWith constructs the full Arrow schema tree and Parquet schema from a
@@ -191,7 +274,7 @@ func build(msg protoreflect.Message) (*message, error) {
 // Panics raised during tree construction (cyclic types, depth exhaustion,
 // unsupported fields) are recovered and returned as errors so that the failing
 // type and path survive.
-func buildWith(msg protoreflect.Message, flattenWKT bool) (m *message, err error) {
+func buildWith(msg protoreflect.Message, o buildOpts) (m *message, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			m = nil
@@ -212,8 +295,11 @@ func buildWith(msg protoreflect.Message, flattenWKT bool) (m *message, err error
 	// direct self-reference report the root name rather than being detected a
 	// level deeper.
 	st := &buildState{
-		seen:       map[protoreflect.FullName]struct{}{msg.Descriptor().FullName(): {}},
-		flattenWKT: flattenWKT,
+		seen:             map[protoreflect.FullName]struct{}{msg.Descriptor().FullName(): {}},
+		flattenWKT:       o.flattenWKT,
+		jsonTerminate:    o.jsonTerminate,
+		jsonTerminateAll: o.jsonTerminateAll,
+		terminated:       o.terminated,
 	}
 	fields := msg.Descriptor().Fields()
 	root.children = make([]*node, fields.Len())
@@ -336,6 +422,15 @@ func createNode(parent *node, field protoreflect.FieldDescriptor, depth int, st 
 			n.field.Nullable = true
 			n.setup = jsonWKTSetup()
 			n.encode = jsonWKTEncode()
+		case st.terminatesCycle(msg):
+			// WithJSONTermination: the type is already on the ancestor path,
+			// so expanding it would recurse forever. Unlike the recursive
+			// WKTs above, it terminates only at the cycle point, so its
+			// shallower occurrences keep their structural columns.
+			n.field.Type = arrow.BinaryTypes.String
+			n.field.Nullable = true
+			n.setup = jsonWKTSetup()
+			n.encode = jsonWKTEncode()
 		case st.flattenWKT && flattenableWKT(field):
 			n.field.Type = ProtoKindToArrowType(field)
 			n.field.Nullable = true
@@ -454,7 +549,7 @@ func createNode(parent *node, field protoreflect.FieldDescriptor, depth int, st 
 		f := msg.Fields()
 		msgName := msg.FullName()
 		if _, dup := st.seen[msgName]; dup {
-			panic(cyclicError{name: msgName, path: name})
+			panic(&CyclicTypeError{Type: msgName, Path: name})
 		}
 		st.seen[msgName] = struct{}{}
 		n.children = make([]*node, f.Len())

@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+// Cyclic schemas for the WithJSONTermination bindings tests.
+
+message Node {
+  string name = 1;
+  repeated Node children = 2;
+}
+
+message Ping {
+  string id = 1;
+  Pong pong = 2;
+}
+
+message Pong {
+  string id = 1;
+  Ping ping = 2;
+}
+
+// Tree has two independent cycles.
+message Tree {
+  string id = 1;
+  Node root = 2;
+  Ping ping = 3;
+}
+
+message Flat {
+  string id = 1;
+}

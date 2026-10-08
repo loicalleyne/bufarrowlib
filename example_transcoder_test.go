@@ -327,10 +327,10 @@ func ExampleTranscoder_WriteParquet() {
 		log.Fatal(err)
 	}
 
-	fmt.Printf("parquet bytes: %d\n", buf.Len())
+	fmt.Printf("valid parquet: %v\n", isParquet(buf.Bytes()))
 	fmt.Println("wrote parquet successfully")
 	// Output:
-	// parquet bytes: 576
+	// valid parquet: true
 	// wrote parquet successfully
 }
 

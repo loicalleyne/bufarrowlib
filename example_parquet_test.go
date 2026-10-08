@@ -54,10 +54,12 @@ func Example_protoToParquetFile() {
 	}
 	f.Close()
 
-	info, _ := os.Stat(name)
-	fmt.Printf("wrote %d messages to parquet (%d bytes)\n", len(products), info.Size())
+	// The exact file size depends on the arrow-go version, so print a
+	// stable property instead: the Parquet magic at both ends.
+	data, _ := os.ReadFile(name)
+	fmt.Printf("wrote %d messages to parquet (valid: %v)\n", len(products), isParquet(data))
 	// Output:
-	// wrote 3 messages to parquet (598 bytes)
+	// wrote 3 messages to parquet (valid: true)
 }
 
 // Example_protoToParquetBatched shows writing protobuf messages to Parquet in
@@ -291,8 +293,15 @@ message Event {
 	}
 
 	fmt.Printf("fields: %v\n", tc.FieldNames())
-	fmt.Printf("wrote parquet: %d bytes\n", buf.Len())
+	fmt.Printf("wrote parquet: %v\n", isParquet(buf.Bytes()))
 	// Output:
 	// fields: [id action user_id]
-	// wrote parquet: 549 bytes
+	// wrote parquet: true
+}
+
+// isParquet reports whether b is framed as a Parquet file, with the PAR1 magic
+// at both ends. Examples print this instead of the file size, which changes
+// between arrow-go versions.
+func isParquet(b []byte) bool {
+	return len(b) >= 8 && bytes.HasPrefix(b, []byte("PAR1")) && bytes.HasSuffix(b, []byte("PAR1"))
 }

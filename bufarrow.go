@@ -87,6 +87,17 @@ type Opt struct {
 	hyperTypeMismatchPolicy HyperTypeMismatchPolicy
 	pruneEmpty              bool
 	flattenWKT              bool
+	jsonTerminate           map[protoreflect.FullName]struct{}
+	jsonTerminateAll        bool
+}
+
+// buildOpts returns the options that affect schema-tree construction.
+func (o *Opt) buildOpts() buildOpts {
+	return buildOpts{
+		flattenWKT:       o.flattenWKT,
+		jsonTerminate:    o.jsonTerminate,
+		jsonTerminateAll: o.jsonTerminateAll,
+	}
 }
 
 // HyperTypeMismatchPolicy controls how New() handles a descriptor mismatch
@@ -217,6 +228,71 @@ func WithPruneEmptyMessages() Option {
 func WithWellKnownTypes() Option {
 	return func(cfg config) {
 		cfg.flattenWKT = true
+	}
+}
+
+// WithJSONTermination lets the named self-referential message types through
+// schema construction instead of failing with [ErrCyclicType]. A named type
+// expands structurally as usual. Only the field where the schema walk would
+// re-enter that type on the current ancestor path becomes a nullable Arrow
+// String column holding the subtree's canonical protojson encoding, the same
+// encoding used for google.protobuf.Struct/Value/ListValue. For
+//
+//	message Container { string name = 1; repeated Container children = 2; }
+//
+// name stays a plain string column and children becomes list<string>, with
+// one protojson document per child.
+//
+// This changes the Arrow and Parquet schema, so it is opt-in. Cycles through
+// types not named here still return [ErrCyclicType]. Names are fully
+// qualified, for example "pkg.Container". If you don't know the names in
+// advance, get them from [CyclicTypes].
+//
+// The terminated column holds JSON text, not plain values. Scalars inside it
+// keep their JSON form: a string field appears double-quoted ("foo"), and
+// int64 fields are quoted per the protojson spec. In DuckDB, use
+// json_extract_string(col, '$') or cast the column to JSON. In BigQuery, the
+// column loads as STRING. Declare it as JSON in an explicit load schema, or
+// call PARSE_JSON at query time. protojson output is not byte-stable across
+// processes, so compare values semantically (protojson.Unmarshal, then
+// proto.Equal) and never by string equality.
+func WithJSONTermination(names ...protoreflect.FullName) Option {
+	return func(cfg config) {
+		if cfg.jsonTerminate == nil {
+			cfg.jsonTerminate = make(map[protoreflect.FullName]struct{}, len(names))
+		}
+		for _, n := range names {
+			cfg.jsonTerminate[n] = struct{}{}
+		}
+	}
+}
+
+// WithJSONTerminationAuto applies [WithJSONTermination] to every cyclic
+// message type in the schema, so [New] never returns [ErrCyclicType]. Each
+// cycle terminates where it closes, exactly as if its type had been named.
+//
+// Use this only if a schema change without an error is acceptable. With
+// [WithJSONTermination], a recursive field added to the .proto later still
+// fails construction until someone names it. With this option it does not.
+// The new field silently becomes a protojson String column, which changes:
+//
+//   - the Arrow schema and the Parquet files written from it
+//   - downstream tables, for example a BigQuery table loaded from those files,
+//     which may then reject the load or need a schema update
+//   - how the field is queried: it is JSON text, so DuckDB needs
+//     json_extract_string and BigQuery needs PARSE_JSON or a JSON column
+//
+// To handle schemas you don't know in advance and still see each cycle, call
+// [CyclicTypes] and pass the result to [WithJSONTermination]. You can then log
+// the list or check it against the types you expect.
+//
+// It combines with [WithJSONTermination], although it already covers every
+// type. The recursive well-known types (google.protobuf.Struct, Value and
+// ListValue) are unaffected and always terminate. The same JSON caveats as
+// [WithJSONTermination] apply.
+func WithJSONTerminationAuto() Option {
+	return func(cfg config) {
+		cfg.jsonTerminateAll = true
 	}
 }
 
@@ -358,13 +434,13 @@ func New(msgDesc protoreflect.MessageDescriptor, mem memory.Allocator, opts ...O
 			}
 		}
 
-		b, err = buildWith(a.ProtoReflect(), o.flattenWKT)
+		b, err = buildWith(a.ProtoReflect(), o.buildOpts())
 		if err != nil {
 			return nil, fmt.Errorf("bufarrow: failed to build message: %w", err)
 		}
 		b.build(mem)
 	} else {
-		b, err = buildWith(a.ProtoReflect(), o.flattenWKT)
+		b, err = buildWith(a.ProtoReflect(), o.buildOpts())
 		if err != nil {
 			return nil, fmt.Errorf("bufarrow: failed to build message: %w", err)
 		}
@@ -402,7 +478,7 @@ func (s *Transcoder) Clone(mem memory.Allocator) (tc *Transcoder, err error) {
 		}
 	}()
 	a := s.stencil
-	b, err := buildWith(a.ProtoReflect(), s.opts.flattenWKT)
+	b, err := buildWith(a.ProtoReflect(), s.opts.buildOpts())
 	if err != nil {
 		return nil, fmt.Errorf("bufarrow: failed to build message: %w", err)
 	}
