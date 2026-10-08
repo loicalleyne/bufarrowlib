@@ -32,6 +32,7 @@ import (
 	"github.com/apache/arrow-go/v18/arrow/memory/mallocator"
 	bufarrowlib "github.com/loicalleyne/bufarrowlib"
 	"github.com/loicalleyne/bufarrowlib/proto/pbpath"
+	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
 const version = "0.1.0"
@@ -484,6 +485,16 @@ func BufarrowGetGlobalError() *C.char {
 	return cString(getGlobalErr())
 }
 
+// BufarrowGetGlobalErrorInfo returns a JSON object describing the last global
+// error, or an empty string when it has no structured form. Read it after
+// BufarrowGetGlobalError. A cycle error is
+// {"kind":"cyclic_type","type":"pkg.T","path":"a.b"}.
+//
+//export BufarrowGetGlobalErrorInfo
+func BufarrowGetGlobalErrorInfo() *C.char {
+	return cString(getGlobalErrInfo())
+}
+
 // ── HyperType ───────────────────────────────────────────────────────────
 
 //export BufarrowNewHyperType
@@ -585,10 +596,64 @@ func BufarrowNewFromFileWithHyperType(
 	return 0
 }
 
+// ── Schema inspection ───────────────────────────────────────────────────
+
+//export BufarrowCyclicTypes
+func BufarrowCyclicTypes(
+	protoPath *C.char,
+	msgName *C.char,
+	importPaths **C.char,
+	nPaths C.int,
+	outJSON **C.char,
+) C.int {
+	defer func() { recoverGlobal(recover()) }()
+
+	paths := make([]string, int(nPaths))
+	if nPaths > 0 && importPaths != nil {
+		slice := unsafe.Slice(importPaths, int(nPaths))
+		for i := range paths {
+			paths[i] = C.GoString(slice[i])
+		}
+	}
+	names, err := cyclicTypes(C.GoString(protoPath), C.GoString(msgName), paths)
+	if err != nil {
+		return setGlobalError(nil, err)
+	}
+	*outJSON = cString(names)
+	return 0
+}
+
+// cyclicTypes returns the cyclic types of msgName as a JSON array of fully
+// qualified names, "[]" when there are none.
+func cyclicTypes(protoPath, msgName string, importPaths []string) (string, error) {
+	fd, err := bufarrowlib.CompileProtoToFileDescriptor(protoPath, importPaths)
+	if err != nil {
+		return "", err
+	}
+	md, err := bufarrowlib.GetMessageDescriptorByName(fd, msgName)
+	if err != nil {
+		return "", err
+	}
+	names, err := bufarrowlib.CyclicTypes(md)
+	if err != nil {
+		return "", err
+	}
+	out := make([]string, len(names))
+	for i, n := range names {
+		out[i] = string(n)
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────────
 
 // setGlobalError is used when no handle exists yet to store an error.
-// The error can be retrieved via BufarrowGetGlobalError.
+// The error can be retrieved via BufarrowGetGlobalError. A cycle error is
+// also stored with its type and path, for BufarrowGetGlobalErrorInfo.
 func setGlobalError(_ *unsafe.Pointer, err error) C.int {
 	setGlobalErr(err)
 	return -1
@@ -601,6 +666,16 @@ type optsPayload struct {
 	CustomImportPaths []string        `json:"custom_import_paths,omitempty"`
 	DenormColumns     []string        `json:"denorm_columns,omitempty"`
 	DenormMetaColumns []metaColumnDTO `json:"denorm_metadata_columns,omitempty"`
+	// JSONTermination names cyclic message types to terminate as protojson
+	// (WithJSONTermination).
+	JSONTermination []string `json:"json_termination,omitempty"`
+	// JSONTerminationAuto terminates every cyclic type
+	// (WithJSONTerminationAuto).
+	JSONTerminationAuto bool `json:"json_termination_auto,omitempty"`
+	// WellKnownTypes enables WithWellKnownTypes.
+	WellKnownTypes bool `json:"well_known_types,omitempty"`
+	// PruneEmptyMessages enables WithPruneEmptyMessages.
+	PruneEmptyMessages bool `json:"prune_empty_messages,omitempty"`
 }
 
 type metaColumnDTO struct {
@@ -614,7 +689,11 @@ func parseOptsJSON(s string) ([]bufarrowlib.Option, error) {
 		return nil, nil
 	}
 	var p optsPayload
-	if err := json.Unmarshal([]byte(s), &p); err != nil {
+	// Reject unknown keys so a mistyped option fails instead of being
+	// silently ignored.
+	dec := json.NewDecoder(strings.NewReader(s))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&p); err != nil {
 		return nil, fmt.Errorf("bufarrow: invalid opts_json: %w", err)
 	}
 
@@ -648,6 +727,22 @@ func parseOptsJSON(s string) ([]bufarrowlib.Option, error) {
 			cols = append(cols, bufarrowlib.DenormMetadataColumn{Name: bufarrowlib.MetaCol(mc.Name), Type: dt})
 		}
 		opts = append(opts, bufarrowlib.WithDenormMetadataColumns(cols...))
+	}
+	if len(p.JSONTermination) > 0 {
+		names := make([]protoreflect.FullName, len(p.JSONTermination))
+		for i, n := range p.JSONTermination {
+			names[i] = protoreflect.FullName(n)
+		}
+		opts = append(opts, bufarrowlib.WithJSONTermination(names...))
+	}
+	if p.JSONTerminationAuto {
+		opts = append(opts, bufarrowlib.WithJSONTerminationAuto())
+	}
+	if p.WellKnownTypes {
+		opts = append(opts, bufarrowlib.WithWellKnownTypes())
+	}
+	if p.PruneEmptyMessages {
+		opts = append(opts, bufarrowlib.WithPruneEmptyMessages())
 	}
 	return opts, nil
 }

@@ -119,6 +119,33 @@ bufarrowlib.WithPruneEmptyMessages() Option
 // Excluded even when enabled: the recursive types (Struct/Value/ListValue,
 // otel AnyValue), and google.protobuf.Duration (no Parquet DURATION support).
 bufarrowlib.WithWellKnownTypes() Option
+
+// Allow the named self-referential message types (fully qualified names)
+// instead of failing with ErrCyclicType. The type expands structurally.
+// Only the field that would re-enter it on the ancestor path becomes a
+// nullable Utf8 column of protojson. Repeated fields become list<Utf8>.
+// Struct/Value/ListValue are unaffected and always terminate.
+// The cells are JSON text, so scalars inside them stay quoted ("foo"). Use
+// json_extract_string(col,'$') in DuckDB, or declare the column JSON in a
+// BigQuery load schema. Compare values semantically, not by string equality.
+bufarrowlib.WithJSONTermination(names ...protoreflect.FullName) Option
+
+// Return every cyclic type in md's schema, sorted, or nil if there are none.
+// Pass the result to WithJSONTermination. Uses the same walk as New. For a
+// two-type cycle A -> B -> A, it reports only A.
+bufarrowlib.CyclicTypes(md protoreflect.MessageDescriptor) ([]protoreflect.FullName, error)
+
+// WithJSONTermination for every cyclic type, so New never returns
+// ErrCyclicType. CAUTION: a recursive field added to the .proto later
+// silently becomes a JSON column, changing the Arrow, Parquet and BigQuery
+// schemas without an error. Prefer CyclicTypes + WithJSONTermination when
+// the schema change should stay visible.
+bufarrowlib.WithJSONTerminationAuto() Option
+
+// The error New returns for a cycle. It wraps ErrCyclicType. Type is the
+// re-entered type, which is the name to pass to WithJSONTermination. Read it
+// with errors.As(err, &ce), where ce is a *CyclicTypeError.
+type bufarrowlib.CyclicTypeError struct { Type protoreflect.FullName; Path string }
 ```
 
 ```go

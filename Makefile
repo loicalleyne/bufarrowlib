@@ -42,7 +42,12 @@ help: ## Display this help screen
 
 libbufarrow: $(LIB) ## Build the shared C library
 
-$(LIB):
+# Rebuild whenever any Go source or go.mod/go.sum changes. Without these
+# prerequisites an existing library is never rebuilt, and Python loads a stale
+# build that lacks newly added exports.
+LIB_SRCS = $(shell find . -name '*.go' -not -path './python/*' -not -name '*_test.go') go.mod go.sum
+
+$(LIB): $(LIB_SRCS)
 	CGO_ENABLED=1 $(GO) build -buildmode=c-shared -tags cgo -o $(LIB) ./cbinding
 
 libbufarrow-all: ## Build shared libraries for all platforms

@@ -43,6 +43,47 @@ message SelfRef {
   SelfRef child = 2;
 }
 
+// Container is a repeated self-reference, used by WithJSONTermination tests.
+message Container {
+  string name = 1;
+  repeated Container children = 2;
+}
+
+// MutualA and MutualB form a two-step cycle (A -> B -> A).
+message MutualA {
+  string a = 1;
+  MutualB b = 2;
+}
+message MutualB {
+  string b = 1;
+  MutualA a = 2;
+}
+
+// SettingsTree mixes a recursive WKT with a user cycle.
+message SettingsTree {
+  string key = 1;
+  map<string, google.protobuf.Value> settings = 2;
+  repeated SettingsTree subtrees = 3;
+}
+
+// MultiCycle has three independent cycles: a direct self-reference, a two-type
+// cycle reached through a map value, and a repeated self-reference. Diamond
+// reuses DiamondInner twice, which is not a cycle.
+message MultiCycle {
+  string id = 1;
+  SelfRef self = 2;
+  map<string, MutualA> mutual = 3;
+  repeated Container containers = 4;
+  DiamondOuter diamond = 5;
+}
+
+// Acyclic has no cycles at all.
+message Acyclic {
+  string id = 1;
+  DiamondOuter diamond = 2;
+  google.protobuf.Struct settings = 3;
+}
+
 // DeepAcyclic12 chains past maxDepth without any cycle, proving the depth guard
 // is still reachable.
 message DeepAcyclic12 { DeepAcyclic11 next = 1; }

@@ -11,6 +11,8 @@ package main
 import "C"
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"runtime/cgo"
 	"sync"
@@ -94,21 +96,54 @@ func cString(s string) *C.char {
 // was created (e.g. during NewFromFile). Protected by globalMu.
 var (
 	globalLastError string
-	globalMu        sync.Mutex
+	// globalLastErrorInfo is a JSON object describing globalLastError, for
+	// example {"kind":"cyclic_type","type":"pkg.T","path":"a.b"}. It is ""
+	// when the error has no structured form.
+	globalLastErrorInfo string
+	globalMu            sync.Mutex
 )
 
-// setGlobalErr stores an error message that can be retrieved via BufarrowGetGlobalError.
+// errorInfo is the JSON form of a structured error returned by
+// BufarrowGetGlobalErrorInfo.
+type errorInfo struct {
+	Kind string `json:"kind"`
+	Type string `json:"type,omitempty"`
+	Path string `json:"path,omitempty"`
+}
+
+// setGlobalErr stores an error message that can be retrieved via
+// BufarrowGetGlobalError, and its structured form, if any, for
+// BufarrowGetGlobalErrorInfo.
 func setGlobalErr(err error) {
+	info := ""
+	var ce *bufarrowlib.CyclicTypeError
+	if errors.As(err, &ce) {
+		b, _ := json.Marshal(errorInfo{Kind: "cyclic_type", Type: string(ce.Type), Path: ce.Path})
+		info = string(b)
+	}
 	globalMu.Lock()
 	globalLastError = err.Error()
+	globalLastErrorInfo = info
 	globalMu.Unlock()
 }
 
-// getGlobalErr returns and clears the global error.
+// getGlobalErr returns and clears the global error message. The structured
+// form is kept until it is read with getGlobalErrInfo or replaced, because
+// callers read the message first.
 func getGlobalErr() string {
 	globalMu.Lock()
 	e := globalLastError
 	globalLastError = ""
+	globalMu.Unlock()
+	return e
+}
+
+// getGlobalErrInfo returns and clears the structured form of the last global
+// error, or "" if it had none.
+func getGlobalErrInfo() string {
+	globalMu.Lock()
+	e := globalLastErrorInfo
+	globalLastErrorInfo = ""
 	globalMu.Unlock()
 	return e
 }

@@ -13,6 +13,22 @@ class BufarrowError(Exception):
     """Error raised by the bufarrow C library."""
 
 
+class CyclicTypeError(BufarrowError):
+    """A message type in the schema recursively contains itself.
+
+    Raised by the ``Transcoder`` and ``Pool`` constructors. ``type`` is the
+    fully qualified name of the re-entered type, which is the name to pass in
+    ``json_termination``. ``path`` is the field path where the cycle was
+    found. Each failure reports only the first cycle, so use
+    :func:`pybufarrow.cyclic_types` to get every cyclic type at once.
+    """
+
+    def __init__(self, message: str, type: str, path: str) -> None:
+        super().__init__(message)
+        self.type = type
+        self.path = path
+
+
 # ── Arrow C Data Interface ABI structs ──────────────────────────────────
 
 
@@ -225,6 +241,19 @@ def _declare_signatures(lib: ctypes.CDLL) -> None:
     lib.BufarrowGetGlobalError.argtypes = []
     lib.BufarrowGetGlobalError.restype = ctypes.c_void_p
 
+    lib.BufarrowGetGlobalErrorInfo.argtypes = []
+    lib.BufarrowGetGlobalErrorInfo.restype = ctypes.c_void_p
+
+    # Schema inspection
+    lib.BufarrowCyclicTypes.argtypes = [
+        ctypes.c_char_p,  # proto_path
+        ctypes.c_char_p,  # msg_name
+        ctypes.POINTER(ctypes.c_char_p),  # import_paths
+        ctypes.c_int,  # n_paths
+        ctypes.POINTER(ctypes.c_void_p),  # out_json
+    ]
+    lib.BufarrowCyclicTypes.restype = ctypes.c_int
+
     # HyperType
     lib.BufarrowNewHyperType.argtypes = [
         ctypes.c_char_p,
@@ -341,7 +370,45 @@ def _check_global(status: int) -> None:
         msg = _read_c_string(ptr) or "unknown error"
         if ptr:
             lib.BufarrowFreeString(ptr)
+        info = _take_global_error_info(lib)
+        if info.get("kind") == "cyclic_type":
+            raise CyclicTypeError(msg, info.get("type", ""), info.get("path", ""))
         raise BufarrowError(msg)
+
+
+def _take_global_error_info(lib: ctypes.CDLL) -> dict:
+    """Read and clear the structured form of the last global error, if any."""
+    import json
+
+    ptr = lib.BufarrowGetGlobalErrorInfo()
+    raw = _read_c_string(ptr)
+    if ptr:
+        lib.BufarrowFreeString(ptr)
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw)
+    except ValueError:
+        return {}
+
+
+def _schema_opts(
+    json_termination: list[str] | None,
+    json_termination_auto: bool,
+    well_known_types: bool,
+    prune_empty_messages: bool,
+) -> dict:
+    """Return the opts_json entries for the schema-shaping constructor options."""
+    out: dict = {}
+    if json_termination:
+        out["json_termination"] = list(json_termination)
+    if json_termination_auto:
+        out["json_termination_auto"] = True
+    if well_known_types:
+        out["well_known_types"] = True
+    if prune_empty_messages:
+        out["prune_empty_messages"] = True
+    return out
 
 
 def _encode(s: str | None) -> bytes | None:
